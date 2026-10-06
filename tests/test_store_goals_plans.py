@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import datetime
 
 import pytest
 
@@ -204,15 +205,73 @@ def test_plan_actual_roundtrip(conn: sqlite3.Connection) -> None:
     assert json.loads(rows[0]["details_json"]) == {"match": "date+type"}
 
 
+def seed_plan_and_activity(conn: sqlite3.Connection) -> tuple[int, int]:
+    wid = add_planned_workout(conn, workout("2026-03-10"))
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 5,
+            "start_time_local": "2026-03-10 07:00:00",
+            "type_key": "running",
+            "raw_json": {},
+        },
+    )
+    return wid, 5
+
+
+def links(kind: str, wid: int, aid: int) -> dict:
+    planned = {"done": True, "different": True, "skipped": True, "extra": False}[kind]
+    actual = {"done": True, "different": True, "skipped": False, "extra": True}[kind]
+    return {
+        "date": "2026-03-10",
+        "kind": kind,
+        "planned_id": wid if planned else None,
+        "activity_id": aid if actual else None,
+    }
+
+
 @pytest.mark.parametrize("kind", ["done", "skipped", "extra", "different"])
-def test_plan_actual_accepts_known_kinds(conn: sqlite3.Connection, kind: str) -> None:
-    add_plan_actual(conn, {"date": "2026-03-10", "kind": kind})
-    assert list_plan_actual(conn, "2026-03-10", "2026-03-10")[0]["kind"] == kind
+def test_plan_actual_accepts_valid_links_for_kind(conn: sqlite3.Connection, kind: str) -> None:
+    wid, aid = seed_plan_and_activity(conn)
+    add_plan_actual(conn, links(kind, wid, aid))
+    row = list_plan_actual(conn, "2026-03-10", "2026-03-10")[0]
+    assert row["kind"] == kind
+    assert row["planned_id"] == (None if kind == "extra" else wid)
+    assert row["activity_id"] == (None if kind == "skipped" else aid)
+
+
+@pytest.mark.parametrize("kind", ["done", "different"])
+def test_plan_actual_done_and_different_need_both_links(
+    conn: sqlite3.Connection, kind: str
+) -> None:
+    wid, aid = seed_plan_and_activity(conn)
+    for bad in (
+        {"planned_id": wid},
+        {"activity_id": aid},
+        {},
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            add_plan_actual(conn, {"date": "2026-03-10", "kind": kind, **bad})
+
+
+def test_plan_actual_skipped_needs_only_planned_id(conn: sqlite3.Connection) -> None:
+    wid, aid = seed_plan_and_activity(conn)
+    for bad in ({}, {"activity_id": aid}, {"planned_id": wid, "activity_id": aid}):
+        with pytest.raises(sqlite3.IntegrityError):
+            add_plan_actual(conn, {"date": "2026-03-10", "kind": "skipped", **bad})
+
+
+def test_plan_actual_extra_needs_only_activity_id(conn: sqlite3.Connection) -> None:
+    wid, aid = seed_plan_and_activity(conn)
+    for bad in ({}, {"planned_id": wid}, {"planned_id": wid, "activity_id": aid}):
+        with pytest.raises(sqlite3.IntegrityError):
+            add_plan_actual(conn, {"date": "2026-03-10", "kind": "extra", **bad})
 
 
 def test_plan_actual_rejects_unknown_kind(conn: sqlite3.Connection) -> None:
+    wid, aid = seed_plan_and_activity(conn)
     with pytest.raises(sqlite3.IntegrityError):
-        add_plan_actual(conn, {"date": "2026-03-10", "kind": "bogus"})
+        add_plan_actual(conn, links("done", wid, aid) | {"kind": "bogus"})
 
 
 def test_plan_actual_requires_existing_planned_workout(conn: sqlite3.Connection) -> None:
@@ -220,16 +279,15 @@ def test_plan_actual_requires_existing_planned_workout(conn: sqlite3.Connection)
         add_plan_actual(conn, {"date": "2026-03-10", "kind": "skipped", "planned_id": 99})
 
 
-def test_plan_actual_skipped_and_extra_allow_null_links(conn: sqlite3.Connection) -> None:
-    add_plan_actual(conn, {"date": "2026-03-10", "kind": "extra"})
-    row = list_plan_actual(conn, "2026-03-10", "2026-03-10")[0]
-    assert row["planned_id"] is None
-    assert row["activity_id"] is None
+def test_plan_actual_requires_existing_activity(conn: sqlite3.Connection) -> None:
+    with pytest.raises(sqlite3.IntegrityError):
+        add_plan_actual(conn, {"date": "2026-03-10", "kind": "extra", "activity_id": 99})
 
 
 def test_list_plan_actual_inclusive_sorted(conn: sqlite3.Connection) -> None:
+    _, aid = seed_plan_and_activity(conn)
     ids = {
-        d: add_plan_actual(conn, {"date": d, "kind": "extra"})
+        d: add_plan_actual(conn, {"date": d, "kind": "extra", "activity_id": aid})
         for d in ("2026-03-11", "2026-03-09", "2026-03-10", "2026-03-12")
     }
     rows = list_plan_actual(conn, "2026-03-10", "2026-03-11")
@@ -237,8 +295,73 @@ def test_list_plan_actual_inclusive_sorted(conn: sqlite3.Connection) -> None:
 
 
 def test_delete_plan_actual_removes_only_period(conn: sqlite3.Connection) -> None:
+    _, aid = seed_plan_and_activity(conn)
     for day in ("2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"):
-        add_plan_actual(conn, {"date": day, "kind": "extra"})
+        add_plan_actual(conn, {"date": day, "kind": "extra", "activity_id": aid})
     delete_plan_actual(conn, "2026-03-10", "2026-03-11")
     rows = list_plan_actual(conn, "2026-03-01", "2026-03-31")
     assert [r["date"] for r in rows] == ["2026-03-09", "2026-03-12"]
+
+
+@pytest.mark.parametrize("sport", ["strength", "mobility", "run", "bike", "swim"])
+def test_planned_workout_accepts_known_sports(conn: sqlite3.Connection, sport: str) -> None:
+    wid = add_planned_workout(conn, workout("2026-03-10") | {"sport": sport})
+    row = get_planned_workout(conn, wid)
+    assert row is not None
+    assert row["sport"] == sport
+
+
+@pytest.mark.parametrize("sport", ["running", "yoga", "RUN", ""])
+def test_planned_workout_rejects_unknown_sport(conn: sqlite3.Connection, sport: str) -> None:
+    with pytest.raises(sqlite3.IntegrityError):
+        add_planned_workout(conn, workout("2026-03-10") | {"sport": sport})
+
+
+def test_planned_workout_update_rejects_unknown_sport(conn: sqlite3.Connection) -> None:
+    wid = add_planned_workout(conn, workout("2026-03-10"))
+    with pytest.raises(sqlite3.IntegrityError):
+        update_planned_workout(conn, wid, {"sport": "yoga"})
+
+
+def test_planned_workout_can_be_cancelled(conn: sqlite3.Connection) -> None:
+    wid = add_planned_workout(conn, workout("2026-03-10"))
+    update_planned_workout(conn, wid, {"status": "cancelled"})
+    row = get_planned_workout(conn, wid)
+    assert row is not None
+    assert row["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("status", ["draft", "approved", "pushed", "cancelled"])
+def test_planned_workout_accepts_all_statuses(conn: sqlite3.Connection, status: str) -> None:
+    wid = add_planned_workout(conn, workout("2026-03-10") | {"status": status})
+    row = get_planned_workout(conn, wid)
+    assert row is not None
+    assert row["status"] == status
+
+
+def parse_db_time(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+
+
+def test_default_timestamps_use_local_time(conn: sqlite3.Connection) -> None:
+    before = datetime.now().replace(microsecond=0)
+    goal = get_goal(conn, add_goal(conn, {"title": "g"}))
+    phase = get_phase(conn, add_phase(conn, {"name": "p"}))
+    wid = add_planned_workout(conn, workout("2026-03-10"))
+    planned = get_planned_workout(conn, wid)
+    _, aid = seed_plan_and_activity(conn)
+    pa_id = add_plan_actual(conn, {"date": "2026-03-10", "kind": "extra", "activity_id": aid})
+    actual = list_plan_actual(conn, "2026-03-10", "2026-03-10")[0]
+    assert goal is not None
+    assert phase is not None
+    assert planned is not None
+    assert actual["id"] == pa_id
+    stamps = [
+        goal["created_at"],
+        goal["updated_at"],
+        phase["created_at"],
+        planned["created_at"],
+        actual["created_at"],
+    ]
+    for stamp in stamps:
+        assert abs((parse_db_time(stamp) - before).total_seconds()) <= 5

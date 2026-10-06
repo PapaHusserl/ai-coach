@@ -316,17 +316,23 @@ def test_migrate_ignores_non_sql_files(monkeypatch: pytest.MonkeyPatch, tmp_path
     raw.close()
 
 
+def new_event(conn: sqlite3.Connection, payload: object) -> int:
+    goal_id = insert(conn, "goals", {"title": "g"})
+    values = {"goal_id": goal_id, "event_type": "x", "occurred_at": "t", "payload_json": payload}
+    return insert(conn, "goal_events", values)
+
+
 def test_json_none_is_stored_as_sql_null(conn: sqlite3.Connection) -> None:
-    pid = insert(conn, "plan_actual", {"date": "2026-03-10", "kind": "extra", "details_json": None})
-    row = fetch_one(conn, "SELECT details_json FROM plan_actual WHERE id = ?", (pid,))
-    assert row == {"details_json": None}
+    eid = new_event(conn, None)
+    row = fetch_one(conn, "SELECT payload_json FROM goal_events WHERE id = ?", (eid,))
+    assert row == {"payload_json": None}
 
 
 def test_json_none_is_stored_as_sql_null_on_update(conn: sqlite3.Connection) -> None:
-    pid = insert(conn, "plan_actual", {"date": "2026-03-10", "kind": "extra", "details_json": {}})
-    update(conn, "plan_actual", pid, {"details_json": None})
-    row = fetch_one(conn, "SELECT details_json FROM plan_actual WHERE id = ?", (pid,))
-    assert row == {"details_json": None}
+    eid = new_event(conn, {})
+    update(conn, "goal_events", eid, {"payload_json": None})
+    row = fetch_one(conn, "SELECT payload_json FROM goal_events WHERE id = ?", (eid,))
+    assert row == {"payload_json": None}
 
 
 @pytest.mark.parametrize("table", ["daily_metrics", "activities"])

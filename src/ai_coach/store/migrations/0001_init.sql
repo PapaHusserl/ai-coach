@@ -62,8 +62,8 @@ CREATE TABLE goals (
     target TEXT,
     target_date TEXT,
     status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE phases (
@@ -73,7 +73,7 @@ CREATE TABLE phases (
     start_date TEXT,
     end_date TEXT,
     status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed', 'accepted')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     accepted_at TEXT
 );
 
@@ -89,13 +89,13 @@ CREATE INDEX goal_events_goal ON goal_events (goal_id, occurred_at);
 CREATE TABLE planned_workouts (
     id INTEGER PRIMARY KEY,
     date TEXT NOT NULL,
-    sport TEXT NOT NULL,
+    sport TEXT NOT NULL CHECK (sport IN ('strength', 'mobility', 'run', 'bike', 'swim')),
     name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'pushed')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'pushed', 'cancelled')),
     workout_json TEXT NOT NULL,
     garmin_workout_id INTEGER,
     garmin_schedule_id INTEGER,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     pushed_at TEXT
 );
 CREATE INDEX planned_workouts_date ON planned_workouts (date);
@@ -107,7 +107,12 @@ CREATE TABLE plan_actual (
     activity_id INTEGER REFERENCES activities (activity_id),
     kind TEXT NOT NULL CHECK (kind IN ('done', 'skipped', 'extra', 'different')),
     details_json TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CHECK (
+        (kind IN ('done', 'different') AND planned_id IS NOT NULL AND activity_id IS NOT NULL)
+        OR (kind = 'skipped' AND planned_id IS NOT NULL AND activity_id IS NULL)
+        OR (kind = 'extra' AND planned_id IS NULL AND activity_id IS NOT NULL)
+    )
 );
 CREATE INDEX plan_actual_date ON plan_actual (date);
 
