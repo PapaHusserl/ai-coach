@@ -1,4 +1,4 @@
-"""Команды `coach`: login, sync, import."""
+"""Команды `coach`: login, sync, import, approve, push, status."""
 
 from getpass import getpass
 from pathlib import Path
@@ -14,9 +14,20 @@ from ai_coach.garmin import (
     load_client,
     token_dir,
 )
+from ai_coach.plan import (
+    PlanError,
+    approve,
+    garmin_json,
+    has_old,
+    pushable,
+    remove_old,
+    send,
+)
 from ai_coach.store.db import open_db
+from ai_coach.store.plans import list_planned_workouts
 from ai_coach.sync import FitImportError, import_fit
 from ai_coach.sync import sync as run_sync
+from ai_coach.workouts import describe_workout
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
 
@@ -86,3 +97,67 @@ def import_(
         fail(str(e))
     finally:
         conn.close()
+
+
+@app.command("approve")
+def approve_(workout_id: Annotated[int, typer.Argument(help="id тренировки")]) -> None:
+    """Утвердить черновик тренировки (draft -> approved)."""
+    conn = open_db()
+    try:
+        approve(conn, workout_id)
+        conn.commit()
+        typer.echo(f"Тренировка {workout_id} утверждена.")
+    except PlanError as e:
+        fail(str(e))
+    finally:
+        conn.close()
+
+
+@app.command()
+def push(workout_id: Annotated[int, typer.Argument(help="id тренировки")]) -> None:
+    """Отправить утверждённую тренировку в Garmin и запланировать на дату (спросит y/N).
+    Повторный push заменяет только свою прежнюю копию — после отдельного y/N."""
+    conn = open_db()
+    try:
+        row = pushable(conn, workout_id)
+        typer.echo(f"Дата: {row['date']}")
+        typer.echo(describe_workout(garmin_json(row)))
+        if not typer.confirm("Отправить в Garmin?", default=False):
+            typer.echo("Ничего не отправлено.")
+            return
+        client = load_client()
+        if has_old(row):
+            typer.echo(
+                "В Garmin уже есть эта тренировка, после отправки новой её снимут с календаря "
+                "и удалят: "
+                f"workoutId={row['garmin_workout_id']}, scheduleId={row['garmin_schedule_id']}"
+            )
+            if not typer.confirm("Отправить новую и удалить старую?", default=False):
+                typer.echo("Ничего не отправлено и не удалено.")
+                return
+        send(conn, client, row)
+        conn.commit()
+        if has_old(row):
+            remove_old(client, row["garmin_workout_id"], row["garmin_schedule_id"])
+        typer.echo("Отправлено. Синхронизируй часы.")
+    except (PlanError, GarminError) as e:
+        fail(str(e))
+    finally:
+        conn.close()
+
+
+@app.command()
+def status() -> None:
+    """Что запланировано и отправлено."""
+    conn = open_db()
+    try:
+        rows = list_planned_workouts(conn, "0000-01-01", "9999-12-31")
+    finally:
+        conn.close()
+    if not rows:
+        typer.echo("Тренировок нет.")
+    for row in rows:
+        sent = f", отправлена {row['pushed_at']}" if row["pushed_at"] else ""
+        typer.echo(
+            f"{row['id']}  {row['date']}  {row['sport']}  {row['name']}  [{row['status']}{sent}]"
+        )

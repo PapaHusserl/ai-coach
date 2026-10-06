@@ -1,0 +1,85 @@
+{
+  "workoutName": "SPIKE Swim",
+  "sportType": {
+    "sportTypeId": 4,
+    "sportTypeKey": "swimming",
+    "displayOrder": 3
+  },
+  "estimatedDurationInSecs": 900,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 4,
+        "sportTypeKey": "swimming",
+        "displayOrder": 3
+      },
+      "workoutSteps": [
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 3,
+            "stepTypeKey": "interval",
+            "displayOrder": 3
+          },
+          "endCondition": {
+            "conditionTypeId": 3,
+            "conditionTypeKey": "distance",
+            "displayOrder": 3,
+            "displayable": true
+          },
+          "endConditionValue": 200.0,
+          "targetType": {
+            "workoutTargetTypeId": 1,
+            "workoutTargetTypeKey": "no.target",
+            "displayOrder": 1
+          }
+        },
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 2,
+          "stepType": {
+            "stepTypeId": 3,
+            "stepTypeKey": "interval",
+            "displayOrder": 3
+          },
+          "endCondition": {
+            "conditionTypeId": 3,
+            "conditionTypeKey": "distance",
+            "displayOrder": 3,
+            "displayable": true
+          },
+          "endConditionValue": 100.0,
+          "targetType": {
+            "workoutTargetTypeId": 1,
+            "workoutTargetTypeKey": "no.target",
+            "displayOrder": 1
+          }
+        },
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 3,
+          "stepType": {
+            "stepTypeId": 3,
+            "stepTypeKey": "interval",
+            "displayOrder": 3
+          },
+          "endCondition": {
+            "conditionTypeId": 3,
+            "conditionTypeKey": "distance",
+            "displayOrder": 3,
+            "displayable": true
+          },
+          "endConditionValue": 100.0,
+          "targetType": {
+            "workoutTargetTypeId": 1,
+            "workoutTargetTypeKey": "no.target",
+            "displayOrder": 1
+          }
+        }
+      ]
+    }
+  ],
+  "author": {}
+}
