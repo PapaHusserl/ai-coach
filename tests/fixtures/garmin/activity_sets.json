@@ -1,0 +1,140 @@
+{
+ "activityId": 9000000001,
+ "exerciseSets": [
+  {
+   "exercises": [
+    {
+     "category": "WARM_UP",
+     "name": "ARM_CIRCLES",
+     "probability": 99.6
+    },
+    {
+     "category": "WARM_UP",
+     "name": "ARM_CIRCLES",
+     "probability": 99.6
+    },
+    {
+     "category": "WARM_UP",
+     "name": "ARM_CIRCLES",
+     "probability": 99.6
+    }
+   ],
+   "duration": 45.0,
+   "repetitionCount": null,
+   "weight": null,
+   "setType": "ACTIVE",
+   "startTime": "2026-03-10T06:57:32.0",
+   "wktStepIndex": 0,
+   "messageIndex": 0,
+   "minimalViableThreshold": null
+  },
+  {
+   "exercises": [
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    }
+   ],
+   "duration": 45.0,
+   "repetitionCount": 10,
+   "weight": 40000.0,
+   "setType": "ACTIVE",
+   "startTime": "2026-03-10T06:58:32.0",
+   "wktStepIndex": 1,
+   "messageIndex": 1,
+   "minimalViableThreshold": null
+  },
+  {
+   "exercises": [
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    }
+   ],
+   "duration": 90.0,
+   "repetitionCount": null,
+   "weight": null,
+   "setType": "REST",
+   "startTime": "2026-03-10T06:59:32.0",
+   "wktStepIndex": 2,
+   "messageIndex": 2,
+   "minimalViableThreshold": null
+  },
+  {
+   "exercises": [
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    },
+    {
+     "category": "BENCH_PRESS",
+     "name": "BARBELL_BENCH_PRESS",
+     "probability": 99.6
+    }
+   ],
+   "duration": 45.0,
+   "repetitionCount": 8,
+   "weight": 40000.0,
+   "setType": "ACTIVE",
+   "startTime": "2026-03-10T06:60:32.0",
+   "wktStepIndex": 3,
+   "messageIndex": 3,
+   "minimalViableThreshold": null
+  },
+  {
+   "exercises": [
+    {
+     "category": "ROW",
+     "name": "BARBELL_ROW",
+     "probability": 99.6
+    },
+    {
+     "category": "ROW",
+     "name": "BARBELL_ROW",
+     "probability": 99.6
+    },
+    {
+     "category": "ROW",
+     "name": "BARBELL_ROW",
+     "probability": 99.6
+    }
+   ],
+   "duration": 45.0,
+   "repetitionCount": 0,
+   "weight": null,
+   "setType": "ACTIVE",
+   "startTime": "2026-03-10T06:61:32.0",
+   "wktStepIndex": 5,
+   "messageIndex": 4,
+   "minimalViableThreshold": null
+  }
+ ]
+}

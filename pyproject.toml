@@ -7,11 +7,15 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "fitdecode>=0.11.0",
     "garminconnect>=0.3",
     "mcp>=2.3.0",
     "pydantic>=2.13.5",
     "typer>=0.27.2",
 ]
+
+[project.scripts]
+coach = "ai_coach.cli.main:app"
 
 [build-system]
 requires = ["uv_build>=0.12.22,<0.13.0"]
@@ -59,7 +63,7 @@ skip_covered = true
 paths = ["src", "tests"]
 min_confidence = 60
 ignore_names = ["model_config", "row_factory"]
-ignore_decorators = ["@field_validator", "@model_validator"]
+ignore_decorators = ["@field_validator", "@model_validator", "@app.command*"]
 
 [tool.mutmut]
 source_paths = ["src/"]
