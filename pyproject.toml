@@ -58,7 +58,7 @@ skip_covered = true
 [tool.vulture]
 paths = ["src", "tests"]
 min_confidence = 60
-ignore_names = ["model_config"]
+ignore_names = ["model_config", "row_factory"]
 ignore_decorators = ["@field_validator", "@model_validator"]
 
 [tool.mutmut]

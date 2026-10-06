@@ -71,3 +71,15 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Рекомендации по восстановлению (массаж, баня) — текстом в /coach-morning (шаг 7).
 - Шаг 3 закрывается без разбора полного экспорта; разбор — отдельно после п.8 спайка.
 - `spikes/**` исключён из qlty (одноразовый код).
+
+## Решения пользователя по шагу 2 (2026-10-06)
+
+- Колонки таблиц — как в `src/ai_coach/store/migrations/0001_init.sql`; в `daily_metrics` выжимка + один `raw_json` на день.
+- Путь к БД: аргумент `path` → `$AI_COACH_DB` → `~/.local/share/ai-coach/coach.db`.
+- `plan_actual.kind`: `done / skipped / extra / different`; пересчёт за период — удалить и добавить заново; естественного ключа у planned_workouts/plan_actual нет.
+- Commit делает вызывающий код (sync — одной транзакцией).
+- Upsert только по ключевым колонкам → `ON CONFLICT DO NOTHING`.
+- `weight_log`, `food_log` без `raw_json` (ручной ввод).
+- Отложено: статусы `goals` и `sync_log` — шаг 4; единица веса в `strength_sets` — шаг 3/6.
+- FK `plan_actual.planned_id` без `ON DELETE` (запрет): сначала меняется план (и plan_actual), потом удаляются/меняются тренировки.
+- После ревью: `None` в `*_json` → SQL NULL; миграции — только `*.sql`, при ошибке rollback.
