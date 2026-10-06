@@ -12,11 +12,13 @@ from ai_coach.store.goals import (
     add_phase,
     add_phase_event,
     add_phase_goal,
+    delete_phase_goals,
     get_goal,
     get_phase,
     list_goal_events,
     list_goals,
     list_phase_events,
+    list_phase_goal_ids,
     list_phases,
 )
 from ai_coach.store.goals import update_goal as update_goal_row
@@ -37,7 +39,9 @@ __all__ = [
     "list_phases",
     "phases_on",
     "propose_phase",
+    "reject_phase",
     "update_goal",
+    "update_phase",
 ]
 
 
@@ -131,6 +135,29 @@ def goals_on(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
     return sorted(states.values(), key=lambda s: (-s["priority"], s["id"]))
 
 
+PHASE_FIELDS = ("name", "description", "start_date", "end_date")
+
+
+def _check_phase_fields(fields: dict[str, Any]) -> None:
+    """Общие проверки propose_phase и update_phase (goal_ids уже убран из fields)."""
+    unknown = set(fields) - set(PHASE_FIELDS)
+    if unknown:
+        raise ValueError(f"нельзя задать поля: {sorted(unknown)}")
+    if "name" in fields and not fields["name"]:
+        raise ValueError("у фазы должно быть название")
+
+
+def _check_phase_goals(conn: sqlite3.Connection, goal_ids: list[int]) -> None:
+    for goal_id in goal_ids:
+        if get_goal(conn, goal_id) is None:
+            raise LookupError(f"цели {goal_id} нет")
+
+
+def _check_phase_dates(start: str | None, end: str | None) -> None:
+    if start and end and end < start:
+        raise ValueError("конец фазы раньше начала")
+
+
 def propose_phase(
     conn: sqlite3.Connection,
     name: str,
@@ -141,18 +168,10 @@ def propose_phase(
     """Черновик фазы (proposed), связь с целями goal_ids и событие proposed.
     fields — необязательные description, start_date, end_date, goal_ids (список целей).
     При исключении вызывающий делает rollback."""
-    if not name:
-        raise ValueError("у фазы должно быть название")
     goal_ids = sorted(set(fields.pop("goal_ids", None) or []))
-    unknown = set(fields) - {"description", "start_date", "end_date"}
-    if unknown:
-        raise ValueError(f"нельзя задать поля: {sorted(unknown)}")
-    start, end = fields.get("start_date"), fields.get("end_date")
-    if start and end and end < start:
-        raise ValueError("конец фазы раньше начала")
-    for goal_id in goal_ids:
-        if get_goal(conn, goal_id) is None:
-            raise LookupError(f"цели {goal_id} нет")
+    _check_phase_fields({"name": name, **fields})
+    _check_phase_dates(fields.get("start_date"), fields.get("end_date"))
+    _check_phase_goals(conn, goal_ids)
     stamp = _now(now)
     snapshot = {"name": name, "description": None, "start_date": None, "end_date": None, **fields}
     phase_id = add_phase(conn, {**snapshot, "created_at": stamp})
@@ -170,45 +189,98 @@ def propose_phase(
     return phase_id
 
 
-def accept_phase(conn: sqlite3.Connection, phase_id: int, now: str | None = None) -> None:
-    """Принятие фазы пользователем: proposed -> accepted, accepted_at, событие accepted.
-    now раньше предложения фазы — ValueError. При исключении вызывающий делает rollback."""
+def _proposed_phase(conn: sqlite3.Connection, phase_id: int, stamp: str) -> dict[str, Any]:
+    """Фаза для решения/правки: должна быть proposed, stamp не раньше её последнего события."""
     phase = get_phase(conn, phase_id)
     if phase is None:
         raise LookupError(f"фазы {phase_id} нет")
     if phase["status"] != "proposed":
-        raise ValueError(f"фаза {phase_id} уже принята")
-    stamp = _now(now)
+        raise ValueError(f"фаза {phase_id} уже не черновик ({phase['status']})")
     if stamp < list_phase_events(conn, phase_id)[-1]["occurred_at"]:
-        raise ValueError("время принятия раньше предложения фазы")
-    update_phase_row(conn, phase_id, {"status": "accepted", "accepted_at": stamp})
+        raise ValueError("время раньше последнего события фазы")
+    return phase
+
+
+def _phase_event(
+    conn: sqlite3.Connection, phase_id: int, kind: str, payload: Any, stamp: str
+) -> None:
     add_phase_event(
         conn,
-        {
-            "phase_id": phase_id,
-            "event_type": "accepted",
-            "payload_json": {"accepted_at": stamp},
-            "occurred_at": stamp,
-        },
+        {"phase_id": phase_id, "event_type": kind, "payload_json": payload, "occurred_at": stamp},
     )
+
+
+def update_phase(
+    conn: sqlite3.Connection, phase_id: int, changes: dict[str, Any], now: str | None = None
+) -> None:
+    """Правка черновика (только proposed): name, description, start_date, end_date, goal_ids
+    (заменяет набор целей). Событие updated хранит новые значения изменившихся полей; если
+    ничего не изменилось — события нет. now раньше последнего события — ValueError.
+    При исключении вызывающий делает rollback."""
+    if not changes:
+        raise ValueError("нет изменений")
+    fields = dict(changes)
+    goal_ids = fields.pop("goal_ids", None)
+    _check_phase_fields(fields)
+    stamp = _now(now)
+    phase = _proposed_phase(conn, phase_id, stamp)
+    merged = {**phase, **fields}
+    _check_phase_dates(merged["start_date"], merged["end_date"])
+    changed = {k: v for k, v in fields.items() if phase[k] != v}
+    if goal_ids is not None:
+        goal_ids = sorted(set(goal_ids))
+        _check_phase_goals(conn, goal_ids)
+        if goal_ids != list_phase_goal_ids(conn, phase_id):
+            changed["goal_ids"] = goal_ids
+    if not changed:
+        return
+    row = {k: v for k, v in changed.items() if k != "goal_ids"}
+    if row:
+        update_phase_row(conn, phase_id, row)
+    if "goal_ids" in changed:
+        delete_phase_goals(conn, phase_id)
+        for goal_id in changed["goal_ids"]:
+            add_phase_goal(conn, phase_id, goal_id)
+    _phase_event(conn, phase_id, "updated", changed, stamp)
+
+
+def accept_phase(conn: sqlite3.Connection, phase_id: int, now: str | None = None) -> None:
+    """Принятие фазы пользователем: proposed -> accepted, accepted_at, событие accepted.
+    now раньше последнего события фазы — ValueError. При исключении вызывающий делает rollback."""
+    stamp = _now(now)
+    _proposed_phase(conn, phase_id, stamp)
+    update_phase_row(conn, phase_id, {"status": "accepted", "accepted_at": stamp})
+    _phase_event(conn, phase_id, "accepted", {"accepted_at": stamp}, stamp)
+
+
+def reject_phase(conn: sqlite3.Connection, phase_id: int, now: str | None = None) -> None:
+    """Отклонение черновика: proposed -> rejected, событие rejected.
+    При исключении вызывающий делает rollback."""
+    stamp = _now(now)
+    _proposed_phase(conn, phase_id, stamp)
+    update_phase_row(conn, phase_id, {"status": "rejected"})
+    _phase_event(conn, phase_id, "rejected", {}, stamp)
 
 
 def phases_on(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
     """Состояние фаз на конец дня `day` (YYYY-MM-DD) по событиям: предложенные до этой даты,
-    со статусом на тот момент и целями (goal_ids). Порядок по id."""
+    с полями, целями (goal_ids) и статусом на тот момент. Порядок по id."""
     sql = (
         "SELECT * FROM phase_events WHERE substr(occurred_at, 1, 10) <= ? ORDER BY occurred_at, id"
     )
     states: dict[int, dict[str, Any]] = {}
     for event in fetch_all(conn, sql, (day,)):
         payload = json.loads(event["payload_json"])
-        if event["event_type"] == "proposed":
+        kind = event["event_type"]
+        if kind == "proposed":
             states[event["phase_id"]] = {
                 "id": event["phase_id"],
                 **payload,
                 "status": "proposed",
                 "accepted_at": None,
             }
+        elif kind == "updated":
+            states[event["phase_id"]].update(payload)
         else:
-            states[event["phase_id"]].update(payload, status="accepted")
+            states[event["phase_id"]].update(payload, status=kind)
     return [states[phase_id] for phase_id in sorted(states)]

@@ -16,7 +16,9 @@ from ai_coach.goals.service import (
     list_phases,
     phases_on,
     propose_phase,
+    reject_phase,
     update_goal,
+    update_phase,
 )
 
 __all__ = [
@@ -30,5 +32,7 @@ __all__ = [
     "list_phases",
     "phases_on",
     "propose_phase",
+    "reject_phase",
     "update_goal",
+    "update_phase",
 ]

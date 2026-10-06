@@ -60,6 +60,10 @@ def add_phase_goal(conn: sqlite3.Connection, phase_id: int, goal_id: int) -> Non
     conn.execute("INSERT INTO phase_goals (phase_id, goal_id) VALUES (?, ?)", (phase_id, goal_id))
 
 
+def delete_phase_goals(conn: sqlite3.Connection, phase_id: int) -> None:
+    conn.execute("DELETE FROM phase_goals WHERE phase_id = ?", (phase_id,))
+
+
 def list_phase_goal_ids(conn: sqlite3.Connection, phase_id: int) -> list[int]:
     sql = "SELECT goal_id FROM phase_goals WHERE phase_id = ? ORDER BY goal_id"
     return [row["goal_id"] for row in fetch_all(conn, sql, (phase_id,))]
