@@ -29,10 +29,7 @@ def token_dir() -> Path:
 
 
 def stale_tokens() -> str:
-    return (
-        "Токены Garmin протухли или отклонены. Удали "
-        f"{token_dir() / TOKEN_NAME} и выполни в обычном терминале: coach login"
-    )
+    return "Токены Garmin протухли или отклонены. Выполни в обычном терминале: coach login"
 
 
 class GarminError(Exception):

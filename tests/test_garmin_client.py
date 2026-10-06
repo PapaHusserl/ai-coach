@@ -87,6 +87,7 @@ def test_load_client_maps_garmin_errors_and_keeps_tokens(
     with pytest.raises(GarminError) as raised:
         load_client()
     assert hint in str(raised.value)
+    assert "Удали" not in str(raised.value)
     assert token_file.read_text() == '{"token": "fake"}'
 
 
