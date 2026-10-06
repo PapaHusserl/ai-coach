@@ -37,6 +37,11 @@
 ## Открытые вопросы
 - Архитектура/MVP — следующий шаг после холда.
 
+## Разработка
+- Установка: `uv sync` (Python 3.12+); для `make smells` нужен Qlty CLI (`curl -fsSL https://qlty.sh | sh`).
+- Все проверки: `make check` — ruff (линт+формат), pyright (strict для src/), qlty smells (сложность, дубли), vulture (мёртвый код), pytest с покрытием ≥94%.
+- Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
+
 Подробности ресёрча: [docs/research-2026-10-03.md](docs/research-2026-10-03.md)
 Архитектура (утверждена): [docs/architecture-2026-10-06.md](docs/architecture-2026-10-06.md)
 План реализации: [docs/plan.md](docs/plan.md)

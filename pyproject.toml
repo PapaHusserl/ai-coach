@@ -1,0 +1,67 @@
+[project]
+name = "ai-coach"
+version = "0.1.0"
+description = "Личный ИИ-тренер на данных Garmin"
+authors = [
+    { name = "VladislavAkhtyamov", email = "vladakhtyamov02@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "garminconnect>=0.3",
+    "mcp>=2.3.0",
+    "pydantic>=2.13.5",
+    "typer>=0.27.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.22,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mutmut>=3.8.0",
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+    "vulture>=2.16",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+strict = ["src"]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["ai_coach"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 94
+show_missing = true
+skip_covered = true
+
+[tool.vulture]
+paths = ["src", "tests"]
+min_confidence = 60
+ignore_names = ["model_config"]
+ignore_decorators = ["@field_validator", "@model_validator"]
+
+[tool.mutmut]
+source_paths = ["src/"]
+pytest_add_cli_args_test_selection = ["tests/"]
+also_copy = ["pyproject.toml"]
