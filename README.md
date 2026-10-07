@@ -43,7 +43,7 @@
 - Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
 
 ## Вес и еда
-- `coach weight 82.4` — записать вес; `coach food "борщ, хлеб, чай"` — записать еду текстом. Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
+- `coach weight 82.4` — записать вес; `coach food "борщ 300 г, хлеб 40 г"` — записать еду текстом, у каждого продукта граммы (без них /coach-food спросит). Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
 - КБЖУ считает скилл `/coach-food` через MCP (`get_food_pending`, `save_food_nutrition`); записи с КБЖУ он не меняет.
 
 ## MCP и скиллы тренера (Claude Code)
