@@ -6,7 +6,6 @@
 
 import json
 import sqlite3
-from contextlib import suppress
 from datetime import date, timedelta
 from typing import Any
 
@@ -176,11 +175,13 @@ def deviations(
     date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
 ) -> dict[str, Any]:
     """Отклонения за день: самочувствие, readiness, HRV, сон, ATL - CTL (пороги — в
-    load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — без проверки ATL - CTL."""
+    load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — ATL - CTL не проверен,
+    причина — в load_error."""
     _day(date)
-    load_row = None
-    with suppress(ToolError):  # нет нагрузки (coach sync) — без ATL - CTL, причина — в snapshot
+    try:
         load_row = load(conn, date, date)["rows"][-1]
+    except ToolError as error:
+        return {**_cap(_day_deviations(conn, date, None)), "load_error": str(error)}
     return _cap(_day_deviations(conn, date, load_row))
 
 

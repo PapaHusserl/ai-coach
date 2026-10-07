@@ -62,7 +62,12 @@ def test_wellbeing_rows_are_limited_and_truncated_flag_set(conn: sqlite3.Connect
 
 
 def test_deviations_have_rows_and_truncated(conn: sqlite3.Connection) -> None:
-    assert call(conn, "get_deviations", date=DAY) == {"rows": [], "truncated": False}
+    result = call(conn, "get_deviations", date=DAY)
+    assert (result["rows"], result["truncated"]) == ([], False)
+
+
+def test_deviations_without_load_say_atl_ctl_not_checked(conn: sqlite3.Connection) -> None:
+    assert "coach sync" in call(conn, "get_deviations", date=DAY)["load_error"]
 
 
 def test_no_data_means_no_deviations(conn: sqlite3.Connection) -> None:
