@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +85,13 @@ def test_weight_at_today_is_allowed(isolated: Path) -> None:
 
 def test_food_at_today_is_allowed(isolated: Path) -> None:
     assert run("food", "борщ", "--at", TODAY).exit_code == 0
+
+
+def test_at_today_is_never_in_future(isolated: Path) -> None:
+    assert run("weight", "81.7", "--at", TODAY).exit_code == 0
+    stored = datetime.fromisoformat(rows(isolated, "weight_log")[0]["measured_at"])
+    assert stored <= datetime.now()
+    assert stored <= datetime.fromisoformat(f"{TODAY} 12:00:00")
 
 
 @pytest.mark.parametrize(

@@ -34,15 +34,15 @@ def now() -> str:
 
 
 def parse_at(text: str | None) -> str | None:
-    """--at: YYYY-MM-DD или "YYYY-MM-DD HH:MM"; None - не задан. Только дата -> 12:00;
-    сегодняшняя дата допустима и до полудня. Будущее - ошибка."""
+    """--at: YYYY-MM-DD или "YYYY-MM-DD HH:MM"; None - не задан. Только дата -> 12:00,
+    для сегодня до полудня - текущее время. Будущее - ошибка."""
     if text is None:
         return None
     value = text.strip()
     try:
         if len(value) == len("YYYY-MM-DD"):
             day = date.fromisoformat(value)
-            moment = datetime(day.year, day.month, day.day, 12)
+            moment = min(datetime(day.year, day.month, day.day, 12), datetime.now())
             in_future = day > date.today()
         else:
             moment = datetime.strptime(value, "%Y-%m-%d %H:%M")
