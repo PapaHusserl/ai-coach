@@ -185,4 +185,16 @@
 
 **Цель:** тренер знает пользователя — без этого рекомендации не юзабельны (отзыв пользователя после первого прогона `тренер`, 2026-10-07: «он меня не знает (вес, рост, пол, потребности, цели)… нужен какой-то жёсткий профиль»).
 
-Детальный план — папа-кабан.
+Детальный план — папа-кабан (2026-10-07): журнал `profile_log` (ключ-значение, только добавление, миграция 0007), `profile/service.py` (белый список ключей, `missing`), `profile/nutrition.py` (BMR/TDEE/КБЖУ), профиль из Garmin при `coach sync`, CLI `coach profile show/set` и `coach goal add/list/done/cancel`, MCP `get_profile` + раздел `profile` в snapshot (не ужимается), опрос тренером при пустом профиле, учёт в /coach-plan, /coach-food, /coach-morning.
+
+Решения пользователя (2026-10-07, «все по рек.»):
+1. Хранение — журнал с историей (профиль на дату).
+2. Ручное значение главнее Garmin; Garmin — только если ручного нет.
+3. Заполнение — опрос тренером при пустом профиле + `coach profile set` для правок.
+4. КБЖУ: Mifflin-St Jeor × коэффициент активности + калории тренировок; дефицит 15–20% (не ниже BMR), профицит 10%; белок 1.8–2.2 г/кг; ручное переопределение `kcal_target`.
+5. Расписание — свободный текст, учитывается в промпте (жёсткая проверка только у вело сб/вс).
+6. Только цель по весу; умных весов нет — `get_body_composition` не берём.
+7. `coach goal` — в этом шаге.
+8. Мини-спайк — оркестратор.
+
+Спайк `get_user_profile()` (2026-10-07, обезличенная фикстура `tests/fixtures/garmin/user_profile.json`): `userData.gender` = `MALE`/`FEMALE`; `birthDate` = `YYYY-MM-DD`; `weight` — граммы (float); `height` — см (float); `activityLevel` = null (не заполнен — ключ ручной); `vo2MaxRunning`/`vo2MaxCycling` = null (VO2max брать из `get_max_metrics` или не брать); `lactateThresholdHeartRate` есть (LTHR уже берётся в шаге 7); `availableTrainingDays` — список дней (`SUNDAY`…, порядок произвольный) — можно подставлять как начальное расписание, ручное главнее; `preferredLongTrainingDays` пуст; `userSleep.sleepTime`/`wakeTime` — секунды от полуночи. Max HR в user-settings нет — из зон (шаг 7).

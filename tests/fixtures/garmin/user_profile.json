@@ -1,0 +1,130 @@
+{
+ "id": 1,
+ "userData": {
+  "gender": "MALE",
+  "weight": 80000.0,
+  "height": 180.0,
+  "timeFormat": "time_twelve_hr",
+  "birthDate": "1990-01-15",
+  "measurementSystem": "metric",
+  "activityLevel": null,
+  "handedness": "RIGHT",
+  "powerFormat": {
+   "formatId": 30,
+   "formatKey": "watt",
+   "minFraction": 0,
+   "maxFraction": 0,
+   "groupingUsed": true,
+   "displayFormat": null
+  },
+  "heartRateFormat": {
+   "formatId": 21,
+   "formatKey": "bpm",
+   "minFraction": 0,
+   "maxFraction": 0,
+   "groupingUsed": false,
+   "displayFormat": null
+  },
+  "firstDayOfWeek": {
+   "dayId": 3,
+   "dayName": "monday",
+   "sortOrder": 3,
+   "isPossibleFirstDay": true
+  },
+  "vo2MaxRunning": null,
+  "vo2MaxCycling": null,
+  "lactateThresholdSpeed": 0.3,
+  "lactateThresholdHeartRate": 170,
+  "diveNumber": null,
+  "intensityMinutesCalcMethod": "AUTO",
+  "moderateIntensityMinutesHrZone": 3,
+  "vigorousIntensityMinutesHrZone": 4,
+  "hydrationMeasurementUnit": "milliliter",
+  "hydrationContainers": [],
+  "hydrationAutoGoalEnabled": true,
+  "firstbeatMaxStressScore": null,
+  "firstbeatCyclingLtTimestamp": 1,
+  "firstbeatRunningLtTimestamp": 1,
+  "thresholdHeartRateAutoDetected": true,
+  "ftpAutoDetected": true,
+  "trainingStatusPausedDate": null,
+  "weatherLocation": {
+   "useFixedLocation": false,
+   "latitude": null,
+   "longitude": null,
+   "locationName": null,
+   "isoCountryCode": null,
+   "postalCode": null
+  },
+  "golfDistanceUnit": "statute_us",
+  "golfElevationUnit": null,
+  "golfSpeedUnit": null,
+  "externalBottomTime": null,
+  "availableTrainingDays": [
+   "SUNDAY",
+   "TUESDAY",
+   "MONDAY",
+   "THURSDAY",
+   "FRIDAY"
+  ],
+  "preferredLongTrainingDays": [],
+  "virtualCaddieDataSource": null,
+  "numberDivesAutomatically": null,
+  "firstbeatRowingLtTimestamp": null,
+  "lactateThresholdRowingPace": null,
+  "lactateThresholdHeartRateRowing": null,
+  "lactateThresholdHeartRateCycling": null,
+  "weeklyTrainingReportEnabled": true,
+  "wtrPrimaryActivityType": 3
+ },
+ "userSleep": {
+  "sleepTime": 79200,
+  "defaultSleepTime": false,
+  "wakeTime": 21600,
+  "defaultWakeTime": false
+ },
+ "connectDate": null,
+ "sourceType": null,
+ "userSleepWindows": [
+  {
+   "sleepWindowFrequency": "SUNDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "MONDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "TUESDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "WEDNESDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "THURSDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "FRIDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "SATURDAY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  },
+  {
+   "sleepWindowFrequency": "DAILY",
+   "startSleepTimeSecondsFromMidnight": 79200,
+   "endSleepTimeSecondsFromMidnight": 21600
+  }
+ ]
+}
