@@ -19,6 +19,7 @@ from ai_coach.load import (
     load_series,
     resolve_thresholds,
 )
+from ai_coach.profile import current_profile, profile_history, profile_nutrition, resting_hr
 from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
     last_rest_hr,
@@ -47,6 +48,7 @@ MAX_ROWS = 60
 MAX_CHARS = 20000
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
+SNAPSHOT_GOALS = 10
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -54,7 +56,7 @@ LOAD_WARMUP_DAYS = 120
 WELLBEING_DAYS = 30
 WEEKEND_ONLY_SPORT = "bike"
 SATURDAY = 5
-NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings")
+NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings", "profile")
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
 
 
@@ -185,6 +187,31 @@ def deviations(
     return _cap(_day_deviations(conn, date, load_row))
 
 
+def profile(
+    conn: sqlite3.Connection,
+    date: str | None = None,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
+    history: bool = False,
+) -> dict[str, Any]:
+    """Профиль спортсмена на конец дня (по умолчанию сегодня): значения с источниками,
+    missing (что не заполнено), no_goals, nutrition (КБЖУ-цель). history=True — ещё и все
+    записи по ключам. Без raw_json."""
+    day = _day(date).isoformat() if date else _today().isoformat()
+    current = current_profile(conn, day)
+    result = {
+        "date": day,
+        **current,
+        "resting_hr": resting_hr(conn, day),
+        "nutrition": profile_nutrition(conn, day, current),
+    }
+    if history:
+        result["history"] = profile_history(conn, day)
+    return result
+
+
+def _today() -> date:
+    return date.today()
+
+
 def _hr_params(
     conn: sqlite3.Connection, end: str
 ) -> tuple[float, dict[str, dict[str, Any]], list[str]]:
@@ -217,6 +244,24 @@ def load(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     result["thresholds"] = thresholds
     result["warnings"] = warnings
     return result
+
+
+def _snapshot_profile(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Профиль для сводки: только текущие значения (без источников и истории), missing,
+    nutrition и активные цели."""
+    current = current_profile(conn, day)
+    found = sorted(goals.list_goals(conn, "active"), key=lambda g: (-g["priority"], g["id"]))
+    active = [
+        {k: g[k] for k in ("id", "title", "kind", "target", "target_date", "priority")}
+        for g in found[:SNAPSHOT_GOALS]
+    ]
+    return {
+        "values": {key: entry["value"] for key, entry in current["values"].items()},
+        "missing": current["missing"],
+        "nutrition": profile_nutrition(conn, day, current),
+        "goals": active,
+        "goals_truncated": len(found) > SNAPSHOT_GOALS,
+    }
 
 
 def morning_snapshot(
@@ -255,6 +300,7 @@ def morning_snapshot(
     snapshot["wellbeing"] = _cap(marks, newest=True)
     snapshot["deviations"] = part(_day_deviations(conn, date, load_row))
     snapshot["last_sync"] = last_sync_log(conn)
+    snapshot["profile"] = _snapshot_profile(conn, date)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]

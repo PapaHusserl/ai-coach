@@ -24,6 +24,7 @@ from ai_coach.store.garmin_data import (
 )
 from ai_coach.store.journal import add_sync_log
 from ai_coach.sync.jsonutil import dump
+from ai_coach.sync.user_profile import read_user_profile, write_profile
 
 STRENGTH = "strength_training"
 LACTATE_PATH = "/biometric-service/biometric/latestLactateThreshold"
@@ -250,6 +251,15 @@ def sync(
             log(conn, started, "error", str(e))
         raise
     message = f"дней с метриками {len(metrics)}, активностей {len(activities)}"
+    try:
+        profile, notes = read_user_profile(client, today)
+    except GarminError as e:
+        profile, notes = [], [f"профиль не обновлён: {e}"]
+    if notes:
+        message += "; " + "; ".join(notes)
+    max_hrs = [t["max_hr"] for t in thresholds if t.get("max_hr")]
+    if max_hrs:
+        profile.append(("max_hr", str(max(max_hrs)), {"max_hr": max(max_hrs)}))
     with conn:
         for row in metrics:
             upsert_daily_metrics(conn, row)
@@ -260,5 +270,8 @@ def sync(
         for threshold in thresholds:
             if not zones_unchanged(conn, threshold):
                 upsert_threshold(conn, threshold)
+        changed = write_profile(conn, profile, f"{today.isoformat()} {started[11:]}")
+        if changed:
+            message += f"; профиль: {', '.join(changed)}"
         log(conn, started, "ok", message)
     return message

@@ -90,6 +90,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "last_sync",
         "wellbeing",
         "deviations",
+        "profile",
     }
 
 

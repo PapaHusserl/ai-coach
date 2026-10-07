@@ -34,6 +34,7 @@ class FakeGarmin:
         missing: dict[str, set[str]] | None = None,
         fail: dict[str, Exception] | None = None,
         with_run: bool = False,
+        profile: Any = "fixture",
     ) -> None:
         self.empty = empty or {}
         self.missing = missing or {}
@@ -44,6 +45,7 @@ class FakeGarmin:
         self.sets = load("activity_sets.json")
         self.lactate = load("latest_lactate_threshold.json")
         self.zones = load("heart_rate_zones.json")
+        self.profile = load("user_profile.json") if profile == "fixture" else profile
 
     def _enter(self, method: str, day: str) -> bool:
         self.calls.append((method, day))
@@ -97,6 +99,12 @@ class FakeGarmin:
         if "get_heart_rate_zones" in self.fail:
             raise self.fail["get_heart_rate_zones"]
         return self.zones
+
+    def get_user_profile(self) -> Any:
+        self.calls.append(("get_user_profile", None))
+        if "get_user_profile" in self.fail:
+            raise self.fail["get_user_profile"]
+        return self.profile
 
     def get_activities_by_date(
         self, startdate: str, enddate: str | None = None, *a: Any, **k: Any

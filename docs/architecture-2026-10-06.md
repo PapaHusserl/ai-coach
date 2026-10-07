@@ -15,7 +15,7 @@ Python 3.12+, uv; python-garminconnect ≥0.3; SQLite (stdlib sqlite3 + SQL-ми
 garmin/ · store/ · sync/ · goals/ · plan/ · load/ · workouts/ · cli/ · mcp_server/ (последние два — тонкие обёртки).
 
 ## Схема
-daily_metrics, activities, strength_sets, weight_log, goals, phases (proposed/accepted), goal_events, planned_workouts (draft/approved/pushed), plan_actual, food_log, sync_log. raw_json хранится всегда.
+daily_metrics, activities, strength_sets, weight_log, goals, phases (proposed/accepted), goal_events, planned_workouts (draft/approved/pushed), plan_actual, food_log, wellbeing_log, profile_log, sync_log. raw_json хранится всегда.
 
 ## Шаги MVP
 0. Кабан-кволити: линтеры, пороги, мутации.
@@ -151,3 +151,12 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - `get_food_pending` с `truncated=true` → /coach-food просит повторный запуск.
 - /coach-food пишет КБЖУ сразу окончательно, без черновика и подтверждения (отступление от плана «MCP-черновик»); исправление оценок — с пунктом бэклога о правке записей.
 - /coach-food требует граммы у каждого продукта, «порции» не угадывает: без граммов спрашивает пользователя, запись остаётся непосчитанной (пользователь 2026-10-07). Остальное в скилле (итог дня, Sonnet) — по рекомендациям.
+
+## Профиль спортсмена (шаг 11, 2026-10-07)
+- `profile_log(id, key, value TEXT, source manual/garmin, logged_at, raw_json)` — миграция 0007, только добавление, индекс (key, logged_at). Текущее значение ключа — последняя запись; ручное главнее Garmin (Garmin — только если ручного нет); состояние на дату — записи с датой `logged_at` не позже неё. Та же запись из Garmin повторно не пишется.
+- Ключи (белый список в `profile/service.py`): sex (m/f), birth_date, height_cm, activity_level, max_hr, injuries, limitations, equipment, schedule, preferences, diet, target_weight_kg, weight_goal (lose/keep/gain), weekly_rate_kg, kcal_target; `weight` — только из Garmin (запасной, в weight_log не пишется); `resting_hr` — только чтение из daily_metrics. Числа хранятся каноническим текстом, наружу отдаются числами.
+- `current_profile(conn, day)` -> `values` (key -> value, source, logged_at), `age`, `weight_kg` (последний weight_log, иначе Garmin), `missing` (обязательные пустые + `goals`, если нет активных целей).
+- `profile/nutrition.py`: Mifflin-St Jeor x коэффициент (1.2/1.375/1.55/1.725) + калории активностей дня минус BMR за время тренировки (не ниже 0); lose −15…20% (не ниже BMR), keep 0, gain +10% (weekly_rate_kg задаёт долю в пределах lose 15–20%, gain 5–15%, зажим — в assumptions); белок 1.8 (lose 2.0) г/кг, жир 0.9 г/кг, углеводы — остаток; `kcal_target` вручную главнее; нет пола/возраста/роста/веса — `kcal_target` None и `missing`.
+- `coach sync` читает `get_user_profile()` (1 запрос); ошибка или неполный ответ — предупреждение в итоге, sync не падает. max_hr — из зон шага 7.
+- CLI: `coach profile show/set`, `coach goal add/list/done/cancel`. MCP: `get_profile(date?, history?)` — значения с источниками, age, weight_kg, resting_hr, missing, nutrition; без raw_json, пишущих инструментов нет. `snapshot["profile"]` — только текущие значения, missing, nutrition, активные цели; в NOT_LISTS, не ужимается.
+- Опрос — `.claude/agents/coach-onboarding.md`, читается тренером при непустом `missing`.

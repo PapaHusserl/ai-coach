@@ -67,6 +67,15 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "
         "список - всё в норме, пересчёт плана не нужен. date - YYYY-MM-DD.",
     ),
+    "get_profile": (
+        tools.profile,
+        "Профиль спортсмена на дату (по умолчанию сегодня): пол, возраст, рост, вес, уровень "
+        "активности, травмы, инвентарь, расписание, цель по весу и т.д. с источниками (manual / "
+        "garmin), age, weight_kg, resting_hr, missing (что не заполнено; goals - нет целей), "
+        "nutrition (BMR, TDEE, kcal_target, белки/жиры/углеводы, допущения). "
+        "history=true - ещё и все записи по ключам. "
+        "Пишет пользователь командой coach profile set.",
+    ),
     "get_food_pending": (
         tools.food_pending,
         "Записи еды без КБЖУ за все дни (для /coach-food).",
