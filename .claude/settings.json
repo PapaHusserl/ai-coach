@@ -10,10 +10,6 @@
       "Bash(cat .claude/skills/coach-food/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/spec-formats.md)"
-    ],
-    "deny": [
-      "Bash(uv run coach approve:*)",
-      "Bash(uv run coach push:*)"
     ]
   }
 }
