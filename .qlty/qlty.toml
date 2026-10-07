@@ -41,12 +41,6 @@ exclude_patterns = [
   "**/testdata/**",
   "**/vendor/**",
   "spikes/**",
-  # typer-команды recipe add/edit: каждая опция - параметр функции, порог qlty 7 не подходит
-  "src/ai_coach/cli/recipes.py",
-  # typer-команды protocol/supplement add/edit: то же самое
-  "src/ai_coach/cli/sport_nutrition.py",
-  # typer-команды med add/edit: то же самое
-  "src/ai_coach/cli/meds.py",
 ]
 
 test_patterns = [
@@ -64,7 +58,8 @@ test_patterns = [
 mode = "comment"
 
 [smells.function_parameters]
-threshold = 7
+# typer-команды add/edit: каждая опция - параметр функции; qlty 0.651 не умеет порог по файлам
+threshold = 15
 
 [[source]]
 name = "default"

@@ -35,7 +35,7 @@ AMOUNTS = {
 MINUTES = {"min_duration_min": "--min-duration", "offset_min": "--offset"}
 PHASE_HELP = "before | during | after"
 SPORT_HELP = "strength | mobility | run | bike | swim; без него - для любого вида"
-SPORT_EDIT_HELP = "Вид спорта; сбросить нельзя - удалите и создайте заново"
+SPORT_EDIT_HELP = "Вид спорта; сбросить - --clear-sport"
 
 
 def one_of(value: str | None, allowed: tuple[str, ...], option: str) -> str | None:
@@ -70,6 +70,14 @@ def read_protocol(options: dict[str, str | None]) -> dict[str, Any]:
         if found is not None:
             values[key] = found
     return values
+
+
+def clear_field(fields: dict[str, Any], key: str, given: Any, flag: bool, pair: str) -> None:
+    """Флаг сброса кладёт NULL; вместе с одноимённой опцией - ошибка."""
+    if flag and given is not None:
+        fail(f"{pair} вместе нельзя.")
+    if flag:
+        fields[key] = None
 
 
 def check_not_empty(values: dict[str, Any]) -> None:
@@ -231,6 +239,10 @@ def protocol_edit(
     fluid: Annotated[str | None, typer.Option("--fluid", help="Жидкость, мл")] = None,
     sodium: Annotated[str | None, typer.Option("--sodium", help="Натрий, мг")] = None,
     note: Annotated[str | None, typer.Option("--note", help="Заметка")] = None,
+    clear_sport: Annotated[
+        bool, typer.Option("--clear-sport", help="Сбросить вид спорта: для любого вида")
+    ] = False,
+    clear_note: Annotated[bool, typer.Option("--clear-note", help="Убрать заметку")] = False,
 ) -> None:
     """Поправить протокол (что передано)."""
     options = {
@@ -247,6 +259,8 @@ def protocol_edit(
     if name is not None:
         fields["name"] = read_name(name)
     fields = {key: value for key, value in fields.items() if value is not None}
+    clear_field(fields, "sport", sport, clear_sport, "--sport и --clear-sport")
+    clear_field(fields, "note", note, clear_note, "--note и --clear-note")
     if not fields:
         fail("Нечего менять: нужен хотя бы один параметр протокола.")
     old = find(get_protocol, str(protocol_id), "Протокола")
@@ -315,6 +329,10 @@ def supplement_edit(
     ] = None,
     time_note: Annotated[str | None, typer.Option("--time-note", help="Когда принимать")] = None,
     note: Annotated[str | None, typer.Option("--note", help="Заметка")] = None,
+    clear_time_note: Annotated[
+        bool, typer.Option("--clear-time-note", help="Убрать пометку о времени")
+    ] = False,
+    clear_note: Annotated[bool, typer.Option("--clear-note", help="Убрать заметку")] = False,
 ) -> None:
     """Поправить добавку (что передано)."""
     fields: dict[str, Any] = {
@@ -326,6 +344,8 @@ def supplement_edit(
         "name": read_name(name) if name is not None else None,
     }
     fields = {key: value for key, value in fields.items() if value is not None}
+    clear_field(fields, "time_note", time_note, clear_time_note, "--time-note и --clear-time-note")
+    clear_field(fields, "note", note, clear_note, "--note и --clear-note")
     if not fields:
         fail("Нечего менять: нужен хотя бы один параметр добавки.")
     change(edit_supplement, supplement_id, fields, "Добавки")

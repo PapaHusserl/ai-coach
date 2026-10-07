@@ -10,6 +10,7 @@ from ai_coach.cli.recipes import read_name
 from ai_coach.cli.sport_nutrition import (
     SCHEDULES,
     change,
+    clear_field,
     find,
     one_of,
     read_dose,
@@ -119,6 +120,11 @@ def med_edit(
     end: Annotated[str | None, typer.Option("--end", help="Конец, YYYY-MM-DD")] = None,
     time_note: Annotated[str | None, typer.Option("--time-note", help="Когда принимать")] = None,
     note: Annotated[str | None, typer.Option("--note", help="Заметка")] = None,
+    no_end: Annotated[bool, typer.Option("--no-end", help="Сделать курс бессрочным")] = False,
+    clear_time_note: Annotated[
+        bool, typer.Option("--clear-time-note", help="Убрать пометку о времени")
+    ] = False,
+    clear_note: Annotated[bool, typer.Option("--clear-note", help="Убрать заметку")] = False,
 ) -> None:
     """Поправить курс (что передано)."""
     fields: dict[str, Any] = {
@@ -133,6 +139,9 @@ def med_edit(
         "name": read_name(name) if name is not None else None,
     }
     fields = {key: value for key, value in fields.items() if value is not None}
+    clear_field(fields, "end_date", end, no_end, "--end и --no-end")
+    clear_field(fields, "time_note", time_note, clear_time_note, "--time-note и --clear-time-note")
+    clear_field(fields, "note", note, clear_note, "--note и --clear-note")
     if not fields:
         fail("Нечего менять: нужен хотя бы один параметр курса.")
     old = find(get_med, str(med_id), "Курса")
