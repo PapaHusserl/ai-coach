@@ -19,7 +19,14 @@ from ai_coach.load import (
     load_series,
     resolve_thresholds,
 )
-from ai_coach.profile import current_profile, profile_history, profile_nutrition, resting_hr
+from ai_coach.pantry import stock
+from ai_coach.profile import (
+    current_profile,
+    profile_history,
+    profile_nutrition,
+    remaining,
+    resting_hr,
+)
 from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
     last_rest_hr,
@@ -35,6 +42,7 @@ from ai_coach.store.journal import (
     list_wellbeing,
     update_food,
 )
+from ai_coach.store.pantry import has_meal_plan
 from ai_coach.store.plans import (
     add_planned_workout,
     get_planned_workout,
@@ -49,6 +57,7 @@ MAX_CHARS = 20000
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
 SNAPSHOT_GOALS = 10
+SNAPSHOT_PANTRY = 30
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -56,7 +65,15 @@ LOAD_WARMUP_DAYS = 120
 WELLBEING_DAYS = 30
 WEEKEND_ONLY_SPORT = "bike"
 SATURDAY = 5
-NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings", "profile")
+NOT_LISTS = (
+    "date",
+    "load_error",
+    "last_sync",
+    "thresholds",
+    "warnings",
+    "profile",
+    "meal_plan_today",
+)
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
 
 
@@ -193,19 +210,27 @@ def profile(
     history: bool = False,
 ) -> dict[str, Any]:
     """Профиль спортсмена на конец дня (по умолчанию сегодня): значения с источниками,
-    missing (что не заполнено), no_goals, nutrition (КБЖУ-цель). history=True — ещё и все
+    missing (что не заполнено), no_goals, nutrition (КБЖУ-цель), nutrition_remaining
+    (остаток дня: цель минус съеденное, минус — перебор; нет цели — None). history=True — ещё и все
     записи по ключам. Без raw_json."""
     day = _day(date).isoformat() if date else _today().isoformat()
     current = current_profile(conn, day)
+    target = profile_nutrition(conn, day, current)
     result = {
         "date": day,
         **current,
         "resting_hr": resting_hr(conn, day),
-        "nutrition": profile_nutrition(conn, day, current),
+        "nutrition": target,
+        "nutrition_remaining": remaining(target, list_food(conn, day, day)),
     }
     if history:
         result["history"] = profile_history(conn, day)
     return result
+
+
+def pantry(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Продукты дома (остаток больше 0): item, qty, unit, updated_at."""
+    return _cap(stock(conn))
 
 
 def _today() -> date:
@@ -248,8 +273,9 @@ def load(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
 
 def _snapshot_profile(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     """Профиль для сводки: только текущие значения (без источников и истории), missing,
-    nutrition и активные цели."""
+    nutrition, nutrition_remaining и активные цели."""
     current = current_profile(conn, day)
+    target = profile_nutrition(conn, day, current)
     found = sorted(goals.list_goals(conn, "active"), key=lambda g: (-g["priority"], g["id"]))
     active = [
         {k: g[k] for k in ("id", "title", "kind", "target", "target_date", "priority")}
@@ -258,7 +284,8 @@ def _snapshot_profile(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     return {
         "values": {key: entry["value"] for key, entry in current["values"].items()},
         "missing": current["missing"],
-        "nutrition": profile_nutrition(conn, day, current),
+        "nutrition": target,
+        "nutrition_remaining": remaining(target, list_food(conn, day, day)),
         "goals": active,
         "goals_truncated": len(found) > SNAPSHOT_GOALS,
     }
@@ -301,6 +328,9 @@ def morning_snapshot(
     snapshot["deviations"] = part(_day_deviations(conn, date, load_row))
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
+    short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]
+    snapshot["pantry"] = _cap(short, SNAPSHOT_PANTRY, SNAPSHOT_CHARS)
+    snapshot["meal_plan_today"] = has_meal_plan(conn, date)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]

@@ -19,6 +19,7 @@ FAT_MIN = 0.8
 KCAL_PROTEIN = 4
 KCAL_FAT = 9
 KCAL_CARBS = 4
+FOOD_KEYS = ("kcal", "protein_g", "fat_g", "carbs_g")
 FORMULA = "BMR Mifflin-St Jeor x коэффициент активности + калории активностей дня"
 
 
@@ -119,4 +120,20 @@ def nutrition(data: NutritionInput) -> dict[str, Any]:
         "carbs_g": round(carbs),
         "formula": FORMULA,
         "assumptions": notes,
+    }
+
+
+def remaining(targets: dict[str, Any] | None, eaten: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Остаток дня: цель (результат nutrition) минус съеденное; минус — перебор. Записи еды
+    без КБЖУ в сумму не входят, их число — pending_count. Нет цели — None."""
+    if targets is None or targets.get("kcal_target") is None:
+        return None
+    counted = [row for row in eaten if row["kcal"] is not None]
+    total = {key: sum(row[key] or 0 for row in counted) for key in FOOD_KEYS}
+    return {
+        "kcal": targets["kcal_target"] - total["kcal"],
+        "protein_g": targets["protein_g"] - total["protein_g"],
+        "fat_g": targets["fat_g"] - total["fat_g"],
+        "carbs_g": targets["carbs_g"] - total["carbs_g"],
+        "pending_count": len(eaten) - len(counted),
     }

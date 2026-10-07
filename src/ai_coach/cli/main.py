@@ -1,4 +1,5 @@
-"""Команды `coach`: sync, import, approve, push, status, weight, food, feel, profile, goal."""
+"""Команды `coach`: sync, import, approve, push, status, weight, food, feel, profile, goal,
+pantry, shop, meal."""
 
 from datetime import date, datetime
 from getpass import getpass
@@ -7,6 +8,7 @@ from typing import Annotated, Any
 
 import typer
 
+from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.garmin import (
     TOKEN_NAME,
     GarminAuthError,
@@ -38,6 +40,9 @@ profile_app = typer.Typer(help="Профиль спортсмена", no_args_is
 goal_app = typer.Typer(help="Цели", no_args_is_help=True)
 app.add_typer(profile_app, name="profile")
 app.add_typer(goal_app, name="goal")
+app.add_typer(pantry_app, name="pantry")
+app.add_typer(meal_app, name="meal")
+app.command()(shop)
 
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
 MIN_WEIGHT_KG = 20

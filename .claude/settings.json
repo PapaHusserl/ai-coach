@@ -10,8 +10,13 @@
       "Bash(uv run coach profile:*)",
       "Bash(uv run coach goal add:*)",
       "Bash(uv run coach goal list:*)",
+      "Bash(uv run coach pantry add:*)",
+      "Bash(uv run coach pantry list:*)",
+      "Bash(uv run coach shop:*)",
+      "Bash(uv run coach meal done:*)",
       "Bash(cat .claude/agents/coach-onboarding.md)",
       "Bash(cat .claude/skills/coach-food/SKILL.md)",
+      "Bash(cat .claude/skills/coach-meal/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/spec-formats.md)"
     ]

@@ -45,6 +45,7 @@ EXPECTED_TOOLS = {
     "cancel_draft_workout",
     "propose_phase",
     "get_profile",
+    "get_pantry",
 }
 
 
