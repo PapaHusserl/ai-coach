@@ -1,4 +1,4 @@
-"""Журналы: weight_log, food_log, sync_log."""
+"""Журналы: weight_log, food_log, wellbeing_log, sync_log."""
 
 import sqlite3
 from typing import Any
@@ -49,6 +49,17 @@ def list_food_pending(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Записи без КБЖУ (kcal пуст), по времени."""
     sql = "SELECT * FROM food_log WHERE kcal IS NULL ORDER BY logged_at, id"
     return fetch_all(conn, sql, ())
+
+
+def add_wellbeing(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
+    """values: date, logged_at, score (1-5), text (может быть пуст). Только добавление."""
+    return insert(conn, "wellbeing_log", values)
+
+
+def list_wellbeing(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Записи с датой date start..end включительно, по времени (последняя за день — основная)."""
+    sql = "SELECT * FROM wellbeing_log WHERE date BETWEEN ? AND ? ORDER BY logged_at, id"
+    return fetch_all(conn, sql, (start, end))
 
 
 def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

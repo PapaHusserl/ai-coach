@@ -4,7 +4,7 @@ SMELLS_MAX ?= 0
 # Модули для мутаций: по умолчанию изменённые относительно HEAD, иначе весь пакет.
 MOD ?= $(or $(shell git diff --name-only HEAD -- src/ai_coach | grep '\.py$$' | sed -e 's|^src/||' -e 's|/__init__\.py$$||' -e 's|\.py$$||' -e 's|/|.|g' -e 's|$$|.*|'),ai_coach.*)
 
-.PHONY: check lint fmt types smells dead cov mutate mutate-report
+.PHONY: check lint fmt types smells dead cov mutate mutate-report install-trener
 
 check: lint types smells dead cov
 	@echo "check: OK"
@@ -41,3 +41,8 @@ mutate-report:
 	@mkdir -p reports
 	uv run mutmut results --all true > reports/mutmut.txt 2>&1 || true
 	@echo "отчёт: reports/mutmut.txt"; awk -F': ' 'NF==2{c[$$2]++} END{for(k in c) printf "  %s: %d\n", k, c[k]}' reports/mutmut.txt
+
+# Команда `тренер` в любой папке: symlink в ~/.local/bin.
+install-trener:
+	mkdir -p $(HOME)/.local/bin
+	ln -sf $(CURDIR)/bin/trener $(HOME)/.local/bin/тренер

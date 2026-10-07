@@ -1,0 +1,4 @@
+#!/bin/sh
+# Запуск тренера: claude --agent coach в папке проекта. Работает и через symlink.
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+exec claude --agent coach

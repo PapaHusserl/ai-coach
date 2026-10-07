@@ -6,13 +6,20 @@
 
 import json
 import sqlite3
+from contextlib import suppress
 from datetime import date, timedelta
 from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
-from ai_coach.load import THRESHOLD_SPORTS, daily_tss, load_series, resolve_thresholds
+from ai_coach.load import (
+    THRESHOLD_SPORTS,
+    daily_tss,
+    find_deviations,
+    load_series,
+    resolve_thresholds,
+)
 from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
     last_rest_hr,
@@ -25,6 +32,7 @@ from ai_coach.store.journal import (
     list_food,
     list_food_pending,
     list_weights,
+    list_wellbeing,
     update_food,
 )
 from ai_coach.store.plans import (
@@ -44,8 +52,11 @@ MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
+WELLBEING_DAYS = 30
+WEEKEND_ONLY_SPORT = "bike"
+SATURDAY = 5
 NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings")
-DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today")
+DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
 
 
 def _clean(row: dict[str, Any]) -> dict[str, Any]:
@@ -146,6 +157,33 @@ def food_pending(conn: sqlite3.Connection) -> dict[str, Any]:
     return _cap(list_food_pending(conn))
 
 
+def wellbeing(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Самочувствие по времени; основная оценка дня — последняя запись этой даты."""
+    _period(start, end)
+    return _cap(list_wellbeing(conn, start, end), newest=True)
+
+
+def _day_deviations(
+    conn: sqlite3.Connection, day: str, load_row: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    marks = list_wellbeing(conn, day, day)
+    metrics = list_daily_metrics(conn, day, day)
+    return find_deviations(marks[-1] if marks else None, metrics[0] if metrics else None, load_row)
+
+
+def deviations(
+    conn: sqlite3.Connection,
+    date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
+) -> dict[str, Any]:
+    """Отклонения за день: самочувствие, readiness, HRV, сон, ATL - CTL (пороги — в
+    load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — без проверки ATL - CTL."""
+    _day(date)
+    load_row = None
+    with suppress(ToolError):  # нет нагрузки (coach sync) — без ATL - CTL, причина — в snapshot
+        load_row = load(conn, date, date)["rows"][-1]
+    return _cap(_day_deviations(conn, date, load_row))
+
+
 def _hr_params(
     conn: sqlite3.Connection, end: str
 ) -> tuple[float, dict[str, dict[str, Any]], list[str]]:
@@ -193,9 +231,11 @@ def morning_snapshot(
         return _cap(rows, SNAPSHOT_ROWS, SNAPSHOT_CHARS, newest)
 
     snapshot: dict[str, Any] = {"date": date}
+    load_row: dict[str, Any] | None = None
     try:
         loaded = load(conn, _shift(date, -6), date)
         snapshot["load"] = part(loaded["rows"], True)
+        load_row = loaded["rows"][-1] if loaded["rows"] else None
         snapshot["thresholds"] = loaded["thresholds"]
         snapshot["warnings"] = loaded["warnings"]
     except ToolError as e:
@@ -210,6 +250,9 @@ def morning_snapshot(
     snapshot["plan_actual"] = part(list_plan_actual(conn, _shift(date, -7), date), True)
     snapshot["weights"] = part(list_weights(conn, _shift(date, -14), date), True)
     snapshot["food_today"] = part(list_food(conn, date, date), True)
+    marks = list_wellbeing(conn, _shift(date, -(WELLBEING_DAYS - 1)), date)
+    snapshot["wellbeing"] = _cap(marks, newest=True)
+    snapshot["deviations"] = part(_day_deviations(conn, date, load_row))
     snapshot["last_sync"] = last_sync_log(conn)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
@@ -231,6 +274,8 @@ def create_draft_workout(
     _day(date)
     if sport not in SPORTS:
         raise ToolError(f"sport должен быть из {list(SPORTS)}, получено: {sport!r}")
+    if sport == WEEKEND_ONLY_SPORT and _day(date).weekday() < SATURDAY:
+        raise ToolError("Вело планируется только в субботу и воскресенье.")
     full_spec = {**spec, "name": name}
     try:
         build_workout(sport, full_spec)

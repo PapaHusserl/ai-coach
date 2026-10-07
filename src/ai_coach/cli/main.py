@@ -1,4 +1,4 @@
-"""Команды `coach`: login, sync, import, approve, push, status, weight, food."""
+"""Команды `coach`: login, sync, import, approve, push, status, weight, food, feel."""
 
 from datetime import datetime
 from getpass import getpass
@@ -25,7 +25,7 @@ from ai_coach.plan import (
     send,
 )
 from ai_coach.store.db import open_db
-from ai_coach.store.journal import add_food, add_weight
+from ai_coach.store.journal import add_food, add_weight, add_wellbeing
 from ai_coach.store.plans import list_planned_workouts
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
@@ -36,6 +36,8 @@ app = typer.Typer(help="Личный ИИ-тренер на данных Garmin"
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
 MIN_WEIGHT_KG = 20
 MAX_WEIGHT_KG = 300
+MIN_SCORE = 1
+MAX_SCORE = 5
 
 
 def fail(message: str) -> None:
@@ -204,3 +206,22 @@ def food(text: Annotated[str, typer.Argument(help="Что съедено, как
     finally:
         conn.close()
     typer.echo("Еда записана. КБЖУ посчитает /coach-food.")
+
+
+@app.command()
+def feel(
+    score: Annotated[int, typer.Argument(help="Самочувствие от 1 до 5")],
+    text: Annotated[str | None, typer.Argument(help="Пояснение, как есть")] = None,
+) -> None:
+    """Записать самочувствие (время — сейчас). Записи только добавляются."""
+    if not MIN_SCORE <= score <= MAX_SCORE:
+        fail(f"Оценка должна быть от {MIN_SCORE} до {MAX_SCORE}.")
+    moment = now()
+    values = {"date": moment[:10], "logged_at": moment, "score": score, "text": text}
+    conn = open_db()
+    try:
+        with conn:
+            add_wellbeing(conn, values)
+    finally:
+        conn.close()
+    typer.echo(f"Самочувствие {score} записано.")

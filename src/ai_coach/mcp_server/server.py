@@ -25,7 +25,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_morning_snapshot": (
         tools.morning_snapshot,
         "Утренний разбор одним вызовом: метрики, активности, нагрузка, цели, фазы, план, "
-        "план/факт, вес, еда за день. date — YYYY-MM-DD (сегодня).",
+        "план/факт, вес, еда за день, самочувствие за 30 дней (все записи, до 60), отклонения. "
+        "date — YYYY-MM-DD (сегодня).",
     ),
     "get_daily_metrics": (
         tools.daily_metrics,
@@ -56,6 +57,16 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_weights": (tools.weights, "Замеры веса."),
     "get_food": (tools.food, "Записи еды (текст и КБЖУ, если посчитаны)."),
+    "get_wellbeing": (
+        tools.wellbeing,
+        "Самочувствие (оценка 1-5, текст) по времени; основная оценка дня - последняя запись. "
+        "Пишет пользователь командой coach feel.",
+    ),
+    "get_deviations": (
+        tools.deviations,
+        "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "
+        "список - всё в норме, пересчёт плана не нужен. date - YYYY-MM-DD.",
+    ),
     "get_food_pending": (
         tools.food_pending,
         "Записи еды без КБЖУ за все дни (для /coach-food).",

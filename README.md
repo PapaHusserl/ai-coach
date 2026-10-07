@@ -40,6 +40,7 @@
 ## Разработка
 - Установка: `uv sync` (Python 3.12+); для `make smells` нужен Qlty CLI (`curl -fsSL https://qlty.sh | sh`).
 - Все проверки: `make check` — ruff (линт+формат), pyright (strict для src/), qlty smells (сложность, дубли), vulture (мёртвый код), pytest с покрытием ≥94%.
+- Тренер: `make install-trener` кладёт symlink `~/.local/bin/тренер`; команда `тренер` запускает `claude --agent coach` в проекте.
 - Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
 
 ## Вес и еда
