@@ -73,6 +73,20 @@ def test_repeated_sync_does_not_change_database(
     assert snapshot(isolated) == first
 
 
+def test_repeated_sync_in_next_second_does_not_change_database(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Метки времени: второй sync в другую секунду (sleep в тестах может быть подменён)."""
+    use_client(monkeypatch, FakeGarmin())
+    runner.invoke(main.app, ["sync", "--days", "3"])
+    first = snapshot(isolated)
+    start = time.monotonic()
+    while time.monotonic() - start < 1.1:
+        pass
+    runner.invoke(main.app, ["sync", "--days", "3"])
+    assert snapshot(isolated) == first
+
+
 def test_sync_without_tokens_says_to_run_login(
     isolated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

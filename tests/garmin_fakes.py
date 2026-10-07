@@ -129,8 +129,18 @@ class FakeGarmin:
         return self.sets
 
 
+def _columns(conn: sqlite3.Connection, table: str) -> str:
+    """Колонки для сравнения: у plan_actual без created_at — таблица пересчитывается
+    при каждом sync, метка времени новая, данные те же."""
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    if table == "plan_actual":
+        cols.remove("created_at")
+    return ", ".join(cols)
+
+
 def snapshot(path: Path) -> dict[str, list[tuple[Any, ...]]]:
-    """Содержимое базы (кроме sync_log), прочитанное новым соединением — только закоммиченное."""
+    """Содержимое базы (кроме sync_log и plan_actual.created_at), прочитанное новым
+    соединением — только закоммиченное."""
     conn = sqlite3.connect(path)
     try:
         names = [
@@ -139,7 +149,10 @@ def snapshot(path: Path) -> dict[str, list[tuple[Any, ...]]]:
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'sync_log'"
             )
         ]
-        return {n: conn.execute(f"SELECT * FROM {n} ORDER BY 1, 2").fetchall() for n in names}
+        return {
+            n: conn.execute(f"SELECT {_columns(conn, n)} FROM {n} ORDER BY 1, 2").fetchall()
+            for n in names
+        }
     finally:
         conn.close()
 
