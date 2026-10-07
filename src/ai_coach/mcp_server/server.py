@@ -30,7 +30,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "meal_plan_today (рацион на сегодня уже предложен), "
         "самочувствие за 30 дней (все записи, до 60), отклонения, "
         "sport_nutrition_today (питание к тренировкам дня и добавки; нет - не отдаётся), "
-        "meds_today (курсы витаминов и средств за сегодня независимо от графика; "
+        "meds_today (курсы на сегодня; "
         "training_day/before/after - только в день тренировки; нет - не отдаётся). "
         "date — YYYY-MM-DD (сегодня).",
     ),
@@ -112,9 +112,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         tools.meds,
         "Курсы витаминов, минералов, электролитов и безрецептурных средств: name, kind "
         "(vitamin/mineral/electrolyte/otc), dose, unit, schedule, time_note, start_date, "
-        "end_date (null - бессрочно), note. date - YYYY-MM-DD: только курсы, идущие в этот "
-        "день, независимо от графика (training_day/before/after принимаются только в день "
-        "тренировки); без date - все живые курсы, в т.ч. закончившиеся. "
+        "end_date (null - бессрочно), note. date - YYYY-MM-DD: только курсы этого дня "
+        "(training_day/before/after - только если в этот день есть тренировка); без date - "
+        "все живые курсы, в т.ч. закончившиеся. "
         "Меняет пользователь командами coach med.",
     ),
     "get_food_pending": (

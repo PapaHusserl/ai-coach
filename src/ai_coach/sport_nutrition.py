@@ -29,6 +29,11 @@ def supplements_for_day(conn: sqlite3.Connection, training: bool) -> list[dict[s
     return [s for s in list_supplements(conn) if training or s["schedule"] == "daily"]
 
 
+def has_training(conn: sqlite3.Connection, day: str) -> bool:
+    """Есть ли в плане дня тренировка, не отменённая."""
+    return any(w["status"] != "cancelled" for w in list_planned_workouts(conn, day, day))
+
+
 def phase_protocols(
     protocols: list[dict[str, Any]], phase: str, sport: str, minutes: int | None
 ) -> list[dict[str, Any]]:
@@ -76,7 +81,7 @@ def day_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
         item |= {phase: [without_service(p) for p in picked[phase]] for phase in PHASES}
         item |= {k: picked[k] for k in ("water_only", "duration_unknown")}
         workouts.append(item)
-    supplements = supplements_for_day(conn, bool(workouts))
+    supplements = supplements_for_day(conn, has_training(conn, day))
     return {
         "date": day,
         "workouts": workouts,

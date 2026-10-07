@@ -18,8 +18,9 @@ from ai_coach.cli.sport_nutrition import (
     save,
     show_note,
 )
+from ai_coach.meds import meds_for_day
 from ai_coach.store.db import open_db
-from ai_coach.store.meds import add_med, delete_med, edit_med, get_med, list_meds, meds_on
+from ai_coach.store.meds import add_med, delete_med, edit_med, get_med, list_meds
 
 med_app = typer.Typer(help="Курсы витаминов и безрецептурных средств", no_args_is_help=True)
 KINDS = ("vitamin", "mineral", "electrolyte", "otc")
@@ -91,7 +92,7 @@ def med_list(
     day = check_date(on) if on is not None else date.today().isoformat()
     conn = open_db()
     try:
-        rows = list_meds(conn) if all_courses else meds_on(conn, day)
+        rows = list_meds(conn) if all_courses else meds_for_day(conn, day)
     finally:
         conn.close()
     if not rows:
