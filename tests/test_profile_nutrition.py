@@ -1,6 +1,14 @@
+from typing import Any
+
 import pytest
 
-from ai_coach.profile.nutrition import bmr, nutrition
+from ai_coach.profile.nutrition import NutritionInput, bmr
+from ai_coach.profile.nutrition import nutrition as calc
+
+
+def nutrition(**fields: Any) -> dict[str, Any]:
+    return calc(NutritionInput(**fields))
+
 
 MAN: dict = {"sex": "m", "age": 35, "height_cm": 180, "weight_kg": 80, "activity_level": "moderate"}
 WOMAN: dict = {

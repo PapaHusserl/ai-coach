@@ -1,5 +1,6 @@
 """Калории и БЖУ: чистые функции, без базы. Это оценка, не медицинский совет."""
 
+from dataclasses import dataclass
 from typing import Any
 
 ACTIVITY_FACTORS = {"sedentary": 1.2, "light": 1.375, "moderate": 1.55, "active": 1.725}
@@ -55,24 +56,32 @@ def _macros(kcal: float, weight_kg: float, goal: str) -> tuple[float, float, flo
     return protein, fat, carbs
 
 
-def nutrition(
-    sex: Any,
-    age: Any,
-    height_cm: Any,
-    weight_kg: Any,
-    *,
-    activity_level: str | None = None,
-    weight_goal: str | None = None,
-    weekly_rate_kg: float | None = None,
-    kcal_target: float | None = None,
-    activity_kcal: float = 0,
-    activity_minutes: float = 0,
-) -> dict[str, Any]:
-    """Цели на день. sex (m/f), age, height_cm, weight_kg обязательны (None - не хватает):
-    тогда kcal_target None и missing со списком. Необязательно: activity_level (иначе
-    light), weight_goal (иначе keep), weekly_rate_kg, kcal_target (ручное, главнее расчёта).
-    activity_kcal и activity_minutes - калории и длительность активностей дня; из калорий
-    вычитается BMR за это время (он уже в коэффициенте активности), не ниже 0."""
+@dataclass
+class NutritionInput:
+    """Данные для расчёта. sex (m/f), age, height_cm, weight_kg обязательны (None - не
+    хватает). Необязательно: activity_level (иначе light), weight_goal (иначе keep),
+    weekly_rate_kg, kcal_target (ручное, главнее расчёта). activity_kcal и activity_minutes -
+    калории и длительность активностей дня."""
+
+    sex: Any
+    age: Any
+    height_cm: Any
+    weight_kg: Any
+    activity_level: str | None = None
+    weight_goal: str | None = None
+    weekly_rate_kg: float | None = None
+    kcal_target: float | None = None
+    activity_kcal: float = 0
+    activity_minutes: float = 0
+
+
+def nutrition(data: NutritionInput) -> dict[str, Any]:
+    """Цели на день. Не хватает обязательного — kcal_target None и missing со списком.
+    Из калорий активностей вычитается BMR за их время (он уже в коэффициенте активности),
+    не ниже 0."""
+    sex, age, height_cm, weight_kg = data.sex, data.age, data.height_cm, data.weight_kg
+    activity_level, weight_goal = data.activity_level, data.weight_goal
+    activity_kcal = data.activity_kcal
     body = {"sex": sex, "age": age, "height_cm": height_cm, "weight_kg": weight_kg}
     missing = [key for key, value in body.items() if value is None]
     if missing:
@@ -86,16 +95,16 @@ def nutrition(
         notes.append("weight_goal не задан, взят keep")
     base = bmr(sex, weight_kg, height_cm, age)
     rest = base * ACTIVITY_FACTORS[activity_level]
-    if activity_minutes > 0:
-        activity_kcal = max(0.0, activity_kcal - base / MINUTES_PER_DAY * activity_minutes)
+    if data.activity_minutes > 0:
+        activity_kcal = max(0.0, activity_kcal - base / MINUTES_PER_DAY * data.activity_minutes)
         notes.append("из калорий тренировок вычтен BMR за время тренировки")
     today = rest + activity_kcal
     sign = 1 if weight_goal == "gain" else -1
-    kcal = today * (1 + sign * _share(weight_goal, weekly_rate_kg, today, notes))
+    kcal = today * (1 + sign * _share(weight_goal, data.weekly_rate_kg, today, notes))
     if weight_goal == "lose":
         kcal = max(kcal, base)
-    if kcal_target is not None:
-        kcal = kcal_target
+    if data.kcal_target is not None:
+        kcal = data.kcal_target
         notes.append("kcal_target задан вручную")
     protein, fat, carbs = _macros(kcal, weight_kg, weight_goal)
     if carbs == 0:

@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 
 from ai_coach.goals import list_goals
-from ai_coach.profile.nutrition import nutrition
+from ai_coach.profile.nutrition import NutritionInput, nutrition
 from ai_coach.store.garmin_data import last_rest_hr, list_activities
 from ai_coach.store.journal import list_weights
 from ai_coach.store.profile import (
@@ -231,14 +231,16 @@ def profile_nutrition(
     burned = sum(a["calories"] or 0 for a in day_activities)
     minutes = sum((a["duration_s"] or 0) / 60 for a in day_activities)
     return nutrition(
-        sex=value("sex"),
-        age=current["age"],
-        height_cm=value("height_cm"),
-        weight_kg=current["weight_kg"],
-        activity_level=value("activity_level"),
-        weight_goal=value("weight_goal"),
-        weekly_rate_kg=value("weekly_rate_kg"),
-        kcal_target=value("kcal_target"),
-        activity_kcal=burned,
-        activity_minutes=minutes,
+        NutritionInput(
+            sex=value("sex"),
+            age=current["age"],
+            height_cm=value("height_cm"),
+            weight_kg=current["weight_kg"],
+            activity_level=value("activity_level"),
+            weight_goal=value("weight_goal"),
+            weekly_rate_kg=value("weekly_rate_kg"),
+            kcal_target=value("kcal_target"),
+            activity_kcal=burned,
+            activity_minutes=minutes,
+        )
     )

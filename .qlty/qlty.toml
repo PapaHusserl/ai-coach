@@ -68,7 +68,3 @@ default = true
 [[plugin]]
 name = "ruff"
 version = "0.15.0"  # qlty 0.651 не парсит JSON ruff 0.16 (fix.message=null)
-
-# nutrition(): 11 именованных параметров профиля и активности — осознанно, тесты зовут их по именам
-[[exclude]]
-file_patterns = ["src/ai_coach/profile/nutrition.py"]
