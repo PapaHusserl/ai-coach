@@ -33,6 +33,17 @@ def now() -> str:
     return datetime.now().isoformat(sep=" ", timespec="seconds")
 
 
+def check_date(value: str) -> str:
+    """Дата строго YYYY-MM-DD, иначе ошибка."""
+    try:
+        ok = date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        ok = False
+    if not ok:
+        fail(f"Дата должна быть YYYY-MM-DD, получено: {value!r}")
+    return value
+
+
 def parse_at(text: str | None) -> str | None:
     """--at: YYYY-MM-DD или "YYYY-MM-DD HH:MM"; None - не задан. Только дата -> 12:00,
     для сегодня до полудня - текущее время. Будущее - ошибка."""
@@ -41,11 +52,12 @@ def parse_at(text: str | None) -> str | None:
     value = text.strip()
     try:
         if len(value) == len("YYYY-MM-DD"):
-            day = date.fromisoformat(value)
+            day = date.fromisoformat(check_date(value))
             moment = min(datetime(day.year, day.month, day.day, 12), datetime.now())
             in_future = day > date.today()
         else:
             moment = datetime.strptime(value, "%Y-%m-%d %H:%M")
+            check_date(value[:10])
             in_future = moment > datetime.now()
     except ValueError:
         fail(f'--at должен быть YYYY-MM-DD или "YYYY-MM-DD HH:MM", получено: {text!r}')
@@ -183,11 +195,7 @@ def delete_food_(food_id: Annotated[int, typer.Argument(help="id записи")]
 def log_day(day: str | None) -> str:
     if day is None:
         return date.today().isoformat()
-    try:
-        date.fromisoformat(day)
-    except ValueError:
-        fail(f"Дата должна быть YYYY-MM-DD, получено: {day!r}")
-    return day
+    return check_date(day)
 
 
 @log_app.command("weight")

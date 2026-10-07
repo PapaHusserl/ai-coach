@@ -129,6 +129,12 @@ def test_goal_add_bad_date_is_an_error(isolated: Path) -> None:
     assert query(isolated, "SELECT * FROM goals") == []
 
 
+def test_goal_add_compact_date_is_an_error(isolated: Path) -> None:
+    result = runner.invoke(main.app, ["goal", "add", "Марафон", "--date", "20261007"])
+    assert result.exit_code != 0
+    assert query(isolated, "SELECT * FROM goals") == []
+
+
 def test_goal_list_shows_goals_with_ids(isolated: Path) -> None:
     runner.invoke(main.app, ["goal", "add", "Полумарафон"])
     result = runner.invoke(main.app, ["goal", "list"])

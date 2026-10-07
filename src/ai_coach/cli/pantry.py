@@ -6,6 +6,7 @@ from typing import Annotated, Any
 
 import typer
 
+from ai_coach.cli.journal import check_date
 from ai_coach.pantry import PantryEntry, missing, normalize, record, shopping_list, spoil, stock
 from ai_coach.store.db import db_path, open_db
 from ai_coach.store.pantry import mark_meal_plan
@@ -27,6 +28,8 @@ def now() -> str:
 def pantry_write(
     op: str, item: str, qty: float, unit: str, until: str | None = None, opened: bool = False
 ) -> None:
+    if until is not None:
+        check_date(until)
     conn = open_db()
     try:
         with conn:
@@ -243,10 +246,7 @@ def meal_done(
     """Отметить: рацион на день предложен (повторно - без ошибки)."""
     moment = now()
     if day is not None:
-        try:
-            date.fromisoformat(day)
-        except ValueError:
-            fail(f"Дата должна быть YYYY-MM-DD, получено: {day!r}")
+        check_date(day)
     day = day or moment[:10]
     conn = open_db()
     try:

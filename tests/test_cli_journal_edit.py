@@ -95,7 +95,17 @@ def test_at_today_is_never_in_future(isolated: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "value", ["вчера", "2026-13-45", "2026-10-05 25:00", "2026-10-05 12:60", "05.10.2026", ""]
+    "value",
+    [
+        "вчера",
+        "2026-13-45",
+        "2026-10-05 25:00",
+        "2026-10-05 12:60",
+        "05.10.2026",
+        "20261007",
+        "2026-10-5 12:00",
+        "",
+    ],
 )
 def test_garbage_at_is_rejected_and_not_saved(isolated: Path, value: str) -> None:
     assert run("weight", "81.7", "--at", value).exit_code != 0

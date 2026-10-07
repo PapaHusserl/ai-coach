@@ -273,3 +273,18 @@ def test_meal_done_with_date(isolated: Path) -> None:
     assert result.exit_code == 0
     assert snapshot_flag(isolated, "2026-01-05") is True
     assert runner.invoke(main.app, ["meal", "done", "--date", "вчера"]).exit_code != 0
+    assert runner.invoke(main.app, ["meal", "done", "--date", "20261007"]).exit_code != 0
+
+
+@pytest.mark.parametrize("args", [["add", "молоко", "1", "pcs"], ["set", "молоко", "1", "pcs"]])
+def test_pantry_until_must_be_iso_date(isolated: Path, args: list[str]) -> None:
+    result = runner.invoke(main.app, ["pantry", *args, "--until", "20261007"])
+    assert result.exit_code != 0
+    assert pantry_rows(isolated) == []
+
+
+def test_pantry_open_until_must_be_iso_date(isolated: Path) -> None:
+    runner.invoke(main.app, ["pantry", "add", "молоко", "1", "pcs"])
+    result = runner.invoke(main.app, ["pantry", "open", "молоко", "--until", "20261007"])
+    assert result.exit_code != 0
+    assert len(pantry_rows(isolated)) == 1

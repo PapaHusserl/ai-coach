@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from ai_coach.cli import main
 from ai_coach.garmin.client import GarminAuthError, GarminError, GarminRateLimitError
 from ai_coach.store.db import open_db
+from ai_coach.store.plans import add_planned_workout
 
 runner = CliRunner()
 
@@ -345,3 +346,93 @@ def test_login_with_stale_tokens_and_failed_full_login_is_clear_error(
     assert result.exit_code == 1
     assert "не принял" in result.output
     assert "wrong-pass" not in result.output
+
+
+def add_workouts(dates: list[str]) -> None:
+    conn = open_db()
+    try:
+        for d in dates:
+            add_planned_workout(
+                conn, {"date": d, "sport": "run", "name": f"w{d}", "workout_json": {}}
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_status_without_options_shows_all(isolated: Path) -> None:
+    add_workouts(["2026-03-01", "2026-03-10", "2026-04-01"])
+    out = runner.invoke(main.app, ["status"]).output
+    assert "w2026-03-01" in out
+    assert "w2026-03-10" in out
+    assert "w2026-04-01" in out
+
+
+def test_status_date_shows_only_that_day(isolated: Path) -> None:
+    add_workouts(["2026-03-09", "2026-03-10", "2026-03-11"])
+    out = runner.invoke(main.app, ["status", "--date", "2026-03-10"]).output
+    assert "w2026-03-10" in out
+    assert "w2026-03-09" not in out
+    assert "w2026-03-11" not in out
+
+
+def test_status_from_without_to(isolated: Path) -> None:
+    add_workouts(["2026-03-09", "2026-03-10", "2026-03-11"])
+    out = runner.invoke(main.app, ["status", "--from", "2026-03-10"]).output
+    assert "w2026-03-09" not in out
+    assert "w2026-03-10" in out
+    assert "w2026-03-11" in out
+
+
+def test_status_to_without_from(isolated: Path) -> None:
+    add_workouts(["2026-03-09", "2026-03-10", "2026-03-11"])
+    out = runner.invoke(main.app, ["status", "--to", "2026-03-10"]).output
+    assert "w2026-03-09" in out
+    assert "w2026-03-10" in out
+    assert "w2026-03-11" not in out
+
+
+def test_status_range_includes_both_borders(isolated: Path) -> None:
+    add_workouts(["2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"])
+    out = runner.invoke(main.app, ["status", "--from", "2026-03-10", "--to", "2026-03-11"]).output
+    assert "w2026-03-09" not in out
+    assert "w2026-03-10" in out
+    assert "w2026-03-11" in out
+    assert "w2026-03-12" not in out
+
+
+def test_status_empty_period_says_no_workouts(isolated: Path) -> None:
+    add_workouts(["2026-03-10"])
+    result = runner.invoke(main.app, ["status", "--date", "2026-05-05"])
+    assert result.exit_code == 0
+    assert "Тренировок нет." in result.output
+
+
+def test_status_date_with_from_is_error(isolated: Path) -> None:
+    add_workouts(["2026-03-10"])
+    result = runner.invoke(main.app, ["status", "--date", "2026-03-10", "--from", "2026-03-01"])
+    assert result.exit_code == 1
+    assert "нельзя вместе" in result.output
+    assert "w2026-03-10" not in result.output
+
+
+def test_status_date_with_to_is_error(isolated: Path) -> None:
+    result = runner.invoke(main.app, ["status", "--date", "2026-03-10", "--to", "2026-03-11"])
+    assert result.exit_code == 1
+    assert "нельзя вместе" in result.output
+
+
+@pytest.mark.parametrize("option", ["--date", "--from", "--to"])
+@pytest.mark.parametrize("value", ["вчера", "20261007"])
+def test_status_garbage_date_is_error(isolated: Path, option: str, value: str) -> None:
+    result = runner.invoke(main.app, ["status", option, value])
+    assert result.exit_code == 1
+    assert "YYYY-MM-DD" in result.output
+
+
+def test_status_from_after_to_is_error(isolated: Path) -> None:
+    add_workouts(["2026-03-10"])
+    result = runner.invoke(main.app, ["status", "--from", "2026-03-11", "--to", "2026-03-10"])
+    assert result.exit_code == 1
+    assert "позже" in result.output
+    assert "w2026-03-10" not in result.output
