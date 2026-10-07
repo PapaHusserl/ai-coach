@@ -108,9 +108,11 @@ def pantry_set(
     item: Annotated[str, typer.Argument(help="Продукт")],
     qty: Annotated[float, typer.Argument(help="Сколько осталось")],
     unit: Annotated[str, typer.Argument(help="g, ml или pcs")],
+    until: Annotated[str | None, typer.Option("--until", help="Годен до, YYYY-MM-DD")] = None,
+    opened: Annotated[bool, typer.Option("--opened", help="Упаковка открыта")] = False,
 ) -> None:
-    """Задать остаток как есть (сверка с реальностью)."""
-    pantry_write("set", item, qty, unit)
+    """Задать остаток как есть (сверка с реальностью), срок годности - как у add."""
+    pantry_write("set", item, qty, unit, until, opened)
 
 
 @pantry_app.command("remove")

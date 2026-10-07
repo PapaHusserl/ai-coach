@@ -29,7 +29,9 @@ def _stock_of(entries: list[dict[str, Any]]) -> float:
 @dataclass
 class PantryEntry:
     """Запись журнала. op: add/use/set/open/spoil; now - время записи; expires_on - срок годности
-    YYYY-MM-DD (у add, set, open); opened - упаковка открыта. open: qty 0, срок обязателен."""
+    YYYY-MM-DD (у add, set, open); opened - упаковка открыта. open: qty 0, срок обязателен;
+    он ставится первой закрытой партии (одна запись add - одна партия, open помечает её
+    открытой целиком)."""
 
     op: str
     item: str
@@ -38,6 +40,24 @@ class PantryEntry:
     now: str
     expires_on: str | None = None
     opened: bool = False
+
+
+def _check_expiry(op: str, expires_on: str | None) -> None:
+    if expires_on is not None:
+        try:
+            date.fromisoformat(expires_on)
+        except ValueError:
+            raise ValueError(f"Срок должен быть YYYY-MM-DD, получено: {expires_on!r}") from None
+    if op == "open" and expires_on is None:
+        raise ValueError("Для open нужен срок годности.")
+
+
+def _check_open(conn: sqlite3.Connection, name: str) -> None:
+    left = batches_of(list_entries(conn, name))
+    if not left:
+        raise ValueError(f"Продукта {name!r} нет дома.")
+    if all(b["opened"] for b in left):
+        raise ValueError(f"У продукта {name!r} нет закрытой упаковки, открывать нечего.")
 
 
 def record(conn: sqlite3.Connection, entry: PantryEntry) -> str | None:
@@ -54,20 +74,14 @@ def record(conn: sqlite3.Connection, entry: PantryEntry) -> str | None:
         raise ValueError(f"Единица должна быть из {list(UNITS)}, получено: {unit!r}")
     if qty < 0 or (qty == 0 and op not in ("set", "open")):
         raise ValueError("Количество должно быть больше 0 (для set можно 0).")
-    if expires_on is not None:
-        try:
-            date.fromisoformat(expires_on)
-        except ValueError:
-            raise ValueError(f"Срок должен быть YYYY-MM-DD, получено: {expires_on!r}") from None
-    if op == "open" and expires_on is None:
-        raise ValueError("Для open нужен срок годности.")
+    _check_expiry(op, expires_on)
     known = _unit_of(conn, name)
     if known is not None and known != unit:
         raise ValueError(f"У продукта {name!r} единица {known}, а не {unit}.")
     if op in ("use", "spoil", "open") and known is None:
         raise ValueError(f"Продукта {name!r} нет дома.")
-    if op == "open" and _stock_of(list_entries(conn, name)) <= 0:
-        raise ValueError(f"Продукта {name!r} нет дома.")
+    if op == "open":
+        _check_open(conn, name)
     warning = None
     if op in ("use", "spoil") and qty > _stock_of(list_entries(conn, name)):
         warning = f"{name}: списано больше остатка, остаток 0."
@@ -161,7 +175,8 @@ def spoil(
     now: str,
     today: str,
 ) -> tuple[float, str, str | None]:
-    """Списать порчей. Без qty - весь просроченный остаток (срок раньше today). Возвращает
+    """Списать порчей. Без qty - весь просроченный остаток (срок раньше today); с qty - FIFO
+    без проверки просрочки (спишется ближайшая партия). Возвращает
     (сколько, единица, предупреждение). Нечего списывать - ValueError."""
     name = normalize(item)
     if qty is not None and unit is not None:

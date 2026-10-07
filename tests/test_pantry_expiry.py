@@ -196,3 +196,22 @@ def test_set_resets_batches(conn: sqlite3.Connection) -> None:
     row = row_of(conn, "молоко")
     assert row["qty"] == 300
     assert row["expires_on"] == "2026-10-30"
+
+
+def test_open_takes_first_closed_batch(conn: sqlite3.Connection) -> None:
+    record(conn, "add", "молоко", 500, "ml", T1, expires_on="2026-10-08", opened=True)
+    record(conn, "add", "молоко", 500, "ml", T1, expires_on="2026-10-20")
+    record(conn, "open", "молоко", 0, "ml", T2, expires_on="2026-10-12")
+    row = row_of(conn, "молоко")
+    assert row["qty"] == 1000
+    assert row["expires_on"] == "2026-10-08"
+    assert row["opened"]
+    assert expiring_items(conn, TODAY, 0) == []
+    assert expiring_items(conn, "2026-10-12", 0) == ["молоко"]
+
+
+def test_open_without_closed_batch_is_an_error(conn: sqlite3.Connection) -> None:
+    record(conn, "add", "молоко", 500, "ml", T1, expires_on="2026-10-08", opened=True)
+    with pytest.raises(ValueError):
+        record(conn, "open", "молоко", 0, "ml", T2, expires_on="2026-10-12")
+    assert conn.execute("SELECT count(*) FROM pantry_log").fetchone()[0] == 1

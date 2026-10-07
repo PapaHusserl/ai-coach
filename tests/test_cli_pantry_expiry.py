@@ -162,3 +162,13 @@ def test_settings_allow_open_but_not_spoil() -> None:
     assert not [rule for rule in allow if "spoil" in rule]
     assert "Bash(uv run coach pantry:*)" not in allow
     assert "Bash(uv run coach:*)" not in allow
+
+
+def test_set_with_until_and_opened(isolated: Path) -> None:
+    until = days_from_now(4)
+    args = ["pantry", "set", "молоко", "300", "ml", "--opened", "--until", until]
+    assert runner.invoke(main.app, args).exit_code == 0
+    row = pantry_rows(isolated)[0]
+    assert row["op"] == "set"
+    assert row["expires_on"] == until
+    assert row["opened"] == 1

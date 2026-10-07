@@ -21,7 +21,8 @@ def _consume(batches: list[dict[str, Any]], qty: float) -> None:
 
 def batches_of(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Партии продукта (qty, expires_on, opened) после всех записей. use и spoil уменьшают партию
-    с ближайшим сроком (FIFO), open ставит новый срок этой же партии."""
+    с ближайшим сроком (FIFO), open ставит новый срок первой закрытой партии (по ближайшему сроку) и
+    помечает её открытой целиком. Ограничение: одна запись add - одна партия."""
     batches: list[dict[str, Any]] = []
     for entry in entries:
         batch: dict[str, Any] = {
@@ -33,8 +34,10 @@ def batches_of(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             batches = [batch] if batch["qty"] > 0 else []
         elif entry["op"] == "add":
             batches.append(batch)
-        elif entry["op"] == "open" and batches:
-            min(batches, key=sort_key).update(expires_on=batch["expires_on"], opened=1)
+        elif entry["op"] == "open":
+            closed = [b for b in batches if not b["opened"]]
+            if closed:
+                min(closed, key=sort_key).update(expires_on=batch["expires_on"], opened=1)
         elif entry["op"] in ("use", "spoil"):
             _consume(batches, entry["qty"])
     return batches
