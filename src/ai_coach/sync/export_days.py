@@ -29,7 +29,7 @@ def add_sleep(days: dict[str, dict[str, Any]], item: dict[str, Any]) -> None:
         + (item.get("remSleepSeconds") or 0)
     )
     day["sleep_score"] = obj(item.get("sleepScores")).get("overallScore")
-    day["raw"]["sleep"] = dict(item)
+    day["raw"]["sleep"] = item
 
 
 def add_hrv(days: dict[str, dict[str, Any]], item: dict[str, Any]) -> None:
@@ -39,11 +39,6 @@ def add_hrv(days: dict[str, dict[str, Any]], item: dict[str, Any]) -> None:
             day["hrv_last_night"] = metric.get("value")
             day["hrv_status"] = metric.get("status")
             day["raw"]["hrv"] = item
-        if metric.get("type") == "HR":
-            # ночной пульс покоя (48-77, как restingHeartRate из sync): кладём туда,
-            # откуда его читает last_rest_hr
-            day = day_of(days, item["calendarDate"])
-            day["raw"].setdefault("sleep", {})["restingHeartRate"] = metric.get("value")
 
 
 def read_days(archive: zipfile.ZipFile) -> dict[str, dict[str, Any]]:
