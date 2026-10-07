@@ -19,6 +19,7 @@ from ai_coach.load import (
     load_series,
     resolve_thresholds,
 )
+from ai_coach.meds import public_meds, short_meds
 from ai_coach.pantry import expiring, stock
 from ai_coach.profile import (
     current_profile,
@@ -64,6 +65,7 @@ SNAPSHOT_PANTRY = 30
 SNAPSHOT_EXPIRING = 10
 SNAPSHOT_RECIPES = 30
 SNAPSHOT_NUTRITION_ROWS = 10
+SNAPSHOT_MEDS = 10
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -273,6 +275,20 @@ def _snapshot_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any] | 
     return result | {"workouts": found["workouts"], "supplements": found["supplements"]}
 
 
+def meds(
+    conn: sqlite3.Connection,
+    date: str | None = None,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
+) -> dict[str, Any]:
+    """Курсы витаминов и безрецептурных средств: на дату (date) или все живые (без date)."""
+    return _cap(public_meds(conn, _day(date).isoformat() if date else None))
+
+
+def _snapshot_meds(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Курсы на день для сводки, компактно (без заметок): {"meds_today": ...}; нет курсов - {}."""
+    short = short_meds(conn, day)
+    return {"meds_today": _cap(short, SNAPSHOT_MEDS, SNAPSHOT_CHARS)} if short else {}
+
+
 def _today() -> date:
     return date.today()
 
@@ -378,6 +394,7 @@ def morning_snapshot(
     nutrition = _snapshot_nutrition(conn, date)
     if nutrition is not None:
         snapshot["sport_nutrition_today"] = nutrition
+    snapshot |= _snapshot_meds(conn, date)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]

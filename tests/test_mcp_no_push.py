@@ -49,6 +49,7 @@ EXPECTED_TOOLS = {
     "get_recipes",
     "get_sport_nutrition",
     "get_sport_nutrition_for",
+    "get_meds",
 }
 
 

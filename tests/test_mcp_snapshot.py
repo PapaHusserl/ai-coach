@@ -7,6 +7,7 @@ from ai_coach.mcp_server.tools import MAX_CHARS, SNAPSHOT_CHARS, SNAPSHOT_ROWS
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
 from ai_coach.store.goals import add_goal, add_phase
 from ai_coach.store.journal import add_food, add_sync_log, add_weight
+from ai_coach.store.meds import add_med
 from ai_coach.store.plans import add_plan_actual, add_planned_workout
 
 RAW = "SECRET_RAW_PAYLOAD"
@@ -185,3 +186,46 @@ def test_snapshot_has_thresholds_with_source(conn: sqlite3.Connection) -> None:
     thresholds = call(conn, "get_morning_snapshot", date=DAY)["thresholds"]
     assert thresholds["run"]["source"] == "garmin_lt"
     assert thresholds["bike"] == {"lthr": 163, "source": "derived", "date": "2026-09-30"}
+
+
+def test_snapshot_without_meds_has_no_meds_today(conn: sqlite3.Connection) -> None:
+    fill(conn)
+    assert "meds_today" not in call(conn, "get_morning_snapshot", date=DAY)
+
+
+def test_snapshot_has_meds_today_for_active_course(conn: sqlite3.Connection) -> None:
+    fill(conn)
+    add_med(
+        conn,
+        {
+            "name": "витамин D",
+            "kind": "vitamin",
+            "dose": 25.0,
+            "unit": "mcg",
+            "schedule": "daily",
+            "start_date": "2026-10-01",
+            "note": RAW,
+            "created_at": f"{DAY} 06:00:00",
+        },
+    )
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert [r["name"] for r in snapshot["meds_today"]["rows"]] == ["витамин D"]
+    assert RAW not in call_text(conn, "get_morning_snapshot", date=DAY)
+
+
+def test_snapshot_with_many_big_meds_fits_total_limit(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS * 2):
+        add_med(
+            conn,
+            {
+                "name": f"курс {number} " + "я" * 300,
+                "kind": "otc",
+                "dose": 1.0,
+                "unit": "pcs",
+                "schedule": "daily",
+                "time_note": "я" * 300,
+                "start_date": "2026-10-01",
+                "created_at": f"{DAY} 06:00:00",
+            },
+        )
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS

@@ -45,6 +45,8 @@ exclude_patterns = [
   "src/ai_coach/cli/recipes.py",
   # typer-команды protocol/supplement add/edit: то же самое
   "src/ai_coach/cli/sport_nutrition.py",
+  # typer-команды med add/edit: то же самое
+  "src/ai_coach/cli/meds.py",
 ]
 
 test_patterns = [

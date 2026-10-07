@@ -100,3 +100,79 @@ def test_agent_describes_supplements_with_limits() -> None:
     assert "uv run coach protocol add" in text
     assert "не медицинский совет" in text.lower()
     assert "кофеин" in text.lower()
+
+
+# --- шаг 18: курсы витаминов и средств ---
+
+
+def agent_text() -> str:
+    return (ROOT / "agents" / "coach.md").read_text()
+
+
+def agent_tools() -> str:
+    return agent_text().split("---")[1]
+
+
+def test_morning_core_mentions_meds_today() -> None:
+    text = (SKILLS / "coach-morning" / "SKILL.md").read_text()
+    assert "meds_today" in text
+
+
+def test_agent_has_get_meds_in_tools() -> None:
+    assert "mcp__ai-coach__get_meds" in agent_tools()
+
+
+def test_agent_keeps_sport_nutrition_tools() -> None:
+    for tool in ["get_sport_nutrition", "get_sport_nutrition_for", "cancel_draft_workout"]:
+        assert f"mcp__ai-coach__{tool}" in agent_tools()
+
+
+def test_agent_allows_med_in_bash_list() -> None:
+    assert "`med`" in agent_text()
+
+
+def test_agent_describes_med_add_after_yes() -> None:
+    text = agent_text()
+    assert "uv run coach med add" in text
+    assert "--kind" in text
+    assert "после «да»" in text
+
+
+def test_agent_advises_only_otc_and_sends_prescription_to_doctor() -> None:
+    text = agent_text().lower()
+    assert "безрецептурн" in text
+    assert "рецептурное" in text
+    assert "к врачу" in text
+    assert "инструкц" in text
+
+
+def test_agent_lists_all_red_flags() -> None:
+    text = agent_text().lower()
+    for flag in ["боль в груди", "обморок", "пульса в покое", "травма", "температур"]:
+        assert flag in text
+
+
+def test_agent_red_flag_cancels_workout_and_records_feel() -> None:
+    text = agent_text()
+    assert "cancel_draft_workout" in text
+    assert "на часах" in text
+    assert "uv run coach feel" in text
+
+
+def test_agent_keeps_vitamins_in_med_not_supplement() -> None:
+    text = agent_text().lower()
+    assert "`med`" in text
+    assert "`supplement`" in text
+    assert "спортпит" in text
+
+
+def test_agent_does_not_give_med_edit_delete_to_itself() -> None:
+    text = agent_text()
+    assert "med edit" in text
+    assert "пользователь сам" in text
+
+
+def test_agent_keeps_step_17_texts() -> None:
+    text = agent_text()
+    assert "uv run coach supplement add" in text
+    assert "кофеин" in text.lower()

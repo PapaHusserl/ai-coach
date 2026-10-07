@@ -6,3 +6,6 @@
 |---|---|---|
 - Журнал приёма добавок (`supplement_log`, `coach supplement take`, «принято сегодня» в snapshot) — отложено на шаге 17 (2026-10-07)
 - edit протокола/добавки: способ сбросить sport/note/time_note (например `--sport any`) — из ревью шага 17 (2026-10-07)
+- `coach med edit --no-end` — сделать курс снова бессрочным (ревью шага 18).
+- qlty: вместо exclude целых cli/recipes.py, cli/sport_nutrition.py, cli/meds.py — точечный override порога параметров (ревью шага 18).
+- Курсы `med` с графиком training_day/before/after фильтровать по дням тренировок, как добавки (ревью шага 18).

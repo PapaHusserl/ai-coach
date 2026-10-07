@@ -1,5 +1,5 @@
 """Команды `coach`: sync, import, approve, push, status, weight, food, feel, profile, goal,
-pantry, shop, meal, recipe, protocol, supplement, log, edit, delete."""
+pantry, shop, meal, recipe, protocol, supplement, med, log, edit, delete."""
 
 from datetime import date, datetime
 from getpass import getpass
@@ -9,6 +9,7 @@ from typing import Annotated, Any
 import typer
 
 from ai_coach.cli.journal import check_date, delete_app, edit_app, food, log_app, weight
+from ai_coach.cli.meds import med_app
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.cli.recipes import recipe_app
 from ai_coach.cli.sport_nutrition import protocol_app, supplement_app
@@ -53,6 +54,7 @@ app.add_typer(meal_app, name="meal")
 app.add_typer(recipe_app, name="recipe")
 app.add_typer(protocol_app, name="protocol")
 app.add_typer(supplement_app, name="supplement")
+app.add_typer(med_app, name="med")
 app.command()(shop)
 
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
