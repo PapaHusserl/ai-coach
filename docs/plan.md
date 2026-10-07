@@ -198,3 +198,7 @@
 8. Мини-спайк — оркестратор.
 
 Спайк `get_user_profile()` (2026-10-07, обезличенная фикстура `tests/fixtures/garmin/user_profile.json`): `userData.gender` = `MALE`/`FEMALE`; `birthDate` = `YYYY-MM-DD`; `weight` — граммы (float); `height` — см (float); `activityLevel` = null (не заполнен — ключ ручной); `vo2MaxRunning`/`vo2MaxCycling` = null (VO2max брать из `get_max_metrics` или не брать); `lactateThresholdHeartRate` есть (LTHR уже берётся в шаге 7); `availableTrainingDays` — список дней (`SUNDAY`…, порядок произвольный) — можно подставлять как начальное расписание, ручное главнее; `preferredLongTrainingDays` пуст; `userSleep.sleepTime`/`wakeTime` — секунды от полуночи. Max HR в user-settings нет — из зон (шаг 7).
+
+Детальный план — [step11-profile-plan.md](step11-profile-plan.md).
+
+Проверка по деньгам (кабан-тесть, 2026-10-07): ок — по подписке $0, в API-эквиваленте сессия ~$0.25 → ~$0.27. Сокращения тестя приняты пользователем («окей, кабаним»): snapshot.profile — только текущие значения и активные цели (история — `get_profile`); сценарий опроса — в отдельном файле, читается только при непустом `missing`; `coach profile show` и итог `coach sync` — коротко.
