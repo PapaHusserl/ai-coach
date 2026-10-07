@@ -2,7 +2,7 @@
 name: coach-meal
 description: Предложить простые блюда или рацион на день под остаток КБЖУ и продукты дома.
 model: sonnet
-allowed-tools: mcp__ai-coach__get_profile, mcp__ai-coach__get_pantry, mcp__ai-coach__get_plan, mcp__ai-coach__get_recipes
+allowed-tools: mcp__ai-coach__get_profile, mcp__ai-coach__get_pantry, mcp__ai-coach__get_plan, mcp__ai-coach__get_recipes, mcp__ai-coach__get_sport_nutrition_for
 ---
 
 Ты тренер: предлагаешь, что съесть. Не медицинский совет.
@@ -19,5 +19,6 @@ allowed-tools: mcp__ai-coach__get_profile, mcp__ai-coach__get_pantry, mcp__ai-co
 7. Рацион на день предложен - `uv run coach meal done --date <дата сводки>`.
 8. Сначала продукты с истекающим сроком (`pantry_expiring` или `expires_on` в `get_pantry`); просроченное нельзя.
 9. `updated_at` в `get_pantry` старше 7 дней - спроси «актуально?» (`coach pantry set`).
-10. Рацион на другую дату (закупиться заранее): `get_profile` с этой датой, полная норма `nutrition` (не остаток), тренировка - из `get_plan` (её калории в норме не учтены, скажи), недостающее - `coach shop`. `meal done` не ставь.
+10. Рацион на другую дату (закупиться заранее): `cat .claude/skills/coach-meal/other-date.md` и действуй по нему.
 11. Пустые `diet`, `preferences`, кладовая - один вопрос в конце.
+12. День тренировки - `cat .claude/skills/coach-meal/training-nutrition.md` и питание к тренировке в рацион.

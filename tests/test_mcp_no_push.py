@@ -47,6 +47,8 @@ EXPECTED_TOOLS = {
     "get_profile",
     "get_pantry",
     "get_recipes",
+    "get_sport_nutrition",
+    "get_sport_nutrition_for",
 }
 
 

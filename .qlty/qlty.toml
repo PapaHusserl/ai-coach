@@ -43,6 +43,8 @@ exclude_patterns = [
   "spikes/**",
   # typer-команды recipe add/edit: каждая опция - параметр функции, порог qlty 7 не подходит
   "src/ai_coach/cli/recipes.py",
+  # typer-команды protocol/supplement add/edit: то же самое
+  "src/ai_coach/cli/sport_nutrition.py",
 ]
 
 test_patterns = [

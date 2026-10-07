@@ -7,7 +7,7 @@
 import json
 import sqlite3
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -27,6 +27,7 @@ from ai_coach.profile import (
     remaining,
     resting_hr,
 )
+from ai_coach.sport_nutrition import compact_nutrition, day_nutrition, without_service
 from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
     last_rest_hr,
@@ -51,6 +52,7 @@ from ai_coach.store.plans import (
     update_planned_workout,
 )
 from ai_coach.store.recipes import list_recipes
+from ai_coach.store.sport_nutrition import list_protocols, list_supplements
 from ai_coach.workouts import SPORTS, build_workout
 
 MAX_ROWS = 60
@@ -61,6 +63,7 @@ SNAPSHOT_GOALS = 10
 SNAPSHOT_PANTRY = 30
 SNAPSHOT_EXPIRING = 10
 SNAPSHOT_RECIPES = 30
+SNAPSHOT_NUTRITION_ROWS = 10
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -242,6 +245,34 @@ def recipes(conn: sqlite3.Connection) -> dict[str, Any]:
     return _cap([{k: v for k, v in row.items() if k not in skip} for row in list_recipes(conn)])
 
 
+def sport_nutrition(
+    conn: sqlite3.Connection, kind: Literal["protocol", "supplement"]
+) -> dict[str, Any]:
+    """Протоколы спортивного питания (kind=protocol) или добавки (kind=supplement), живые."""
+    found = list_protocols(conn) if kind == "protocol" else list_supplements(conn)
+    return _cap([without_service(row) for row in found])
+
+
+def sport_nutrition_for(
+    conn: sqlite3.Connection,
+    date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
+) -> dict[str, Any]:
+    """Питание к тренировкам дня (без отменённых): по каждой before / during / after, water_only
+    (короче 75 минут - во время только вода), duration_unknown (длительности нет - спросить
+    пользователя). supplements: daily всегда, остальные - в день тренировки."""
+    _day(date)
+    return day_nutrition(conn, date)
+
+
+def _snapshot_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any] | None:
+    """Питание дня для сводки, компактно (без заметок). Нет тренировок и добавок - None."""
+    found = compact_nutrition(day_nutrition(conn, day))
+    if found is None:
+        return None
+    result = _cap(found["rows"], SNAPSHOT_NUTRITION_ROWS, SNAPSHOT_CHARS)
+    return result | {"workouts": found["workouts"], "supplements": found["supplements"]}
+
+
 def _today() -> date:
     return date.today()
 
@@ -344,6 +375,9 @@ def morning_snapshot(
     short_recipes = [{k: row[k] for k in names} for row in list_recipes(conn)]
     snapshot["recipes"] = _cap(short_recipes, SNAPSHOT_RECIPES, SNAPSHOT_CHARS)
     snapshot["meal_plan_today"] = has_meal_plan(conn, date)
+    nutrition = _snapshot_nutrition(conn, date)
+    if nutrition is not None:
+        snapshot["sport_nutrition_today"] = nutrition
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]

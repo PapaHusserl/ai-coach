@@ -287,6 +287,8 @@
 
 После проверки по деньгам (кабан-тесть, пользователь 2026-10-07): coach-morning обобщить до разбора в любое время — ядро зависит от времени суток (утром — план на сегодня; днём/вечером — сделано/осталось, остаток КБЖУ), опции-файлы общие; `sport_nutrition_today` компактно — имя, фаза, г/мл, без note, добавки одной строкой, пусто — не отдавать; coach-meal — правило «питание к тренировке» в отдельный файл скилла, читать только в день тренировки; coach.md — блок добавок не выносить; длительность неизвестна — спросить.
 
+При TDD (пользователь 2026-10-07): coach-plan/SKILL.md (5392 байта) — тоже ленивая выгрузка в файлы папки скилла, тест ≤ 3 КБ для всех SKILL.md; allow `Bash(cat .claude/skills/<скилл>/<файл>)` — по конкретным файлам-опциям, как для spec-formats.md.
+
 План (папа-кабан):
 1. Миграция 0012: `nutrition_protocol` (name уникально среди живых без регистра, phase before|during|after, sport NULL|strength|mobility|run|bike|swim, min_duration_min, offset_min, carbs_g/protein_g/fluid_ml/sodium_mg ≥ 0 — в час для during, note, created/updated/deleted_at); `supplement` (name уникально среди живых, dose > 0, unit g|mg|ml|pcs, schedule, time_note, note, даты).
 2. `store/sport_nutrition.py`: add/list/get(id|имя)/edit/delete для обоих (повторное delete — False), стиль store/recipes.py.

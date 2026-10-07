@@ -28,7 +28,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "план/факт, вес, еда за день, продукты дома (до 30 строк), "
         "recipes (имена и КБЖУ на 100 г, до 30), "
         "meal_plan_today (рацион на сегодня уже предложен), "
-        "самочувствие за 30 дней (все записи, до 60), отклонения. "
+        "самочувствие за 30 дней (все записи, до 60), отклонения, "
+        "sport_nutrition_today (питание к тренировкам дня и добавки; нет - не отдаётся). "
         "date — YYYY-MM-DD (сегодня).",
     ),
     "get_daily_metrics": (
@@ -90,6 +91,20 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Справочник рецептов: id, name, kcal_100, protein_100, fat_100, carbs_100 (на 100 г "
         "готового), yield_g (вес готового или null), items (product, qty, unit). "
         "Меняет пользователь командами coach recipe.",
+    ),
+    "get_sport_nutrition": (
+        tools.sport_nutrition,
+        "Протоколы спортивного питания (kind=protocol: name, phase before/during/after, sport или "
+        "null, min_duration_min, offset_min, carbs_g, protein_g, fluid_ml, sodium_mg - для "
+        "during в час, note) или добавки (kind=supplement: name, dose, unit, schedule, time_note, "
+        "note). Меняет пользователь командами coach protocol / coach supplement.",
+    ),
+    "get_sport_nutrition_for": (
+        tools.sport_nutrition_for,
+        "Питание к тренировкам дня (без отменённых): по каждой before / during / after, "
+        "water_only (короче 75 минут - во время только вода), duration_unknown (длительности "
+        "нет - спроси пользователя); supplements: daily всегда, остальные в день тренировки. "
+        "date - YYYY-MM-DD.",
     ),
     "get_food_pending": (
         tools.food_pending,

@@ -19,11 +19,25 @@
       "Bash(uv run coach recipe add:*)",
       "Bash(uv run coach recipe list:*)",
       "Bash(uv run coach recipe show:*)",
+      "Bash(uv run coach protocol add:*)",
+      "Bash(uv run coach protocol list:*)",
+      "Bash(uv run coach protocol show:*)",
+      "Bash(uv run coach supplement add:*)",
+      "Bash(uv run coach supplement list:*)",
+      "Bash(uv run coach supplement show:*)",
       "Bash(cat .claude/agents/coach-onboarding.md)",
       "Bash(cat .claude/skills/coach-food/SKILL.md)",
       "Bash(cat .claude/skills/coach-meal/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/SKILL.md)",
-      "Bash(cat .claude/skills/coach-plan/spec-formats.md)"
+      "Bash(cat .claude/skills/coach-plan/spec-formats.md)",
+      "Bash(cat .claude/skills/coach-meal/training-nutrition.md)",
+      "Bash(cat .claude/skills/coach-meal/other-date.md)",
+      "Bash(cat .claude/skills/coach-plan/recalc.md)",
+      "Bash(cat .claude/skills/coach-plan/week.md)",
+      "Bash(cat .claude/skills/coach-morning/recovery.md)",
+      "Bash(cat .claude/skills/coach-morning/training-nutrition.md)",
+      "Bash(cat .claude/skills/coach-morning/plan-actual.md)",
+      "Bash(cat .claude/skills/coach-morning/weight-food.md)"
     ]
   }
 }
