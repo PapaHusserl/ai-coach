@@ -1,4 +1,4 @@
-"""MCP-сервер (stdio) для Claude Code: читает агрегаты, пишет только черновики."""
+"""MCP-сервер (stdio) для Claude Code: читает агрегаты, пишет черновики и КБЖУ еды."""
 
 import inspect
 from collections.abc import Callable
@@ -15,8 +15,8 @@ INSTRUCTIONS = (
     "Данные тренера: агрегаты из базы ai-coach (без сырых ответов Garmin). Даты YYYY-MM-DD. "
     f"Списки — не больше {MAX_ROWS} строк и {MAX_CHARS} символов: ответ {{rows, truncated}}, "
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
-    "Записать можно только черновики: create_draft_workout, cancel_draft_workout (только draft) "
-    "и propose_phase, а ещё КБЖУ записи еды без него: save_food_nutrition. "
+    "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
+    "propose_phase) и КБЖУ записи еды, у которой его ещё нет (save_food_nutrition). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push."
 )
 
