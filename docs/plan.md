@@ -289,6 +289,8 @@
 
 При TDD (пользователь 2026-10-07): coach-plan/SKILL.md (5392 байта) — тоже ленивая выгрузка в файлы папки скилла, тест ≤ 3 КБ для всех SKILL.md; allow `Bash(cat .claude/skills/<скилл>/<файл>)` — по конкретным файлам-опциям, как для spec-formats.md.
 
+После ревью и аудита (пользователь 2026-10-07): длительность неизвестна — протоколы фаз без фильтра по min_duration_min, агент отбирает по ответу; coach-plan — шаги 1–6 в week.md; coach-meal — п.10 в other-date.md; name тренировки в flags сводки; qlty-исключение cli/sport_nutrition.py — оставить; решения кабана (name ≤ 40, flags ≤ 10, формат sport_nutrition_today без sodium, строка добавок без лимита) — «оставить».
+
 План (папа-кабан):
 1. Миграция 0012: `nutrition_protocol` (name уникально среди живых без регистра, phase before|during|after, sport NULL|strength|mobility|run|bike|swim, min_duration_min, offset_min, carbs_g/protein_g/fluid_ml/sodium_mg ≥ 0 — в час для during, note, created/updated/deleted_at); `supplement` (name уникально среди живых, dose > 0, unit g|mg|ml|pcs, schedule, time_note, note, даты).
 2. `store/sport_nutrition.py`: add/list/get(id|имя)/edit/delete для обоих (повторное delete — False), стиль store/recipes.py.
