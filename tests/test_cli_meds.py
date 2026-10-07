@@ -47,7 +47,10 @@ def med_rows(db: Path) -> list[sqlite3.Row]:
 
 
 def add_med(name: str = "витамин D", *extra: str) -> Any:
-    return run("med", "add", name, *(extra or DOSE))
+    args = extra or DOSE
+    if "--start" not in args:
+        args = (*args, "--start", "2026-10-01")
+    return run("med", "add", name, *args)
 
 
 def day(shift: int) -> str:
@@ -84,9 +87,11 @@ def test_add_without_end_is_open_ended(isolated: Path) -> None:
     assert med_rows(isolated)[0]["end_date"] is None
 
 
-def test_add_without_start_begins_today(isolated: Path) -> None:
-    assert add_med().exit_code == 0
-    assert med_rows(isolated)[0]["start_date"] == TODAY.isoformat()
+def test_add_without_start_fails_with_text(isolated: Path) -> None:
+    result = run("med", "add", "витамин D", *DOSE)
+    assert result.exit_code == 1
+    assert "--start обязателен" in result.output
+    assert med_rows(isolated) == []
 
 
 @pytest.mark.parametrize("kind", ["vitamin", "mineral", "electrolyte", "otc"])
@@ -216,7 +221,14 @@ def test_add_duplicate_name_fails_with_text(isolated: Path) -> None:
 
 def test_add_options_with_equals_sign(isolated: Path) -> None:
     result = run(
-        "med", "add", "витамин D", "--kind=vitamin", "--dose=25", "--unit=mcg", "--schedule=daily"
+        "med",
+        "add",
+        "витамин D",
+        "--kind=vitamin",
+        "--dose=25",
+        "--unit=mcg",
+        "--schedule=daily",
+        "--start=2026-10-01",
     )
     assert result.exit_code == 0
 

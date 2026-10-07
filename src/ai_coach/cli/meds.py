@@ -50,7 +50,7 @@ def med_add(
     unit: Annotated[str, typer.Option("--unit", help=UNIT_HELP)],
     schedule: Annotated[str, typer.Option("--schedule", help=SCHEDULE_HELP)],
     start: Annotated[
-        str | None, typer.Option("--start", help="Начало, YYYY-MM-DD; по умолчанию сегодня")
+        str | None, typer.Option("--start", help="Начало, YYYY-MM-DD, обязательно")
     ] = None,
     end: Annotated[
         str | None, typer.Option("--end", help="Конец, YYYY-MM-DD; без него - бессрочно")
@@ -63,7 +63,10 @@ def med_add(
     one_of(kind, KINDS, "--kind")
     one_of(unit, UNITS, "--unit")
     one_of(schedule, SCHEDULES, "--schedule")
-    first = check_date(start) if start is not None else date.today().isoformat()
+    if start is None:
+        fail("--start обязателен: укажи дату начала курса, YYYY-MM-DD.")
+        return
+    first = check_date(start)
     last = check_date(end) if end is not None else None
     check_period(first, last)
     values = {"name": name, "kind": kind, "dose": read_dose(dose), "unit": unit}
