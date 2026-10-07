@@ -4,13 +4,15 @@ import json
 import sqlite3
 from typing import Any
 
-from ai_coach.load.sports import SPORT_TYPE_KEYS
+from ai_coach.load.sports import MOBILITY_TYPE_KEYS, SPORT_TYPE_KEYS
 from ai_coach.store.garmin_data import list_activities, list_strength_sets
 from ai_coach.store.plans import add_plan_actual, delete_plan_actual, list_planned_workouts
 
+PLAN_TYPE_KEYS = {**SPORT_TYPE_KEYS, "mobility": MOBILITY_TYPE_KEYS}
+
 
 def _same_type(planned: dict[str, Any], activity: dict[str, Any]) -> bool:
-    return activity["type_key"] in SPORT_TYPE_KEYS.get(planned["sport"], ())
+    return activity["type_key"] in PLAN_TYPE_KEYS.get(planned["sport"], ())
 
 
 def _missing_exercises(
@@ -84,7 +86,7 @@ def rebuild_plan_actual(conn: sqlite3.Connection, start: str, end: str) -> None:
     delete_plan_actual(conn, start, end)
     planned_by_day: dict[str, list[dict[str, Any]]] = {}
     for planned in list_planned_workouts(conn, start, end):
-        if planned["status"] == "pushed" and planned["sport"] in SPORT_TYPE_KEYS:
+        if planned["status"] == "pushed" and planned["sport"] in PLAN_TYPE_KEYS:
             planned_by_day.setdefault(planned["date"], []).append(planned)
     activities_by_day: dict[str, list[dict[str, Any]]] = {}
     for activity in list_activities(conn, start, end):

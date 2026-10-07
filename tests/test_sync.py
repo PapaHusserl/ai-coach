@@ -20,6 +20,7 @@ from ai_coach.store.garmin_data import (
     list_daily_metrics,
     list_strength_sets,
 )
+from ai_coach.store.plans import add_planned_workout, list_plan_actual
 from ai_coach.sync.garmin_sync import sync
 
 TODAY = date(2026, 3, 10)
@@ -48,6 +49,21 @@ def test_sync_writes_daily_metrics_summary(conn: sqlite3.Connection) -> None:
     assert row["stress_avg"] == 30
     assert row["readiness_score"] == 70
     assert row["readiness_level"] == "MODERATE"
+
+
+def test_sync_rebuilds_plan_actual(conn: sqlite3.Connection) -> None:
+    add_planned_workout(
+        conn,
+        {
+            "date": day(),
+            "sport": "strength",
+            "name": "Силовая",
+            "status": "pushed",
+            "workout_json": {"exercises": []},
+        },
+    )
+    run_sync(conn, FakeGarmin(), 1)
+    assert [r["kind"] for r in list_plan_actual(conn, day(), day())] == ["done"]
 
 
 def test_sync_keeps_raw_json_of_metrics(conn: sqlite3.Connection) -> None:

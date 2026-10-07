@@ -302,14 +302,27 @@ def test_strength_skipped_when_no_activity(conn: sqlite3.Connection) -> None:
     assert [r["kind"] for r in rows(conn)] == ["skipped"]
 
 
-def test_mobility_plan_is_skipped_and_does_not_take_activity(conn: sqlite3.Connection) -> None:
-    plan(conn, "2026-03-10", "mobility")
-    act = activity(conn, 1, "2026-03-10 07:00:00", "running")
+def test_mobility_plan_is_done_by_mobility_activity(conn: sqlite3.Connection) -> None:
+    planned = plan(conn, "2026-03-10", "mobility")
+    act = activity(conn, 1, "2026-03-10 07:00:00", "mobility")
     rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
     [row] = rows(conn)
-    assert row["kind"] == "extra"
-    assert row["planned_id"] is None
+    assert row["kind"] == "done"
+    assert row["planned_id"] == planned
     assert row["activity_id"] == act
+
+
+def test_mobility_plan_does_not_take_running(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "mobility")
+    activity(conn, 1, "2026-03-10 07:00:00", "running")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
+    assert [r["kind"] for r in rows(conn)] == ["different"]
+
+
+def test_mobility_plan_without_activity_is_skipped(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "mobility")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
+    assert [r["kind"] for r in rows(conn)] == ["skipped"]
 
 
 def test_two_equal_plans_lower_id_gets_earlier_activity(conn: sqlite3.Connection) -> None:

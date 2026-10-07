@@ -15,6 +15,7 @@ from garminconnect import (  # pyright: ignore[reportMissingTypeStubs]
 )
 
 from ai_coach.garmin import GarminError, garmin_errors
+from ai_coach.load import rebuild_plan_actual
 from ai_coach.store.garmin_data import (
     last_zones_threshold,
     upsert_activity,
@@ -267,6 +268,7 @@ def sync(
             upsert_activity(conn, activity)
             for row in sets:
                 upsert_strength_set(conn, row)
+        rebuild_plan_actual(conn, day_list[-1], day_list[0])
         for threshold in thresholds:
             if not zones_unchanged(conn, threshold):
                 upsert_threshold(conn, threshold)
