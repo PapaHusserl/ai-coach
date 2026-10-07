@@ -14,7 +14,8 @@ from ai_coach.store.journal import (
 def test_weight_roundtrip(conn: sqlite3.Connection) -> None:
     wid = add_weight(conn, {"measured_at": "2026-03-10T07:00:00", "weight_kg": 81.4})
     rows = list_weights(conn, "2026-03-10", "2026-03-10")
-    assert rows == [{"id": wid, "measured_at": "2026-03-10T07:00:00", "weight_kg": 81.4}]
+    row = {"id": wid, "measured_at": "2026-03-10T07:00:00", "weight_kg": 81.4, "deleted_at": None}
+    assert rows == [row]
 
 
 def test_weights_inclusive_by_date_sorted_by_time_then_id(conn: sqlite3.Connection) -> None:

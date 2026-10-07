@@ -380,8 +380,11 @@ def save_food_nutrition(
     with conn:
         saved = update_food(conn, food_id, values)
     if not saved:
-        if fetch_one(conn, "SELECT id FROM food_log WHERE id = ?", (food_id,)) is None:
+        row = fetch_one(conn, "SELECT deleted_at FROM food_log WHERE id = ?", (food_id,))
+        if row is None:
             raise ToolError(f"Записи еды {food_id} нет.")
+        if row["deleted_at"] is not None:
+            raise ToolError(f"Запись еды {food_id} удалена.")
         raise ToolError(f"У записи {food_id} КБЖУ уже посчитано.")
     return {"food_id": food_id}
 

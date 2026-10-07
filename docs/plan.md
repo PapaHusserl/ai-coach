@@ -244,6 +244,16 @@
 ### Шаг 14. Запись задним числом и правка записей
 `coach weight/food --at` (запись задним числом); правка и удаление записей веса/еды с пересчётом КБЖУ. Источник: решение по шагу 8.
 
+Решения пользователя (2026-10-07): удаление — пометка (`deleted_at`), не DELETE; правка текста еды сбрасывает КБЖУ → пересчитает /coach-food; `--at` — `YYYY-MM-DD` или `"YYYY-MM-DD HH:MM"` (только дата → 12:00); правка и удаление — с подтверждением Claude Code (не в allow).
+
+План (оркестратор):
+1. Миграция 0010: `weight_log.deleted_at TEXT`, `food_log.deleted_at TEXT` (NULL — живая запись).
+2. `store/journal.py`: `list_weights`, `list_food`, `list_food_pending` не отдают удалённые; `update_food` (КБЖУ) не пишет в удалённую; новые `edit_weight(id, weight_kg)`, `edit_food(id, text)` (КБЖУ → NULL), `delete_weight(id)`, `delete_food(id)` (ставят `deleted_at`; удалённую не правят и повторно не удаляют — False). Время записи (`measured_at`/`logged_at`) правится тоже — через `--at`.
+3. CLI: `coach weight <кг> [--at ...]`, `coach food "<текст>" [--at ...]` — в allow остаются (prefix `weight:*`/`food:*`). Правка/удаление — отдельные команды, имена не начинаются с `weight`/`food`, чтобы не попасть в allow: `coach edit weight <id> [<кг>] [--at ...]`, `coach edit food <id> ["<текст>"] [--at ...]`, `coach delete weight|food <id>`. Найти id: `coach log weight|food [--date YYYY-MM-DD]` (только чтение, в allow; по умолчанию сегодня). `--at` в будущем — ошибка. Разбор `--at` — одна функция для всех команд.
+4. MCP: `get_weights`/`get_food` отдают `id` (уже) и не отдают удалённые; `save_food_nutrition` по удалённой — ошибка «запись удалена».
+5. Агент/скиллы: coach.md — «съел вчера …» → `coach food ... --at <дата>`; поправить/удалить — показать запись, после «да» `coach edit/delete` (Claude Code спросит ещё раз); coach-food — после правки запись снова в pending. SKILL.md ≤ 3 КБ.
+6. Тесты (TDD): миграция и перенос данных; --at (дата, дата+время, мусор, будущее); edit weight/food, сброс КБЖУ, правка времени; delete — пропадает из list/pending/snapshot/nutrition_remaining/профиля (вес); повторное delete и edit удалённой — отказ; save_food_nutrition на удалённой; `coach log`; edit/delete не в allow.
+
 ### Шаг 15. `coach status` с фильтром по дате
 Источник: решение по шагу 5.
 

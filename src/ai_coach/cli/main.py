@@ -1,5 +1,5 @@
 """Команды `coach`: sync, import, approve, push, status, weight, food, feel, profile, goal,
-pantry, shop, meal."""
+pantry, shop, meal, log, edit, delete."""
 
 from datetime import date, datetime
 from getpass import getpass
@@ -8,6 +8,7 @@ from typing import Annotated, Any
 
 import typer
 
+from ai_coach.cli.journal import delete_app, edit_app, food, log_app, weight
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.garmin import (
     TOKEN_NAME,
@@ -29,7 +30,7 @@ from ai_coach.plan import (
 )
 from ai_coach.profile import current_profile, set_value
 from ai_coach.store.db import open_db
-from ai_coach.store.journal import add_food, add_weight, add_wellbeing
+from ai_coach.store.journal import add_wellbeing
 from ai_coach.store.plans import list_planned_workouts
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
@@ -40,13 +41,16 @@ profile_app = typer.Typer(help="Профиль спортсмена", no_args_is
 goal_app = typer.Typer(help="Цели", no_args_is_help=True)
 app.add_typer(profile_app, name="profile")
 app.add_typer(goal_app, name="goal")
+app.add_typer(edit_app, name="edit")
+app.add_typer(delete_app, name="delete")
+app.add_typer(log_app, name="log")
+app.command()(weight)
+app.command()(food)
 app.add_typer(pantry_app, name="pantry")
 app.add_typer(meal_app, name="meal")
 app.command()(shop)
 
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
-MIN_WEIGHT_KG = 20
-MAX_WEIGHT_KG = 300
 MIN_SCORE = 1
 MAX_SCORE = 5
 
@@ -184,39 +188,6 @@ def status() -> None:
         typer.echo(
             f"{row['id']}  {row['date']}  {row['sport']}  {row['name']}  [{row['status']}{sent}]"
         )
-
-
-@app.command()
-def weight(text: Annotated[str, typer.Argument(help="Вес, кг (можно 81,7)")]) -> None:
-    """Записать вес (время — сейчас, местное)."""
-    try:
-        kg = float(text.replace(",", "."))
-    except ValueError:
-        fail(f"Вес должен быть числом, получено: {text!r}")
-        return
-    if not MIN_WEIGHT_KG <= kg <= MAX_WEIGHT_KG:
-        fail(f"Вес должен быть от {MIN_WEIGHT_KG} до {MAX_WEIGHT_KG} кг.")
-    conn = open_db()
-    try:
-        with conn:
-            add_weight(conn, {"measured_at": now(), "weight_kg": kg})
-    finally:
-        conn.close()
-    typer.echo(f"Вес {kg} кг записан.")
-
-
-@app.command()
-def food(text: Annotated[str, typer.Argument(help="Что съедено, как есть")]) -> None:
-    """Записать еду текстом (время — сейчас). КБЖУ посчитает /coach-food."""
-    if not text.strip():
-        fail("Текст пустой.")
-    conn = open_db()
-    try:
-        with conn:
-            add_food(conn, {"logged_at": now(), "text": text.strip()})
-    finally:
-        conn.close()
-    typer.echo("Еда записана. КБЖУ посчитает /coach-food.")
 
 
 @app.command()

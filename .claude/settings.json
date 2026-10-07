@@ -8,6 +8,7 @@
       "Bash(uv run coach status:*)",
       "Bash(uv run coach weight:*)",
       "Bash(uv run coach profile:*)",
+      "Bash(uv run coach log:*)",
       "Bash(uv run coach goal add:*)",
       "Bash(uv run coach goal list:*)",
       "Bash(uv run coach pantry add:*)",

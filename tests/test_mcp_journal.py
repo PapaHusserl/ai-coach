@@ -66,7 +66,7 @@ def test_zero_macros_are_allowed(conn: sqlite3.Connection) -> None:
 
 
 def test_unknown_entry_is_rejected(conn: sqlite3.Connection) -> None:
-    with pytest.raises(ToolError):
+    with pytest.raises(ToolError, match="нет"):
         call(conn, TOOL, food_id=999, **MACROS)
     assert food(conn) == []
 
@@ -143,7 +143,7 @@ def test_snapshot_food_today_has_only_that_day(conn: sqlite3.Connection) -> None
 def test_already_counted_entry_is_not_overwritten(conn: sqlite3.Connection) -> None:
     food_id = new_food(conn)
     call(conn, TOOL, food_id=food_id, **MACROS)
-    with pytest.raises(ToolError):
+    with pytest.raises(ToolError, match="уже посчитано"):
         call(conn, TOOL, food_id=food_id, **{**MACROS, "kcal": 1.0})
     assert food(conn)[0]["kcal"] == 520.0
 

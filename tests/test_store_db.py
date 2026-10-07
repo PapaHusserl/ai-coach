@@ -165,7 +165,12 @@ def test_insert_returns_new_id_and_stores_row(conn: sqlite3.Connection) -> None:
     second = insert(conn, "weight_log", {"measured_at": "2026-01-02T07:00", "weight_kg": 80.1})
     assert second == first + 1
     row = fetch_one(conn, "SELECT * FROM weight_log WHERE id = ?", (first,))
-    assert row == {"id": first, "measured_at": "2026-01-01T07:00", "weight_kg": 80.5}
+    assert row == {
+        "id": first,
+        "measured_at": "2026-01-01T07:00",
+        "weight_kg": 80.5,
+        "deleted_at": None,
+    }
 
 
 def test_insert_dumps_json_object_in_json_columns(conn: sqlite3.Connection) -> None:
@@ -218,8 +223,8 @@ def test_update_changes_only_given_row_and_columns(conn: sqlite3.Connection) -> 
     update(conn, "weight_log", a, {"weight_kg": 79.0})
     row_a = fetch_one(conn, "SELECT * FROM weight_log WHERE id = ?", (a,))
     row_b = fetch_one(conn, "SELECT * FROM weight_log WHERE id = ?", (b,))
-    assert row_a == {"id": a, "measured_at": "t1", "weight_kg": 79.0}
-    assert row_b == {"id": b, "measured_at": "t2", "weight_kg": 81.0}
+    assert row_a == {"id": a, "measured_at": "t1", "weight_kg": 79.0, "deleted_at": None}
+    assert row_b == {"id": b, "measured_at": "t2", "weight_kg": 81.0, "deleted_at": None}
 
 
 def test_update_dumps_json_object(conn: sqlite3.Connection) -> None:
