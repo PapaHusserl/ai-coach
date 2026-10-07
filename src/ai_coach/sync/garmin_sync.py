@@ -15,7 +15,12 @@ from garminconnect import (  # pyright: ignore[reportMissingTypeStubs]
 )
 
 from ai_coach.garmin import GarminError, garmin_errors
-from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_strength_set
+from ai_coach.store.garmin_data import (
+    upsert_activity,
+    upsert_daily_metrics,
+    upsert_strength_set,
+    upsert_threshold,
+)
 from ai_coach.store.journal import add_sync_log
 from ai_coach.sync.jsonutil import dump
 
@@ -152,6 +157,23 @@ def read_activities(
     return result
 
 
+def read_threshold(client: Garmin, today: date) -> dict[str, Any] | None:
+    """Пороговый пульс бега (LTHR) из Garmin; нет данных — None.
+    Библиотека при пустом ответе падает с TypeError (перебор None) — это тоже «нет данных»."""
+    try:
+        data = obj(client.get_lactate_threshold(latest=True))
+    except (GarminConnectNotFoundError, TypeError):
+        return None
+    found = obj(data.get("speed_and_heart_rate"))
+    if not found.get("heartRate"):
+        return None
+    return {
+        "calendar_date": str(found.get("calendarDate") or today.isoformat())[:10],
+        "lthr": found["heartRate"],
+        "raw_json": dump(data),
+    }
+
+
 def sync(
     conn: sqlite3.Connection,
     client: Garmin,
@@ -169,6 +191,7 @@ def sync(
         with garmin_errors():
             metrics = read_metrics(client, day_list, pause)
             activities = read_activities(client, day_list[-1], day_list[0], pause)
+            threshold = read_threshold(client, today)
     except GarminError as e:
         with conn:
             log(conn, started, "error", str(e))
@@ -181,5 +204,7 @@ def sync(
             upsert_activity(conn, activity)
             for row in sets:
                 upsert_strength_set(conn, row)
+        if threshold:
+            upsert_threshold(conn, threshold)
         log(conn, started, "ok", message)
     return message

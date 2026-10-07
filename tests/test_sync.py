@@ -16,6 +16,7 @@ from ai_coach.garmin.client import GarminError
 from ai_coach.store.garmin_data import (
     get_activity,
     get_daily_metrics,
+    last_threshold,
     list_activities,
     list_daily_metrics,
     list_strength_sets,
@@ -338,3 +339,33 @@ def test_sync_network_error_is_written_to_sync_log(
     rows = sync_log(tmp_path / "coach.db")
     assert [(r["kind"], r["status"]) for r in rows] == [("sync", "error")]
     assert rows[0]["message"]
+
+
+def test_sync_writes_lthr_from_garmin(conn: sqlite3.Connection) -> None:
+    run_sync(conn, FakeGarmin(), 1)
+    row = last_threshold(conn, "2099-01-01")
+    assert row is not None
+    assert (row["calendar_date"], row["lthr"]) == ("2026-03-09", 168)
+
+
+def test_sync_without_lthr_data_still_syncs(conn: sqlite3.Connection) -> None:
+    for error in (GarminConnectNotFoundError("404"), TypeError("None")):
+        run_sync(conn, FakeGarmin(fail={"get_lactate_threshold": error}), 1)
+    assert last_threshold(conn, "2099-01-01") is None
+    assert get_daily_metrics(conn, day()) is not None
+
+
+def test_sync_with_empty_lthr_answer_does_not_write_it(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin()
+    fake.lactate = {"speed_and_heart_rate": {"heartRate": None}, "power": {}}
+    run_sync(conn, fake, 1)
+    assert last_threshold(conn, "2099-01-01") is None
+
+
+def test_sync_cuts_time_from_lthr_date(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin()
+    fake.lactate["speed_and_heart_rate"]["calendarDate"] = "2026-03-09T00:00:00.0"
+    run_sync(conn, fake, 1)
+    row = last_threshold(conn, "2026-03-09")
+    assert row is not None
+    assert row["calendar_date"] == "2026-03-09"

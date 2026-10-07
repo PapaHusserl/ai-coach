@@ -42,6 +42,14 @@
 - Все проверки: `make check` — ruff (линт+формат), pyright (strict для src/), qlty smells (сложность, дубли), vulture (мёртвый код), pytest с покрытием ≥94%.
 - Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
 
+## MCP и скиллы тренера (Claude Code)
+- MCP-сервер (stdio) читает агрегаты из базы (без raw_json); списки отдаются как `{rows, truncated}`, до 60 строк и 20 000 символов, у рядов по датам остаются самые новые строки. Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (только draft -> cancelled), `propose_phase`. Инструментов отправки на часы и удаления нет, в Garmin сервер не ходит: утверждает и отправляет пользователь (`coach approve`, `coach push`).
+- Регистрация (один раз; путь к репо свой):
+  `claude mcp add ai-coach -- uv run --project /путь/к/ai-coach python -m ai_coach.mcp_server`
+  База — `$AI_COACH_DB` или `~/.local/share/ai-coach/coach.db`.
+- Нагрузка (CTL/ATL): пульс покоя берётся из ответа сна в базе (последний день с данными), пороговый пульс (LTHR) `coach sync` забирает из Garmin (`get_lactate_threshold`, таблица `thresholds`). Нет данных — в снапшоте `load_error`, остальное работает.
+- Скиллы лежат в `.claude/skills/` и подхватываются в этом репозитории: `/coach-morning` (утренний разбор и рекомендации по восстановлению, Sonnet), `/coach-plan` (план недели черновиками, Sonnet; форматы тренировок в `.claude/skills/coach-plan/spec-formats.md`). Поле `model` во frontmatter и имена инструментов `mcp__ai-coach__*` в `allowed-tools` на живом Claude Code не проверены.
+
 Подробности ресёрча: [docs/research-2026-10-03.md](docs/research-2026-10-03.md)
 Архитектура (утверждена): [docs/architecture-2026-10-06.md](docs/architecture-2026-10-06.md)
 План реализации: [docs/plan.md](docs/plan.md)

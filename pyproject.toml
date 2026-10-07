@@ -62,8 +62,8 @@ skip_covered = true
 [tool.vulture]
 paths = ["src", "tests"]
 min_confidence = 60
-ignore_names = ["model_config", "row_factory"]
-ignore_decorators = ["@field_validator", "@model_validator", "@app.command*"]
+ignore_names = ["model_config", "row_factory", "__signature__"]
+ignore_decorators = ["@field_validator", "@model_validator", "@app.command*", "@pytest.fixture*"]
 
 [tool.mutmut]
 source_paths = ["src/"]

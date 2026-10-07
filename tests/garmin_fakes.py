@@ -42,6 +42,7 @@ class FakeGarmin:
         self.calls: list[tuple[str, Any]] = []
         self.activities = load("activities_list.json")
         self.sets = load("activity_sets.json")
+        self.lactate = load("lactate_threshold.json")
 
     def _enter(self, method: str, day: str) -> bool:
         self.calls.append((method, day))
@@ -83,6 +84,12 @@ class FakeGarmin:
         if self._enter("get_training_readiness", cdate):
             return []
         return for_day(load("training_readiness_2026-03-10.json"), cdate)
+
+    def get_lactate_threshold(self, *, latest: bool = True) -> Any:
+        self.calls.append(("get_lactate_threshold", latest))
+        if "get_lactate_threshold" in self.fail:
+            raise self.fail["get_lactate_threshold"]
+        return self.lactate
 
     def get_activities_by_date(
         self, startdate: str, enddate: str | None = None, *a: Any, **k: Any

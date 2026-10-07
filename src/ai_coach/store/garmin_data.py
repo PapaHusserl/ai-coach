@@ -47,3 +47,24 @@ def upsert_strength_set(conn: sqlite3.Connection, values: dict[str, Any]) -> Non
 def list_strength_sets(conn: sqlite3.Connection, activity_id: int) -> list[dict[str, Any]]:
     sql = "SELECT * FROM strength_sets WHERE activity_id = ? ORDER BY set_index"
     return fetch_all(conn, sql, (activity_id,))
+
+
+def upsert_threshold(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
+    """Ключ — calendar_date. values: calendar_date, lthr, raw_json."""
+    upsert(conn, "thresholds", ["calendar_date"], values)
+
+
+def last_threshold(conn: sqlite3.Connection, end: str) -> dict[str, Any] | None:
+    """Самая свежая запись порогового пульса на дату end включительно."""
+    sql = "SELECT * FROM thresholds WHERE calendar_date <= ? ORDER BY calendar_date DESC LIMIT 1"
+    return fetch_one(conn, sql, (end,))
+
+
+def last_rest_hr(conn: sqlite3.Connection, end: str) -> int | None:
+    """Пульс покоя из ответа сна (raw_json) за последний день до end включительно, где он есть."""
+    sql = (
+        "SELECT json_extract(raw_json, '$.sleep.restingHeartRate') AS rest_hr FROM daily_metrics "
+        "WHERE date <= ? AND rest_hr IS NOT NULL ORDER BY date DESC LIMIT 1"
+    )
+    row = fetch_one(conn, sql, (end,))
+    return row["rest_hr"] if row else None
