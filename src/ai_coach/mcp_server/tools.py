@@ -50,6 +50,7 @@ from ai_coach.store.plans import (
     list_planned_workouts,
     update_planned_workout,
 )
+from ai_coach.store.recipes import list_recipes
 from ai_coach.workouts import SPORTS, build_workout
 
 MAX_ROWS = 60
@@ -59,6 +60,7 @@ SNAPSHOT_CHARS = 4000
 SNAPSHOT_GOALS = 10
 SNAPSHOT_PANTRY = 30
 SNAPSHOT_EXPIRING = 10
+SNAPSHOT_RECIPES = 30
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -234,6 +236,12 @@ def pantry(conn: sqlite3.Connection) -> dict[str, Any]:
     return _cap(stock(conn))
 
 
+def recipes(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Рецепты (живые): id, name, КБЖУ на 100 г, yield_g, items (состав)."""
+    skip = ("created_at", "updated_at", "deleted_at")
+    return _cap([{k: v for k, v in row.items() if k not in skip} for row in list_recipes(conn)])
+
+
 def _today() -> date:
     return date.today()
 
@@ -332,6 +340,9 @@ def morning_snapshot(
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]
     snapshot["pantry"] = _cap(short, SNAPSHOT_PANTRY, SNAPSHOT_CHARS)
     snapshot["pantry_expiring"] = _cap(expiring(conn, date), SNAPSHOT_EXPIRING, SNAPSHOT_CHARS)
+    names = ("name", "kcal_100", "protein_100", "fat_100", "carbs_100")
+    short_recipes = [{k: row[k] for k in names} for row in list_recipes(conn)]
+    snapshot["recipes"] = _cap(short_recipes, SNAPSHOT_RECIPES, SNAPSHOT_CHARS)
     snapshot["meal_plan_today"] = has_meal_plan(conn, date)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {

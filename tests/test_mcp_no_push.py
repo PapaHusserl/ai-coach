@@ -46,6 +46,7 @@ EXPECTED_TOOLS = {
     "propose_phase",
     "get_profile",
     "get_pantry",
+    "get_recipes",
 }
 
 

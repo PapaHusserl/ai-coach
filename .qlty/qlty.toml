@@ -41,6 +41,8 @@ exclude_patterns = [
   "**/testdata/**",
   "**/vendor/**",
   "spikes/**",
+  # typer-команды recipe add/edit: каждая опция - параметр функции, порог qlty 7 не подходит
+  "src/ai_coach/cli/recipes.py",
 ]
 
 test_patterns = [

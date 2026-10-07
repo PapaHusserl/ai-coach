@@ -26,6 +26,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         tools.morning_snapshot,
         "Утренний разбор одним вызовом: метрики, активности, нагрузка, цели, фазы, план, "
         "план/факт, вес, еда за день, продукты дома (до 30 строк), "
+        "recipes (имена и КБЖУ на 100 г, до 30), "
         "meal_plan_today (рацион на сегодня уже предложен), "
         "самочувствие за 30 дней (все записи, до 60), отклонения. "
         "date — YYYY-MM-DD (сегодня).",
@@ -83,6 +84,12 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Продукты дома (остаток больше 0): item, qty, unit (g/ml/pcs), updated_at, "
         "expires_on (ближайший срок годности или null), opened (0/1). "
         "Меняет пользователь командами coach pantry.",
+    ),
+    "get_recipes": (
+        tools.recipes,
+        "Справочник рецептов: id, name, kcal_100, protein_100, fat_100, carbs_100 (на 100 г "
+        "готового), yield_g (вес готового или null), items (product, qty, unit). "
+        "Меняет пользователь командами coach recipe.",
     ),
     "get_food_pending": (
         tools.food_pending,
