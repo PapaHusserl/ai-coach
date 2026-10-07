@@ -318,3 +318,31 @@
 Решения ревью (пользователь «рек», 2026-10-08): описание get_meds — без даты в т.ч. закончившиеся; в описаниях и coach-morning — график не фильтрует, training_day/before/after только в день тренировки; красные флаги — отдельным пунктом coach.md; «предложи, не сохраняй сам». В бэклог: `med edit --no-end`, точечный qlty-override, фильтр курсов по дням тренировок. Остальное — как есть.
 
 Решения аудита (пользователь, 2026-10-08): `med add --start` обязательный; snapshot `meds_today` ≤ 10 — оставить; «Это не медицинский совет.» из coach.md убрать; бессрочный курс без напоминания об окончании — подтверждено.
+
+### Шаг 19. Доработки спортпита и курсов (бэклог шагов 17–18)
+Пять пунктов из `backlog.md`: журнал приёма добавок; сброс sport/note/time_note в edit; `med edit --no-end`; точечный qlty-override вместо exclude трёх CLI-файлов; фильтр курсов med по дням тренировок.
+
+Решения пользователя (2026-10-08, «рек» на все рекомендации папы-кабана): журнал — пока только добавки, таблица общая `intake_log(kind, item_id)`; сброс — флагами `--clear-*`; `--clear-note`/`--clear-time-note` и в `med edit`; несколько приёмов в день разрешены (`taken` — есть хоть одна запись); день тренировки — только план без cancelled; `med list --date` фильтруется как MCP; qlty-порог параметров 15 только для трёх файлов; партии 19а → 19б → 19в.
+
+План (папа-кабан, 2026-10-08). Каждая партия — свой цикл «Общее для шагов 2–8».
+
+**19а — CLI/store без миграций**
+1. `protocol edit`: `--clear-sport`, `--clear-note`; `supplement edit`: `--clear-time-note`, `--clear-note`; `med edit`: `--clear-time-note`, `--clear-note`. Флаг кладёт NULL после фильтра `is not None`; флаг вместе с одноимённой опцией — `fail` («--sport и --clear-sport вместе нельзя.»); один флаг без опций — не «Нечего менять». `check_not_empty` у протокола остаётся. Обновить `SPORT_EDIT_HELP`.
+2. `med edit --no-end` → end_date NULL; с `--end` — `fail("--end и --no-end вместе нельзя.")`; на бессрочном — без ошибки.
+3. qlty (последним): убрать три файла из `exclude_patterns`, `[[override]]` с `smells.function_parameters.threshold = 15` для `cli/recipes.py`, `cli/sport_nutrition.py`, `cli/meds.py`; проверить синтаксис на qlty 0.651, `qlty smells --all` до/после. Вскрывшиеся мелкие замечания — чинить здесь, крупные — вопрос пользователю.
+4. Тесты: сбросы → NULL и тексты ошибок; сброс у несуществующей — «не найден»; `--no-end` и курс виден через год; edit-команды не в allow; страж — эти пути не в `exclude_patterns`.
+
+**19б — фильтр курсов по дням тренировок**
+1. Общий хелпер `has_training(conn, day)` в `ai_coach/sport_nutrition.py` (план без cancelled); `day_nutrition` на нём.
+2. `meds_for_day(conn, day)` в `ai_coach/meds.py`: daily — всегда, training_day/before/after — только при тренировке; `store/meds.py: meds_on` не менять. `public_meds(day)`, `short_meds`, `med list --date`/по умолчанию — через него; `get_meds()` без даты и `--all` — без фильтра.
+3. Тексты описаний get_meds/snapshot, coach-morning, coach.md: «на дату — только курсы этого дня (тренировочные — при тренировке)».
+4. Тесты: daily/тренировочные в дни с тренировкой, без и с единственной cancelled; две тренировки — курс один раз; границы дат; snapshot без ключа, если остались только тренировочные; регрессия добавок.
+
+**19в — журнал приёма**
+1. Миграция 0014 `intake_log`: id, `kind` CHECK ('supplement') (med — позже), `item_id`, `date`, `taken_at`, `dose REAL NULL CHECK > 0` (NULL — по норме), note, `deleted_at`; индекс `(date)`; только добавление.
+2. Store: `log_intake`, `list_intake(from, to)` (с именем, удалённые добавки видны), `delete_intake` (повтор → False).
+3. `day_nutrition`: у добавки `taken`; `compact_nutrition` помечает принятые (без эмодзи); проверить, что SNAPSHOT_CHARS не режет строку.
+4. CLI (файл `cli/supplement_log.py`): `coach supplement take <id|имя> [--date] [--dose] [--note]`, `log [--date|--from --to]` (пусто — «Приёмов нет.»), `untake <log_id>`; allow — take и log, untake — нет.
+5. MCP `get_supplement_log(date_from, date_to)` {rows, truncated}; `taken` в `get_sport_nutrition_for` и snapshot. Записи через MCP нет.
+6. coach-morning: принято/не принято, вечером напомнить о непринятых; `training-nutrition.md` — после тренировки предложить отметить `after`; coach.md — get_supplement_log, отметка после «да». SKILL.md ≤ 3072.
+7. Тесты: миграция, store, CLI ошибки с текстами, задним числом, untake повтор, allow, taken по дате, лимиты snapshot и MCP, нет записывающих tools.
