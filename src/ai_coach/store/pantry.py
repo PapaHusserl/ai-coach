@@ -7,7 +7,8 @@ from ai_coach.store.db import fetch_all, fetch_one, insert, upsert
 
 
 def add_entry(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
-    """values: item, qty, unit (g/ml/pcs), op (add/use/set), logged_at, note (необязателен)."""
+    """values: item, qty, unit (g/ml/pcs), op (add/use/set/open/spoil), logged_at; не обязательны:
+    note, expires_on (YYYY-MM-DD), opened (0/1)."""
     return insert(conn, "pantry_log", values)
 
 

@@ -92,6 +92,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "deviations",
         "profile",
         "pantry",
+        "pantry_expiring",
         "meal_plan_today",
     }
 

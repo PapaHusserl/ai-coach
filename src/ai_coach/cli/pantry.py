@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 import typer
 
-from ai_coach.pantry import missing, normalize, record, shopping_list, stock
+from ai_coach.pantry import PantryEntry, missing, normalize, record, shopping_list, spoil, stock
 from ai_coach.store.db import db_path, open_db
 from ai_coach.store.pantry import mark_meal_plan
 
@@ -24,11 +24,13 @@ def now() -> str:
     return datetime.now().isoformat(sep=" ", timespec="seconds")
 
 
-def pantry_write(op: str, item: str, qty: float, unit: str) -> None:
+def pantry_write(
+    op: str, item: str, qty: float, unit: str, until: str | None = None, opened: bool = False
+) -> None:
     conn = open_db()
     try:
         with conn:
-            warning = record(conn, op, item, qty, unit, now())
+            warning = record(conn, PantryEntry(op, item, qty, unit, now(), until, opened))
     except ValueError as e:
         fail(str(e))
         return
@@ -44,9 +46,51 @@ def pantry_add(
     item: Annotated[str, typer.Argument(help="Продукт")],
     qty: Annotated[float, typer.Argument(help="Сколько")],
     unit: Annotated[str, typer.Argument(help="g, ml или pcs")],
+    until: Annotated[str | None, typer.Option("--until", help="Годен до, YYYY-MM-DD")] = None,
+    opened: Annotated[bool, typer.Option("--opened", help="Упаковка открыта")] = False,
 ) -> None:
-    """Купил или принёс: добавить к остатку."""
-    pantry_write("add", item, qty, unit)
+    """Купил или принёс: добавить к остатку (со сроком годности, если он есть)."""
+    pantry_write("add", item, qty, unit, until, opened)
+
+
+@pantry_app.command("open")
+def pantry_open(
+    item: Annotated[str, typer.Argument(help="Продукт")],
+    until: Annotated[str, typer.Option("--until", help="Новый срок, YYYY-MM-DD")],
+) -> None:
+    """Открыли упаковку: новый срок годности, количество не меняется."""
+    conn = open_db()
+    try:
+        rows = [row for row in stock(conn) if row["item"] == normalize(item)]
+    finally:
+        conn.close()
+    if not rows:
+        fail(f"Продукта {item!r} нет дома.")
+        return
+    pantry_write("open", item, 0, rows[0]["unit"], until)
+
+
+@pantry_app.command("spoil")
+def pantry_spoil(
+    item: Annotated[str, typer.Argument(help="Продукт")],
+    qty: Annotated[float | None, typer.Argument(help="Сколько (нет - весь просроченный)")] = None,
+    unit: Annotated[str | None, typer.Argument(help="g, ml или pcs")] = None,
+) -> None:
+    """Испортилось: списать порчей (по умолчанию весь просроченный остаток)."""
+    if (qty is None) != (unit is None):
+        fail("Нужно и количество, и единица, или ни того ни другого.")
+    conn = open_db()
+    try:
+        with conn:
+            done, done_unit, warning = spoil(conn, item, qty, unit, now(), date.today().isoformat())
+    except ValueError as e:
+        fail(str(e))
+        return
+    finally:
+        conn.close()
+    typer.echo(f"{item}: spoil {done:g} {done_unit} записано.")
+    if warning:
+        typer.echo(warning)
 
 
 @pantry_app.command("use")
@@ -94,7 +138,10 @@ def pantry_list() -> None:
     if not rows:
         typer.echo("Дома ничего нет.")
     for row in rows:
-        typer.echo(f"{row['item']}  {row['qty']:g} {row['unit']}  (обновлено {row['updated_at']})")
+        until = f", годен до {row['expires_on']}" if row["expires_on"] else ""
+        opened = ", открыт" if row["opened"] else ""
+        info = f"обновлено {row['updated_at']}{until}{opened}"
+        typer.echo(f"{row['item']}  {row['qty']:g} {row['unit']}  ({info})")
 
 
 def parse_item(line: str) -> dict[str, Any]:
@@ -127,7 +174,8 @@ def shop_done(path: str) -> None:
         with conn:
             for line in lines:
                 found = parse_item(line)
-                record(conn, "add", found["item"], found["qty"], found["unit"], now())
+                entry = PantryEntry("add", found["item"], found["qty"], found["unit"], now())
+                record(conn, entry)
     except ValueError as e:
         fail(f"{e} Ничего не оприходовано.")
         return

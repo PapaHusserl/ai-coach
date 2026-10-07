@@ -12,6 +12,7 @@
       "Bash(uv run coach goal list:*)",
       "Bash(uv run coach pantry add:*)",
       "Bash(uv run coach pantry list:*)",
+      "Bash(uv run coach pantry open:*)",
       "Bash(uv run coach shop:*)",
       "Bash(uv run coach meal done:*)",
       "Bash(cat .claude/agents/coach-onboarding.md)",

@@ -80,7 +80,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_pantry": (
         tools.pantry,
-        "Продукты дома (остаток больше 0): item, qty, unit (g/ml/pcs), updated_at. "
+        "Продукты дома (остаток больше 0): item, qty, unit (g/ml/pcs), updated_at, "
+        "expires_on (ближайший срок годности или null), opened (0/1). "
         "Меняет пользователь командами coach pantry.",
     ),
     "get_food_pending": (

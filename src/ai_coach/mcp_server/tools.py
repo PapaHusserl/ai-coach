@@ -19,7 +19,7 @@ from ai_coach.load import (
     load_series,
     resolve_thresholds,
 )
-from ai_coach.pantry import stock
+from ai_coach.pantry import expiring, stock
 from ai_coach.profile import (
     current_profile,
     profile_history,
@@ -58,6 +58,7 @@ SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
 SNAPSHOT_GOALS = 10
 SNAPSHOT_PANTRY = 30
+SNAPSHOT_EXPIRING = 10
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -229,7 +230,7 @@ def profile(
 
 
 def pantry(conn: sqlite3.Connection) -> dict[str, Any]:
-    """Продукты дома (остаток больше 0): item, qty, unit, updated_at."""
+    """Продукты дома (остаток больше 0): item, qty, unit, updated_at, expires_on, opened."""
     return _cap(stock(conn))
 
 
@@ -330,6 +331,7 @@ def morning_snapshot(
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]
     snapshot["pantry"] = _cap(short, SNAPSHOT_PANTRY, SNAPSHOT_CHARS)
+    snapshot["pantry_expiring"] = _cap(expiring(conn, date), SNAPSHOT_EXPIRING, SNAPSHOT_CHARS)
     snapshot["meal_plan_today"] = has_meal_plan(conn, date)
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {

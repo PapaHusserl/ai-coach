@@ -1,12 +1,21 @@
 import sqlite3
+from typing import Any
 
 from mcp_fakes import call, call_text, rows
 
 from ai_coach.mcp_server.tools import MAX_CHARS
-from ai_coach.pantry.service import record
+from ai_coach.pantry.service import PantryEntry
+from ai_coach.pantry.service import record as save
 from ai_coach.profile.service import set_value
 from ai_coach.store.goals import add_goal
 from ai_coach.store.journal import add_food, add_weight
+
+
+def record(
+    conn: sqlite3.Connection, op: str, item: str, qty: float, unit: str, now: str, **fields: Any
+) -> str | None:
+    return save(conn, PantryEntry(op, item, qty, unit, now, **fields))
+
 
 DAY = "2026-10-07"
 SNAPSHOT_PANTRY_ROWS = 30

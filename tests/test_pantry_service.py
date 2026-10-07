@@ -1,8 +1,17 @@
 import sqlite3
+from typing import Any
 
 import pytest
 
-from ai_coach.pantry.service import missing, record, stock
+from ai_coach.pantry.service import PantryEntry, missing, stock
+from ai_coach.pantry.service import record as save
+
+
+def record(
+    conn: sqlite3.Connection, op: str, item: str, qty: float, unit: str, now: str, **fields: Any
+) -> str | None:
+    return save(conn, PantryEntry(op, item, qty, unit, now, **fields))
+
 
 T1 = "2026-10-01T10:00:00"
 T2 = "2026-10-02T10:00:00"
