@@ -226,15 +226,6 @@ def test_import_missing_file_is_clear_error(isolated: Path, tmp_path: Path) -> N
     assert "Traceback" not in result.output
 
 
-def test_import_zip_is_not_supported_yet_and_keeps_database(isolated: Path, tmp_path: Path) -> None:
-    archive = tmp_path / "export.zip"
-    shutil.make_archive(str(archive.with_suffix("")), "zip", FIXTURES / "garmin")
-    result = runner.invoke(main.app, ["import", str(archive)])
-    assert result.exit_code == 1
-    assert "zip" in result.output
-    assert count(isolated, "activities") == 0
-
-
 def test_login_with_working_tokens_does_not_ask_password(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

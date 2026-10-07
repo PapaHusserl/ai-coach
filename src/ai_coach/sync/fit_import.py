@@ -12,25 +12,33 @@ from ai_coach.store.garmin_data import get_activity, upsert_activity, upsert_str
 from ai_coach.store.journal import add_sync_log
 from ai_coach.sync.jsonutil import dump
 
-WANTED = ("session", "sport", "activity", "set")
+WANTED = ("file_id", "session", "sport", "activity", "set")
 
 
 class FitImportError(Exception):
     """Понятная пользователю ошибка импорта."""
 
 
-def read_messages(path: Path) -> dict[str, list[dict[str, Any]]]:
+def collect_messages(source: Any, only_activity: bool = False) -> dict[str, list[dict[str, Any]]]:
+    """Нужные сообщения FIT из пути или файлового объекта; only_activity — бросить разбор
+    сразу после file_id, если тип файла не activity."""
     messages: dict[str, list[dict[str, Any]]] = {}
+    with fitdecode.FitReader(source) as reader:
+        frame: Any
+        for frame in reader:
+            if frame.frame_type == fitdecode.FIT_FRAME_DATA and frame.name in WANTED:
+                fields: dict[str, Any] = {f.name: f.value for f in frame.fields}
+                messages.setdefault(str(frame.name), []).append(fields)
+                if only_activity and frame.name == "file_id" and fields.get("type") != "activity":
+                    break
+    return messages
+
+
+def read_messages(path: Path) -> dict[str, list[dict[str, Any]]]:
     try:
-        with fitdecode.FitReader(str(path)) as reader:
-            frame: Any
-            for frame in reader:
-                if frame.frame_type == fitdecode.FIT_FRAME_DATA and frame.name in WANTED:
-                    fields: dict[str, Any] = {f.name: f.value for f in frame.fields}
-                    messages.setdefault(str(frame.name), []).append(fields)
+        return collect_messages(str(path))
     except fitdecode.FitError as e:
         raise FitImportError(f"{path.name} не читается как FIT: {e}") from e
-    return messages
 
 
 def activity_id_from_name(path: Path) -> int:

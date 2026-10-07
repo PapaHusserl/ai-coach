@@ -27,15 +27,13 @@ from ai_coach.plan import (
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import add_food, add_weight
 from ai_coach.store.plans import list_planned_workouts
-from ai_coach.sync import FitImportError, import_fit
+from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
 from ai_coach.workouts import describe_workout
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
 
-ZIP_UNSUPPORTED = (
-    "Разбор полного экспорта (zip) пока не поддерживается. Передай FIT активности (.fit)."
-)
+ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
 MIN_WEIGHT_KG = 20
 MAX_WEIGHT_KG = 300
 
@@ -88,19 +86,23 @@ def sync(days: Annotated[int, typer.Option(help="За сколько после�
 
 @app.command("import")
 def import_(
-    path: Annotated[Path, typer.Argument(help="FIT активности")],
+    path: Annotated[Path, typer.Argument(help="FIT активности или zip-экспорт Garmin")],
     activity_id: Annotated[
         int | None, typer.Option("--id", help="id активности, если его нет в имени файла")
     ] = None,
 ) -> None:
-    """Импортировать FIT активности (без сети)."""
-    if path.suffix.lower() == ".zip":
-        fail(ZIP_UNSUPPORTED)
+    """Импортировать FIT активности или zip-экспорт Garmin (без сети)."""
+    is_zip = path.suffix.lower() == ".zip"
+    if is_zip and activity_id is not None:
+        fail(ZIP_WITH_ID)
     if not path.is_file():
         fail(f"Файл не найден: {path}")
     conn = open_db()
     try:
-        typer.echo(import_fit(conn, path, activity_id))
+        if is_zip:
+            typer.echo(summary(import_export(conn, path)))
+        else:
+            typer.echo(import_fit(conn, path, activity_id))
     except FitImportError as e:
         fail(str(e))
     finally:
