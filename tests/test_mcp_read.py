@@ -189,12 +189,18 @@ def test_load_without_rest_hr_asks_for_sync(conn: sqlite3.Connection) -> None:
         call(conn, "get_load", start="2026-10-01", end="2026-10-07")
 
 
-def test_load_without_lthr_says_garmin_gave_none(conn: sqlite3.Connection) -> None:
+def test_load_without_any_threshold_warns_about_every_sport(conn: sqlite3.Connection) -> None:
     upsert_daily_metrics(
         conn, {"date": "2026-10-01", "raw_json": {"sleep": {"restingHeartRate": 50}}}
     )
-    with pytest.raises(ToolError, match="LTHR"):
-        call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+    result = call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+    assert result["thresholds"] == {}
+    assert result["warnings"] == [
+        "нет порога для run",
+        "нет порога для bike",
+        "нет порога для swim",
+    ]
+    assert len(result["rows"]) == 7
 
 
 def test_load_with_lthr_not_above_rest_hr_is_rejected(conn: sqlite3.Connection) -> None:
@@ -297,8 +303,9 @@ def test_load_ignores_lthr_measured_after_end_of_period(conn: sqlite3.Connection
             "raw_json": {},
         },
     )
-    with pytest.raises(ToolError, match="LTHR"):
-        call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+    result = call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+    assert result["thresholds"] == {}
+    assert "нет порога для run" in result["warnings"]
 
 
 def rest_hr_on(conn: sqlite3.Connection, day: str, value: int = 50) -> None:
@@ -368,3 +375,32 @@ def test_load_uses_bike_threshold_for_cycling_activity(conn: sqlite3.Connection)
     # производный порог вело 170 - 7 = 163: IF = 1, TSS = 100
     result = rows(conn, "get_load", start="2026-10-05", end="2026-10-05")
     assert result[0]["tss"] == pytest.approx(100)
+
+
+def test_load_activity_of_sport_without_threshold_has_zero_tss(conn: sqlite3.Connection) -> None:
+    heart_rate(conn)  # пульс покоя; порогов потом оставлен один — вело
+    conn.execute("DELETE FROM thresholds")
+    upsert_threshold(
+        conn,
+        {
+            "sport": "bike",
+            "source": "garmin_lt",
+            "calendar_date": "2026-09-30",
+            "lthr": 160,
+            "raw_json": {},
+        },
+    )
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 77,
+            "start_time_local": "2026-10-03 07:00:00",
+            "type_key": "running",
+            "duration_s": 3600,
+            "avg_hr": 150,
+            "raw_json": {},
+        },
+    )
+    result = call(conn, "get_load", start="2026-10-03", end="2026-10-03")
+    assert result["warnings"] == ["нет порога для run", "нет порога для swim"]
+    assert result["rows"][-1]["tss"] == 0

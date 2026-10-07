@@ -36,7 +36,7 @@ SNAPSHOT_CHARS = 4000
 MAX_DAYS = 92
 REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
-NOT_LISTS = ("date", "load_error", "last_sync", "thresholds")
+NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings")
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today")
 
 
@@ -133,9 +133,11 @@ def food(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     return _cap(list_food(conn, start, end), newest=True)
 
 
-def _hr_params(conn: sqlite3.Connection, end: str) -> tuple[float, dict[str, dict[str, Any]]]:
-    """Пульс покоя (последний из сна в базе, не старше 14 дней) и пороги по видам спорта.
-    Нет данных или порог не больше пульса покоя — ToolError."""
+def _hr_params(
+    conn: sqlite3.Connection, end: str
+) -> tuple[float, dict[str, dict[str, Any]], list[str]]:
+    """Пульс покоя (последний из сна в базе, не старше 14 дней), пороги по видам спорта и
+    предупреждения о видах без порога. Нет пульса покоя или порог не больше него — ToolError."""
     found = last_rest_hr(conn, end)
     if found is None or (_day(end) - _day(found[0])).days > REST_HR_MAX_AGE_DAYS:
         raise ToolError(
@@ -144,28 +146,24 @@ def _hr_params(conn: sqlite3.Connection, end: str) -> tuple[float, dict[str, dic
         )
     rest_hr = found[1]
     thresholds = resolve_thresholds(conn, end)
-    for sport in THRESHOLD_SPORTS:
-        if sport not in thresholds:
-            raise ToolError(
-                f"Нет порогового пульса (LTHR) для {sport}: Garmin его не отдал, "
-                "беговой порог и максимальный пульс тоже неизвестны. Сделай coach sync."
-            )
-        if thresholds[sport]["lthr"] <= rest_hr:
-            raise ToolError(
-                f"LTHR {thresholds[sport]['lthr']} ({sport}) не больше пульса покоя {rest_hr}."
-            )
-    return rest_hr, thresholds
+    for sport, threshold in thresholds.items():
+        if threshold["lthr"] <= rest_hr:
+            raise ToolError(f"LTHR {threshold['lthr']} ({sport}) не больше пульса покоя {rest_hr}.")
+    warnings = [f"нет порога для {sport}" for sport in THRESHOLD_SPORTS if sport not in thresholds]
+    return rest_hr, thresholds, warnings
 
 
 def load(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """TSS, CTL, ATL по дням start..end; расчёт идёт с запасом назад, чтобы CTL/ATL прогрелись.
-    Кроме rows и truncated отдаёт thresholds: {вид: {lthr, source, date}}."""
+    Кроме rows и truncated отдаёт thresholds: {вид: {lthr, source, date}} и warnings — виды
+    без порога (их активности считаются с TSS 0)."""
     _period(start, end)
-    rest_hr, thresholds = _hr_params(conn, end)
+    rest_hr, thresholds, warnings = _hr_params(conn, end)
     lthr_by_sport = {sport: t["lthr"] for sport, t in thresholds.items()}
     tss = daily_tss(conn, _shift(start, -LOAD_WARMUP_DAYS), end, rest_hr, lthr_by_sport)
     result = _cap([row for row in load_series(tss) if row["date"] >= start], newest=True)
     result["thresholds"] = thresholds
+    result["warnings"] = warnings
     return result
 
 
@@ -186,6 +184,7 @@ def morning_snapshot(
         loaded = load(conn, _shift(date, -6), date)
         snapshot["load"] = part(loaded["rows"], True)
         snapshot["thresholds"] = loaded["thresholds"]
+        snapshot["warnings"] = loaded["warnings"]
     except ToolError as e:
         snapshot["load"] = part([])
         snapshot["load_error"] = str(e)

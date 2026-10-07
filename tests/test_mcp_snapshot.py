@@ -107,8 +107,13 @@ def test_snapshot_without_lthr_keeps_other_parts(conn: sqlite3.Connection) -> No
     fill(conn)
     conn.execute("DELETE FROM thresholds")
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
-    assert "LTHR" in snapshot["load_error"]
-    assert snapshot["load"]["rows"] == []
+    assert "load_error" not in snapshot
+    assert snapshot["warnings"] == [
+        "нет порога для run",
+        "нет порога для bike",
+        "нет порога для swim",
+    ]
+    assert snapshot["thresholds"] == {}
     assert snapshot["metrics"]["rows"][0]["hrv_last_night"] == 63
 
 

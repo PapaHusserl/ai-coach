@@ -49,7 +49,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_load": (
         tools.load,
-        "TSS, CTL, ATL по дням плюс thresholds: {вид: {lthr, source, date}} (пульс покоя и "
+        "TSS, CTL, ATL по дням плюс thresholds: {вид: {lthr, source, date}} и warnings "
+        "(виды без порога, их TSS 0) (пульс покоя и "
         "пороги по видам берутся из базы, их кладёт coach sync; source: garmin_lt, "
         "garmin_zones, derived — посчитан по бегу или по max HR).",
     ),

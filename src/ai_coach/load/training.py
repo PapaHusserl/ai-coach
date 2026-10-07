@@ -27,13 +27,16 @@ def activity_tss(
     activity: dict[str, Any], rest_hr: float, lthr_by_sport: Mapping[str, float]
 ) -> float:
     """TSS активности: бег/вело/плавание — hrTSS по порогу своего вида, силовая — 35 в час,
-    растяжка — 0, незнакомый вид — hrTSS по беговому порогу."""
+    растяжка — 0, незнакомый вид — hrTSS по беговому порогу;
+    нет порога вида — 0."""
     sport = sport_of(activity["type_key"])
     if sport == "strength":
         return (activity["duration_s"] or 0) / 3600 * STRENGTH_TSS_PER_HOUR
     if activity["type_key"] in MOBILITY_TYPE_KEYS:
         return 0.0
-    lthr = lthr_by_sport[sport or "run"]
+    lthr = lthr_by_sport.get(sport or "run")
+    if lthr is None:
+        return 0.0
     return hr_tss(activity["duration_s"], activity["avg_hr"], rest_hr, lthr)
 
 
