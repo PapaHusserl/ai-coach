@@ -3,7 +3,7 @@
 import sqlite3
 from typing import Any
 
-from ai_coach.store.db import fetch_all, fetch_one, insert, update
+from ai_coach.store.db import fetch_all, fetch_one, insert
 
 
 def add_weight(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
@@ -25,9 +25,15 @@ def add_food(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     return insert(conn, "food_log", values)
 
 
-def update_food(conn: sqlite3.Connection, food_id: int, values: dict[str, Any]) -> None:
-    """Запись КБЖУ: kcal, protein_g, fat_g, carbs_g."""
-    update(conn, "food_log", food_id, values)
+def update_food(conn: sqlite3.Connection, food_id: int, values: dict[str, Any]) -> bool:
+    """Запись КБЖУ (kcal, protein_g, fat_g, carbs_g) в запись, где оно ещё пусто.
+    True — записано; False — записи нет или КБЖУ уже посчитано."""
+    sql = (
+        "UPDATE food_log SET kcal = ?, protein_g = ?, fat_g = ?, carbs_g = ? "
+        "WHERE id = ? AND kcal IS NULL"
+    )
+    args = (values["kcal"], values["protein_g"], values["fat_g"], values["carbs_g"], food_id)
+    return conn.execute(sql, args).rowcount > 0
 
 
 def list_food(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
@@ -37,6 +43,12 @@ def list_food(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, 
         "ORDER BY logged_at, id"
     )
     return fetch_all(conn, sql, (start, end))
+
+
+def list_food_pending(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Записи без КБЖУ (kcal пуст), по времени."""
+    sql = "SELECT * FROM food_log WHERE kcal IS NULL ORDER BY logged_at, id"
+    return fetch_all(conn, sql, ())
 
 
 def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

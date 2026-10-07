@@ -1,5 +1,6 @@
-"""Команды `coach`: login, sync, import, approve, push, status."""
+"""Команды `coach`: login, sync, import, approve, push, status, weight, food."""
 
+from datetime import datetime
 from getpass import getpass
 from pathlib import Path
 from typing import Annotated
@@ -24,6 +25,7 @@ from ai_coach.plan import (
     send,
 )
 from ai_coach.store.db import open_db
+from ai_coach.store.journal import add_food, add_weight
 from ai_coach.store.plans import list_planned_workouts
 from ai_coach.sync import FitImportError, import_fit
 from ai_coach.sync import sync as run_sync
@@ -34,11 +36,17 @@ app = typer.Typer(help="Личный ИИ-тренер на данных Garmin"
 ZIP_UNSUPPORTED = (
     "Разбор полного экспорта (zip) пока не поддерживается. Передай FIT активности (.fit)."
 )
+MIN_WEIGHT_KG = 20
+MAX_WEIGHT_KG = 300
 
 
 def fail(message: str) -> None:
     typer.echo(message, err=True)
     raise typer.Exit(1)
+
+
+def now() -> str:
+    return datetime.now().isoformat(sep=" ", timespec="seconds")
 
 
 @app.command()
@@ -161,3 +169,36 @@ def status() -> None:
         typer.echo(
             f"{row['id']}  {row['date']}  {row['sport']}  {row['name']}  [{row['status']}{sent}]"
         )
+
+
+@app.command()
+def weight(text: Annotated[str, typer.Argument(help="Вес, кг (можно 81,7)")]) -> None:
+    """Записать вес (время — сейчас, местное)."""
+    try:
+        kg = float(text.replace(",", "."))
+    except ValueError:
+        fail(f"Вес должен быть числом, получено: {text!r}")
+        return
+    if not MIN_WEIGHT_KG <= kg <= MAX_WEIGHT_KG:
+        fail(f"Вес должен быть от {MIN_WEIGHT_KG} до {MAX_WEIGHT_KG} кг.")
+    conn = open_db()
+    try:
+        with conn:
+            add_weight(conn, {"measured_at": now(), "weight_kg": kg})
+    finally:
+        conn.close()
+    typer.echo(f"Вес {kg} кг записан.")
+
+
+@app.command()
+def food(text: Annotated[str, typer.Argument(help="Что съедено, как есть")]) -> None:
+    """Записать еду текстом (время — сейчас). КБЖУ посчитает /coach-food."""
+    if not text.strip():
+        fail("Текст пустой.")
+    conn = open_db()
+    try:
+        with conn:
+            add_food(conn, {"logged_at": now(), "text": text.strip()})
+    finally:
+        conn.close()
+    typer.echo("Еда записана. КБЖУ посчитает /coach-food.")

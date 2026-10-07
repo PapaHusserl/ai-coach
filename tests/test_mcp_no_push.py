@@ -37,6 +37,8 @@ EXPECTED_TOOLS = {
     "get_load",
     "get_weights",
     "get_food",
+    "get_food_pending",
+    "save_food_nutrition",
     "create_draft_workout",
     "cancel_draft_workout",
     "propose_phase",

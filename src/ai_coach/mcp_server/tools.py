@@ -13,13 +13,20 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
 from ai_coach.load import THRESHOLD_SPORTS, daily_tss, load_series, resolve_thresholds
+from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
     last_rest_hr,
     list_activities,
     list_daily_metrics,
     list_strength_sets,
 )
-from ai_coach.store.journal import last_sync_log, list_food, list_weights
+from ai_coach.store.journal import (
+    last_sync_log,
+    list_food,
+    list_food_pending,
+    list_weights,
+    update_food,
+)
 from ai_coach.store.plans import (
     add_planned_workout,
     get_planned_workout,
@@ -34,6 +41,7 @@ MAX_CHARS = 20000
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
 MAX_DAYS = 92
+MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
 NOT_LISTS = ("date", "load_error", "last_sync", "thresholds", "warnings")
@@ -133,6 +141,11 @@ def food(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     return _cap(list_food(conn, start, end), newest=True)
 
 
+def food_pending(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Записи еды без КБЖУ (за все дни), старые первыми."""
+    return _cap(list_food_pending(conn))
+
+
 def _hr_params(
     conn: sqlite3.Connection, end: str
 ) -> tuple[float, dict[str, dict[str, Any]], list[str]]:
@@ -226,6 +239,27 @@ def create_draft_workout(
     row = {"date": date, "sport": sport, "name": name, "workout_json": full_spec}
     with conn:
         return {"draft_id": add_planned_workout(conn, row)}
+
+
+def save_food_nutrition(
+    conn: sqlite3.Connection,
+    food_id: int,
+    kcal: float,
+    protein_g: float,
+    fat_g: float,
+    carbs_g: float,
+) -> dict[str, Any]:
+    """КБЖУ записи еды (оценка тренера). Только для записи без КБЖУ: посчитанные не меняет."""
+    if not all(0 <= x <= MAX_NUTRITION for x in (kcal, protein_g, fat_g, carbs_g)):
+        raise ToolError(f"КБЖУ записи: ккал и граммы от 0 до {MAX_NUTRITION}.")
+    values = {"kcal": kcal, "protein_g": protein_g, "fat_g": fat_g, "carbs_g": carbs_g}
+    with conn:
+        saved = update_food(conn, food_id, values)
+    if not saved:
+        if fetch_one(conn, "SELECT id FROM food_log WHERE id = ?", (food_id,)) is None:
+            raise ToolError(f"Записи еды {food_id} нет.")
+        raise ToolError(f"У записи {food_id} КБЖУ уже посчитано.")
+    return {"food_id": food_id}
 
 
 def cancel_draft_workout(conn: sqlite3.Connection, workout_id: int) -> dict[str, Any]:

@@ -42,13 +42,17 @@
 - Все проверки: `make check` — ruff (линт+формат), pyright (strict для src/), qlty smells (сложность, дубли), vulture (мёртвый код), pytest с покрытием ≥94%.
 - Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
 
+## Вес и еда
+- `coach weight 82.4` — записать вес; `coach food "борщ, хлеб, чай"` — записать еду текстом. Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
+- КБЖУ считает скилл `/coach-food` через MCP (`get_food_pending`, `save_food_nutrition`); записи с КБЖУ он не меняет.
+
 ## MCP и скиллы тренера (Claude Code)
 - MCP-сервер (stdio) читает агрегаты из базы (без raw_json); списки отдаются как `{rows, truncated}`, до 60 строк и 20 000 символов, у рядов по датам остаются самые новые строки. Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (только draft -> cancelled), `propose_phase`. Инструментов отправки на часы и удаления нет, в Garmin сервер не ходит: утверждает и отправляет пользователь (`coach approve`, `coach push`).
 - Регистрация (один раз; путь к репо свой):
   `claude mcp add ai-coach -- uv run --project /путь/к/ai-coach python -m ai_coach.mcp_server`
   База — `$AI_COACH_DB` или `~/.local/share/ai-coach/coach.db`.
 - Нагрузка (CTL/ATL): пульс покоя берётся из ответа сна в базе (последний день с данными, не старше 14 дней, иначе ошибка «сделай coach sync»). Пороговый пульс (LTHR) свой для каждого вида (бег/вело/плавание), таблица `thresholds` с историей: `coach sync` забирает беговой порог (endpoint `latestLactateThreshold`, source `garmin_lt`) и пороги видов из пульсовых зон Garmin (`get_heart_rate_zones`, source `garmin_zones`). Чего Garmin не дал, считается на лету (source `derived`): беговой минус смещение (вело −7, плавание −12, константы в `load/thresholds.py`), а без бегового порога — 0.89 × максимальный пульс из активностей. Силовая — 35 TSS/час, растяжка — 0, незнакомый вид — по беговому порогу. `get_load` отдаёт `thresholds` ({вид: {lthr, source, date}}), снапшот — тоже. Нет данных — в снапшоте `load_error`, остальное работает.
-- Скиллы лежат в `.claude/skills/` и подхватываются в этом репозитории: `/coach-morning` (утренний разбор и рекомендации по восстановлению, Sonnet), `/coach-plan` (план недели черновиками, Sonnet; форматы тренировок в `.claude/skills/coach-plan/spec-formats.md`). Поле `model` во frontmatter и имена инструментов `mcp__ai-coach__*` в `allowed-tools` на живом Claude Code не проверены.
+- Скиллы лежат в `.claude/skills/` и подхватываются в этом репозитории: `/coach-morning` (утренний разбор и рекомендации по восстановлению, Sonnet), `/coach-plan` (план недели черновиками, Sonnet; форматы тренировок в `.claude/skills/coach-plan/spec-formats.md`), `/coach-food` (раз в день считает КБЖУ записей еды без него, Sonnet). Поле `model` во frontmatter и имена инструментов `mcp__ai-coach__*` в `allowed-tools` на живом Claude Code не проверены.
 
 Подробности ресёрча: [docs/research-2026-10-03.md](docs/research-2026-10-03.md)
 Архитектура (утверждена): [docs/architecture-2026-10-06.md](docs/architecture-2026-10-06.md)

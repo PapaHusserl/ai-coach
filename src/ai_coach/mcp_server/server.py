@@ -16,7 +16,7 @@ INSTRUCTIONS = (
     f"Списки — не больше {MAX_ROWS} строк и {MAX_CHARS} символов: ответ {{rows, truncated}}, "
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики: create_draft_workout, cancel_draft_workout (только draft) "
-    "и propose_phase. "
+    "и propose_phase, а ещё КБЖУ записи еды без него: save_food_nutrition. "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push."
 )
 
@@ -56,6 +56,15 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_weights": (tools.weights, "Замеры веса."),
     "get_food": (tools.food, "Записи еды (текст и КБЖУ, если посчитаны)."),
+    "get_food_pending": (
+        tools.food_pending,
+        "Записи еды без КБЖУ за все дни (для /coach-food).",
+    ),
+    "save_food_nutrition": (
+        tools.save_food_nutrition,
+        "Записать КБЖУ (kcal, protein_g, fat_g, carbs_g — на всю порцию записи) для записи "
+        "еды без КБЖУ по food_id; посчитанные не меняет.",
+    ),
     "create_draft_workout": (
         tools.create_draft_workout,
         "Записать тренировку плана черновиком (draft). sport: strength / mobility / run / "
