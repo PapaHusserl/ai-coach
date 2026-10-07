@@ -1,0 +1,30 @@
+[
+  {
+    "trainingMethod": "LACTATE_THRESHOLD",
+    "restingHeartRateUsed": null,
+    "lactateThresholdHeartRateUsed": 171,
+    "maxHeartRateUsed": 200,
+    "sport": "DEFAULT"
+  },
+  {
+    "trainingMethod": "HR_MAX",
+    "restingHeartRateUsed": null,
+    "lactateThresholdHeartRateUsed": 180,
+    "maxHeartRateUsed": 200,
+    "sport": "RUNNING"
+  },
+  {
+    "trainingMethod": "HR_MAX",
+    "restingHeartRateUsed": null,
+    "lactateThresholdHeartRateUsed": 165,
+    "maxHeartRateUsed": 195,
+    "sport": "CYCLING"
+  },
+  {
+    "trainingMethod": "HR_MAX",
+    "restingHeartRateUsed": null,
+    "lactateThresholdHeartRateUsed": null,
+    "maxHeartRateUsed": 170,
+    "sport": "SWIMMING"
+  }
+]

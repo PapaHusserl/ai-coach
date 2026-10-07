@@ -4,22 +4,9 @@ import json
 import sqlite3
 from typing import Any
 
+from ai_coach.load.sports import SPORT_TYPE_KEYS
 from ai_coach.store.garmin_data import list_activities, list_strength_sets
 from ai_coach.store.plans import add_plan_actual, delete_plan_actual, list_planned_workouts
-
-SPORT_TYPE_KEYS = {
-    "run": ("running", "treadmill_running", "trail_running", "track_running", "virtual_run"),
-    "bike": (
-        "cycling",
-        "indoor_cycling",
-        "road_biking",
-        "mountain_biking",
-        "gravel_cycling",
-        "virtual_ride",
-    ),
-    "swim": ("lap_swimming", "open_water_swimming", "swimming"),
-    "strength": ("strength_training",),
-}
 
 
 def _same_type(planned: dict[str, Any], activity: dict[str, Any]) -> bool:

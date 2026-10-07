@@ -162,11 +162,29 @@ def heart_rate(conn: sqlite3.Connection, rest_hr: int = 50, lthr: int = 170) -> 
     upsert_daily_metrics(
         conn, {"date": "2026-10-01", "raw_json": {"sleep": {"restingHeartRate": rest_hr}}}
     )
-    upsert_threshold(conn, {"calendar_date": "2026-09-30", "lthr": lthr, "raw_json": {}})
+    upsert_threshold(
+        conn,
+        {
+            "sport": "run",
+            "source": "garmin_lt",
+            "calendar_date": "2026-09-30",
+            "lthr": lthr,
+            "raw_json": {},
+        },
+    )
 
 
 def test_load_without_rest_hr_asks_for_sync(conn: sqlite3.Connection) -> None:
-    upsert_threshold(conn, {"calendar_date": "2026-09-30", "lthr": 170, "raw_json": {}})
+    upsert_threshold(
+        conn,
+        {
+            "sport": "run",
+            "source": "garmin_lt",
+            "calendar_date": "2026-09-30",
+            "lthr": 170,
+            "raw_json": {},
+        },
+    )
     with pytest.raises(ToolError, match="пульса покоя"):
         call(conn, "get_load", start="2026-10-01", end="2026-10-07")
 
@@ -269,6 +287,84 @@ def test_load_ignores_lthr_measured_after_end_of_period(conn: sqlite3.Connection
     upsert_daily_metrics(
         conn, {"date": "2026-10-01", "raw_json": {"sleep": {"restingHeartRate": 50}}}
     )
-    upsert_threshold(conn, {"calendar_date": "2026-10-08", "lthr": 170, "raw_json": {}})
+    upsert_threshold(
+        conn,
+        {
+            "sport": "run",
+            "source": "garmin_lt",
+            "calendar_date": "2026-10-08",
+            "lthr": 170,
+            "raw_json": {},
+        },
+    )
     with pytest.raises(ToolError, match="LTHR"):
         call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+
+
+def rest_hr_on(conn: sqlite3.Connection, day: str, value: int = 50) -> None:
+    upsert_daily_metrics(conn, {"date": day, "raw_json": {"sleep": {"restingHeartRate": value}}})
+
+
+def sport_threshold(conn: sqlite3.Connection, sport: str, lthr: int, source: str) -> None:
+    upsert_threshold(
+        conn,
+        {
+            "sport": sport,
+            "source": source,
+            "calendar_date": "2026-10-01",
+            "lthr": lthr,
+            "raw_json": {},
+        },
+    )
+
+
+def test_load_rest_hr_15_days_old_asks_for_sync(conn: sqlite3.Connection) -> None:
+    rest_hr_on(conn, "2026-10-05")
+    sport_threshold(conn, "run", 170, "garmin_lt")
+    with pytest.raises(ToolError, match="coach sync"):
+        call(conn, "get_load", start="2026-10-20", end="2026-10-20")
+
+
+def test_load_rest_hr_14_days_old_is_accepted(conn: sqlite3.Connection) -> None:
+    rest_hr_on(conn, "2026-10-06")
+    sport_threshold(conn, "run", 170, "garmin_lt")
+    assert len(rows(conn, "get_load", start="2026-10-20", end="2026-10-20")) == 1
+
+
+def test_load_swim_threshold_not_above_rest_hr_names_the_sport(conn: sqlite3.Connection) -> None:
+    rest_hr_on(conn, "2026-10-01", 60)
+    sport_threshold(conn, "run", 170, "garmin_lt")
+    sport_threshold(conn, "swim", 60, "garmin_zones")
+    with pytest.raises(ToolError, match="swim"):
+        call(conn, "get_load", start="2026-10-01", end="2026-10-07")
+
+
+def test_load_returns_thresholds_with_source(conn: sqlite3.Connection) -> None:
+    rest_hr_on(conn, "2026-10-01")
+    sport_threshold(conn, "run", 170, "garmin_lt")
+    sport_threshold(conn, "bike", 165, "garmin_zones")
+    thresholds = call(conn, "get_load", start="2026-10-01", end="2026-10-07")["thresholds"]
+    assert {sport: (t["lthr"], t["source"]) for sport, t in thresholds.items()} == {
+        "run": (170, "garmin_lt"),
+        "bike": (165, "garmin_zones"),
+        "swim": (158, "derived"),
+    }
+
+
+def test_load_uses_bike_threshold_for_cycling_activity(conn: sqlite3.Connection) -> None:
+    rest_hr_on(conn, "2026-10-01")
+    sport_threshold(conn, "run", 170, "garmin_lt")
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 1,
+            "start_time_local": "2026-10-05 07:00:00",
+            "type_key": "cycling",
+            "duration_s": 3600,
+            "avg_hr": 163,
+            "raw_json": {},
+        },
+    )
+    # производный порог вело 170 - 7 = 163: IF = 1, TSS = 100
+    result = rows(conn, "get_load", start="2026-10-05", end="2026-10-05")
+    assert result[0]["tss"] == pytest.approx(100)

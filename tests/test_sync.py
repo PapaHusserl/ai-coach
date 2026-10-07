@@ -16,7 +16,6 @@ from ai_coach.garmin.client import GarminError
 from ai_coach.store.garmin_data import (
     get_activity,
     get_daily_metrics,
-    last_threshold,
     list_activities,
     list_daily_metrics,
     list_strength_sets,
@@ -341,31 +340,122 @@ def test_sync_network_error_is_written_to_sync_log(
     assert rows[0]["message"]
 
 
-def test_sync_writes_lthr_from_garmin(conn: sqlite3.Connection) -> None:
+def thresholds(conn: sqlite3.Connection) -> dict[tuple[str, str], tuple[int | None, str]]:
+    sql = "SELECT sport, calendar_date, lthr, source FROM thresholds"
+    return {(r[0], r[1]): (r[2], r[3]) for r in conn.execute(sql)}
+
+
+def test_sync_writes_run_lthr_from_direct_endpoint_call(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin()
+    run_sync(conn, fake, 1)
+    assert ("connectapi", "/biometric-service/biometric/latestLactateThreshold") in fake.calls
+    # первая запись ответа с hearRate null пропущена, дата без времени
+    assert thresholds(conn)[("run", "2026-03-09")] == (170, "garmin_lt")
+
+
+def test_sync_writes_bike_lthr_from_zones(conn: sqlite3.Connection) -> None:
     run_sync(conn, FakeGarmin(), 1)
-    row = last_threshold(conn, "2099-01-01")
-    assert row is not None
-    assert (row["calendar_date"], row["lthr"]) == ("2026-03-09", 168)
+    assert thresholds(conn)[("bike", "2026-03-10")] == (165, "garmin_zones")
 
 
-def test_sync_without_lthr_data_still_syncs(conn: sqlite3.Connection) -> None:
-    for error in (GarminConnectNotFoundError("404"), TypeError("None")):
-        run_sync(conn, FakeGarmin(fail={"get_lactate_threshold": error}), 1)
-    assert last_threshold(conn, "2099-01-01") is None
+def test_sync_skips_swim_with_null_lthr_and_default_sport(conn: sqlite3.Connection) -> None:
+    run_sync(conn, FakeGarmin(), 1)
+    with_lthr = {sport for (sport, _), (lthr, _) in thresholds(conn).items() if lthr}
+    assert with_lthr == {"run", "bike"}
+
+
+def test_sync_writes_run_lthr_from_zones_whatever_training_method(
+    conn: sqlite3.Connection,
+) -> None:
+    run_sync(conn, FakeGarmin(), 1)
+    # у RUNNING в зонах trainingMethod HR_MAX, порог всё равно записан (на дату зон)
+    assert thresholds(conn)[("run", "2026-03-10")] == (180, "garmin_zones")
+
+
+def test_sync_without_lactate_endpoint_data_still_syncs(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin(fail={"connectapi": GarminConnectNotFoundError("404")})
+    run_sync(conn, fake, 1)
+    assert ("run", "2026-03-09") not in thresholds(conn)
     assert get_daily_metrics(conn, day()) is not None
 
 
-def test_sync_with_empty_lthr_answer_does_not_write_it(conn: sqlite3.Connection) -> None:
+@pytest.mark.parametrize("answer", [None, [], {}, [{"hearRate": None}]])
+def test_sync_with_empty_lactate_answer_writes_no_run_lthr(
+    conn: sqlite3.Connection, answer: object
+) -> None:
     fake = FakeGarmin()
-    fake.lactate = {"speed_and_heart_rate": {"heartRate": None}, "power": {}}
+    fake.lactate = answer
     run_sync(conn, fake, 1)
-    assert last_threshold(conn, "2099-01-01") is None
+    assert ("run", "2026-03-09") not in thresholds(conn)
+    assert get_daily_metrics(conn, day()) is not None
 
 
-def test_sync_cuts_time_from_lthr_date(conn: sqlite3.Connection) -> None:
+def test_sync_does_not_swallow_type_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(TypeError):
+        run_sync(conn, FakeGarmin(fail={"connectapi": TypeError("bug")}), 1)
+
+
+def test_sync_keeps_older_lthr_dates(conn: sqlite3.Connection) -> None:
+    run_sync(conn, FakeGarmin(), 1)
     fake = FakeGarmin()
-    fake.lactate["speed_and_heart_rate"]["calendarDate"] = "2026-03-09T00:00:00.0"
+    fake.lactate[1]["hearRate"] = 172
+    fake.lactate[1]["calendarDate"] = "2026-03-11T07:00:00.0"
     run_sync(conn, fake, 1)
-    row = last_threshold(conn, "2026-03-09")
-    assert row is not None
-    assert row["calendar_date"] == "2026-03-09"
+    found = thresholds(conn)
+    assert found[("run", "2026-03-09")] == (170, "garmin_lt")
+    assert found[("run", "2026-03-11")] == (172, "garmin_lt")
+
+
+def test_sync_writes_bike_lthr_from_lactate_endpoint(conn: sqlite3.Connection) -> None:
+    run_sync(conn, FakeGarmin(), 1)
+    # запись с heartRateCycling — вело, дата без времени
+    assert thresholds(conn)[("bike", "2026-02-20")] == (158, "garmin_lt")
+
+
+def test_sync_without_zones_data_still_syncs(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin(fail={"get_heart_rate_zones": GarminConnectNotFoundError("404")})
+    run_sync(conn, fake, 1)
+    assert ("run", "2026-03-10") not in thresholds(conn)
+    assert thresholds(conn)[("run", "2026-03-09")] == (170, "garmin_lt")
+    assert get_daily_metrics(conn, day()) is not None
+
+
+def test_sync_zones_error_other_than_404_fails_sync(conn: sqlite3.Connection) -> None:
+    fake = FakeGarmin(fail={"get_heart_rate_zones": GarminConnectConnectionError("down")})
+    with pytest.raises(GarminError):
+        run_sync(conn, fake, 1)
+
+
+def test_sync_swim_zones_keep_max_hr_without_lthr(conn: sqlite3.Connection) -> None:
+    run_sync(conn, FakeGarmin(), 1)
+    sql = "SELECT lthr, max_hr FROM thresholds WHERE sport = 'swim'"
+    assert [tuple(r) for r in conn.execute(sql)] == [(None, 170)]
+
+
+def test_sync_same_zones_on_next_day_do_not_add_rows(conn: sqlite3.Connection) -> None:
+    sync(conn, FakeGarmin(), 1, today=date(2026, 3, 10))  # type: ignore[arg-type]
+    sync(conn, FakeGarmin(), 1, today=date(2026, 3, 11))  # type: ignore[arg-type]
+    sql = "SELECT COUNT(*) FROM thresholds WHERE sport = 'bike' AND source = 'garmin_zones'"
+    assert conn.execute(sql).fetchone()[0] == 1
+
+
+def test_sync_changed_zones_add_a_row(conn: sqlite3.Connection) -> None:
+    sync(conn, FakeGarmin(), 1, today=date(2026, 3, 10))  # type: ignore[arg-type]
+    fake = FakeGarmin()
+    fake.zones[2]["lactateThresholdHeartRateUsed"] = 166
+    sync(conn, fake, 1, today=date(2026, 3, 11))  # type: ignore[arg-type]
+    assert thresholds(conn)[("bike", "2026-03-11")] == (166, "garmin_zones")
+    assert thresholds(conn)[("bike", "2026-03-10")] == (165, "garmin_zones")
+
+
+def test_sync_newer_lactate_beats_older_unchanged_zones(conn: sqlite3.Connection) -> None:
+    from ai_coach.load import resolve_thresholds
+
+    sync(conn, FakeGarmin(), 1, today=date(2026, 3, 10))  # type: ignore[arg-type]
+    fake = FakeGarmin()
+    fake.lactate[1]["hearRate"] = 175
+    fake.lactate[1]["calendarDate"] = "2026-03-12T07:00:00.0"
+    sync(conn, fake, 1, today=date(2026, 3, 13))  # type: ignore[arg-type]
+    # зоны (180) не менялись и заново не пишутся, действует более новый lactate (175)
+    found = resolve_thresholds(conn, "2026-03-13")["run"]
+    assert (found["lthr"], found["source"], found["date"]) == (175, "garmin_lt", "2026-03-12")

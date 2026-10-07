@@ -49,7 +49,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_load": (
         tools.load,
-        "TSS, CTL, ATL по дням (пульс покоя и LTHR берутся из базы, их кладёт coach sync).",
+        "TSS, CTL, ATL по дням плюс thresholds: {вид: {lthr, source, date}} (пульс покоя и "
+        "пороги по видам берутся из базы, их кладёт coach sync; source: garmin_lt, "
+        "garmin_zones, derived — посчитан по бегу или по max HR).",
     ),
     "get_weights": (tools.weights, "Замеры веса."),
     "get_food": (tools.food, "Записи еды (текст и КБЖУ, если посчитаны)."),

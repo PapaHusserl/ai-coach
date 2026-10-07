@@ -1,13 +1,16 @@
 """Нагрузка: hrTSS по резерву ЧСС, CTL/ATL."""
 
 import sqlite3
+from collections.abc import Mapping
 from datetime import date, timedelta
 from typing import Any
 
+from ai_coach.load.sports import MOBILITY_TYPE_KEYS, sport_of
 from ai_coach.store.garmin_data import list_activities
 
 CTL_DAYS = 42
 ATL_DAYS = 7
+STRENGTH_TSS_PER_HOUR = 35
 
 
 def hr_tss(duration_s: float | None, avg_hr: float | None, rest_hr: float, lthr: float) -> float:
@@ -20,8 +23,26 @@ def hr_tss(duration_s: float | None, avg_hr: float | None, rest_hr: float, lthr:
     return duration_s / 3600 * intensity**2 * 100
 
 
+def activity_tss(
+    activity: dict[str, Any], rest_hr: float, lthr_by_sport: Mapping[str, float]
+) -> float:
+    """TSS активности: бег/вело/плавание — hrTSS по порогу своего вида, силовая — 35 в час,
+    растяжка — 0, незнакомый вид — hrTSS по беговому порогу."""
+    sport = sport_of(activity["type_key"])
+    if sport == "strength":
+        return (activity["duration_s"] or 0) / 3600 * STRENGTH_TSS_PER_HOUR
+    if activity["type_key"] in MOBILITY_TYPE_KEYS:
+        return 0.0
+    lthr = lthr_by_sport[sport or "run"]
+    return hr_tss(activity["duration_s"], activity["avg_hr"], rest_hr, lthr)
+
+
 def daily_tss(
-    conn: sqlite3.Connection, start: str, end: str, rest_hr: float, lthr: float
+    conn: sqlite3.Connection,
+    start: str,
+    end: str,
+    rest_hr: float,
+    lthr_by_sport: Mapping[str, float],
 ) -> dict[str, float]:
     """TSS по каждому локальному дню start..end включительно (дни без тренировок — 0)."""
     result: dict[str, float] = {}
@@ -31,7 +52,7 @@ def daily_tss(
         day += timedelta(days=1)
     for activity in list_activities(conn, start, end):
         key = activity["start_time_local"][:10]
-        result[key] += hr_tss(activity["duration_s"], activity["avg_hr"], rest_hr, lthr)
+        result[key] += activity_tss(activity, rest_hr, lthr_by_sport)
     return result
 
 

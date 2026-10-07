@@ -50,21 +50,59 @@ def list_strength_sets(conn: sqlite3.Connection, activity_id: int) -> list[dict[
 
 
 def upsert_threshold(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
-    """Ключ — calendar_date. values: calendar_date, lthr, raw_json."""
-    upsert(conn, "thresholds", ["calendar_date"], values)
+    """Ключ — (sport, calendar_date, source). values: sport, calendar_date, source, raw_json;
+    lthr и max_hr необязательны."""
+    upsert(conn, "thresholds", ["sport", "calendar_date", "source"], values)
 
 
-def last_threshold(conn: sqlite3.Connection, end: str) -> dict[str, Any] | None:
-    """Самая свежая запись порогового пульса на дату end включительно."""
-    sql = "SELECT * FROM thresholds WHERE calendar_date <= ? ORDER BY calendar_date DESC LIMIT 1"
-    return fetch_one(conn, sql, (end,))
-
-
-def last_rest_hr(conn: sqlite3.Connection, end: str) -> int | None:
-    """Пульс покоя из ответа сна (raw_json) за последний день до end включительно, где он есть."""
+def last_threshold(conn: sqlite3.Connection, sport: str, end: str) -> dict[str, Any] | None:
+    """Самая свежая запись с пороговым пульсом вида спорта на дату end включительно;
+    при равной дате зоны (garmin_zones) выигрывают у lactate (garmin_lt)."""
     sql = (
-        "SELECT json_extract(raw_json, '$.sleep.restingHeartRate') AS rest_hr FROM daily_metrics "
-        "WHERE date <= ? AND rest_hr IS NOT NULL ORDER BY date DESC LIMIT 1"
+        "SELECT * FROM thresholds WHERE sport = ? AND calendar_date <= ? AND lthr IS NOT NULL "
+        "ORDER BY calendar_date DESC, source DESC LIMIT 1"
+    )
+    return fetch_one(conn, sql, (sport, end))
+
+
+def last_zones_threshold(conn: sqlite3.Connection, sport: str) -> dict[str, Any] | None:
+    """Самая свежая запись вида спорта из зон Garmin."""
+    sql = (
+        "SELECT * FROM thresholds WHERE sport = ? AND source = 'garmin_zones' "
+        "ORDER BY calendar_date DESC LIMIT 1"
+    )
+    return fetch_one(conn, sql, (sport,))
+
+
+def last_zones_max_hr(conn: sqlite3.Connection, sport: str, end: str) -> int | None:
+    """Максимальный пульс вида спорта из последних зон Garmin на дату end включительно."""
+    sql = (
+        "SELECT max_hr FROM thresholds WHERE sport = ? AND calendar_date <= ? "
+        "AND max_hr IS NOT NULL ORDER BY calendar_date DESC LIMIT 1"
+    )
+    row = fetch_one(conn, sql, (sport, end))
+    return row["max_hr"] if row else None
+
+
+def max_hr(
+    conn: sqlite3.Connection, start: str, end: str, type_keys: tuple[str, ...]
+) -> int | None:
+    """Максимальный пульс по активностям данных typeKey с датой start..end включительно."""
+    marks = ", ".join("?" for _ in type_keys)
+    sql = (
+        "SELECT MAX(max_hr) AS max_hr FROM activities "
+        f"WHERE substr(start_time_local, 1, 10) BETWEEN ? AND ? AND type_key IN ({marks})"
+    )
+    row = fetch_one(conn, sql, (start, end, *type_keys))
+    return row["max_hr"] if row else None
+
+
+def last_rest_hr(conn: sqlite3.Connection, end: str) -> tuple[str, int] | None:
+    """(дата, пульс покоя) из ответа сна (raw_json) за последний день до end включительно,
+    где он есть."""
+    sql = (
+        "SELECT date, json_extract(raw_json, '$.sleep.restingHeartRate') AS rest_hr "
+        "FROM daily_metrics WHERE date <= ? AND rest_hr IS NOT NULL ORDER BY date DESC LIMIT 1"
     )
     row = fetch_one(conn, sql, (end,))
-    return row["rest_hr"] if row else None
+    return (row["date"], row["rest_hr"]) if row else None

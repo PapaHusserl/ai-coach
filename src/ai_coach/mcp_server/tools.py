@@ -12,10 +12,9 @@ from typing import Any
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
-from ai_coach.load import daily_tss, load_series
+from ai_coach.load import THRESHOLD_SPORTS, daily_tss, load_series, resolve_thresholds
 from ai_coach.store.garmin_data import (
     last_rest_hr,
-    last_threshold,
     list_activities,
     list_daily_metrics,
     list_strength_sets,
@@ -35,8 +34,9 @@ MAX_CHARS = 20000
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
 MAX_DAYS = 92
+REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
-NOT_LISTS = ("date", "load_error", "last_sync")
+NOT_LISTS = ("date", "load_error", "last_sync", "thresholds")
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today")
 
 
@@ -133,27 +133,40 @@ def food(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     return _cap(list_food(conn, start, end), newest=True)
 
 
-def _hr_params(conn: sqlite3.Connection, end: str) -> tuple[float, float]:
-    """Пульс покоя (последний из сна в базе) и порог LTHR (последний из Garmin). Нет — ToolError."""
-    rest_hr = last_rest_hr(conn, end)
-    if rest_hr is None:
-        raise ToolError("В базе нет пульса покоя (из сна). Выполни coach sync.")
-    threshold = last_threshold(conn, end)
-    if threshold is None:
+def _hr_params(conn: sqlite3.Connection, end: str) -> tuple[float, dict[str, dict[str, Any]]]:
+    """Пульс покоя (последний из сна в базе, не старше 14 дней) и пороги по видам спорта.
+    Нет данных или порог не больше пульса покоя — ToolError."""
+    found = last_rest_hr(conn, end)
+    if found is None or (_day(end) - _day(found[0])).days > REST_HR_MAX_AGE_DAYS:
         raise ToolError(
-            "В базе нет порогового пульса (LTHR): Garmin его не отдал или sync не запускался."
+            f"В базе нет свежего (не старше {REST_HR_MAX_AGE_DAYS} дней) пульса покоя из сна. "
+            "Сделай coach sync."
         )
-    if threshold["lthr"] <= rest_hr:
-        raise ToolError(f"LTHR {threshold['lthr']} не больше пульса покоя {rest_hr}.")
-    return rest_hr, threshold["lthr"]
+    rest_hr = found[1]
+    thresholds = resolve_thresholds(conn, end)
+    for sport in THRESHOLD_SPORTS:
+        if sport not in thresholds:
+            raise ToolError(
+                f"Нет порогового пульса (LTHR) для {sport}: Garmin его не отдал, "
+                "беговой порог и максимальный пульс тоже неизвестны. Сделай coach sync."
+            )
+        if thresholds[sport]["lthr"] <= rest_hr:
+            raise ToolError(
+                f"LTHR {thresholds[sport]['lthr']} ({sport}) не больше пульса покоя {rest_hr}."
+            )
+    return rest_hr, thresholds
 
 
 def load(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    """TSS, CTL, ATL по дням start..end; расчёт идёт с запасом назад, чтобы CTL/ATL прогрелись."""
+    """TSS, CTL, ATL по дням start..end; расчёт идёт с запасом назад, чтобы CTL/ATL прогрелись.
+    Кроме rows и truncated отдаёт thresholds: {вид: {lthr, source, date}}."""
     _period(start, end)
-    rest_hr, lthr = _hr_params(conn, end)
-    tss = daily_tss(conn, _shift(start, -LOAD_WARMUP_DAYS), end, rest_hr, lthr)
-    return _cap([row for row in load_series(tss) if row["date"] >= start], newest=True)
+    rest_hr, thresholds = _hr_params(conn, end)
+    lthr_by_sport = {sport: t["lthr"] for sport, t in thresholds.items()}
+    tss = daily_tss(conn, _shift(start, -LOAD_WARMUP_DAYS), end, rest_hr, lthr_by_sport)
+    result = _cap([row for row in load_series(tss) if row["date"] >= start], newest=True)
+    result["thresholds"] = thresholds
+    return result
 
 
 def morning_snapshot(
@@ -170,7 +183,9 @@ def morning_snapshot(
 
     snapshot: dict[str, Any] = {"date": date}
     try:
-        snapshot["load"] = part(load(conn, _shift(date, -6), date)["rows"], True)
+        loaded = load(conn, _shift(date, -6), date)
+        snapshot["load"] = part(loaded["rows"], True)
+        snapshot["thresholds"] = loaded["thresholds"]
     except ToolError as e:
         snapshot["load"] = part([])
         snapshot["load_error"] = str(e)

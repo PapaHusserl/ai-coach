@@ -16,6 +16,7 @@ from garminconnect import (  # pyright: ignore[reportMissingTypeStubs]
 
 from ai_coach.garmin import GarminError, garmin_errors
 from ai_coach.store.garmin_data import (
+    last_zones_threshold,
     upsert_activity,
     upsert_daily_metrics,
     upsert_strength_set,
@@ -25,6 +26,9 @@ from ai_coach.store.journal import add_sync_log
 from ai_coach.sync.jsonutil import dump
 
 STRENGTH = "strength_training"
+LACTATE_PATH = "/biometric-service/biometric/latestLactateThreshold"
+LACTATE_FIELDS = {"run": "hearRate", "bike": "heartRateCycling"}
+ZONE_SPORTS = {"RUNNING": "run", "CYCLING": "bike", "SWIMMING": "swim"}
 
 
 def log(conn: sqlite3.Connection, started: str, status: str, message: str) -> None:
@@ -157,21 +161,70 @@ def read_activities(
     return result
 
 
-def read_threshold(client: Garmin, today: date) -> dict[str, Any] | None:
-    """Пороговый пульс бега (LTHR) из Garmin; нет данных — None.
-    Библиотека при пустом ответе падает с TypeError (перебор None) — это тоже «нет данных»."""
+def read_lt_thresholds(client: Garmin, today: date) -> list[dict[str, Any]]:
+    """Пороги из latestLactateThreshold (прямой вызов endpoint, библиотечный метод падает на
+    пустом ответе): бег — запись с непустым hearRate (опечатка Garmin), вело — с непустым
+    heartRateCycling; по каждому виду самая новая запись. Пустой ответ — пусто."""
     try:
-        data = obj(client.get_lactate_threshold(latest=True))
-    except (GarminConnectNotFoundError, TypeError):
-        return None
-    found = obj(data.get("speed_and_heart_rate"))
-    if not found.get("heartRate"):
-        return None
-    return {
-        "calendar_date": str(found.get("calendarDate") or today.isoformat())[:10],
-        "lthr": found["heartRate"],
-        "raw_json": dump(data),
-    }
+        data = client.connectapi(LACTATE_PATH)
+    except GarminConnectNotFoundError:
+        return []
+    rows: list[dict[str, Any]] = []
+    for sport, field in LACTATE_FIELDS.items():
+        found = [r for r in objs(data) if r.get(field)]
+        if not found:
+            continue
+        last = max(found, key=lambda r: str(r.get("calendarDate") or ""))
+        rows.append(
+            {
+                "sport": sport,
+                "calendar_date": str(last.get("calendarDate") or today.isoformat())[:10],
+                "lthr": last[field],
+                "source": "garmin_lt",
+                "raw_json": dump(last),
+            }
+        )
+    return rows
+
+
+def read_zone_thresholds(client: Garmin, today: date) -> list[dict[str, Any]]:
+    """Порог и максимальный пульс по видам из пульсовых зон Garmin на сегодня; вид без обоих
+    значений пропускается. trainingMethod не смотрим, вид DEFAULT игнорируем; 404 — пусто."""
+    try:
+        zones = objs(client.get_heart_rate_zones())
+    except GarminConnectNotFoundError:
+        return []
+    rows: list[dict[str, Any]] = []
+    for zone in zones:
+        sport = ZONE_SPORTS.get(str(zone.get("sport")))
+        lthr = zone.get("lactateThresholdHeartRateUsed")
+        max_hr = zone.get("maxHeartRateUsed")
+        if sport and (lthr or max_hr):
+            rows.append(
+                {
+                    "sport": sport,
+                    "calendar_date": today.isoformat(),
+                    "lthr": lthr or None,
+                    "max_hr": max_hr or None,
+                    "source": "garmin_zones",
+                    "raw_json": dump(zone),
+                }
+            )
+    return rows
+
+
+def read_thresholds(client: Garmin, today: date) -> list[dict[str, Any]]:
+    """Пороги lactate и зоны пишутся отдельными строками (ключ включает source).
+    Какой порог действует, решает база: побеждает запись с более новой датой."""
+    return read_lt_thresholds(client, today) + read_zone_thresholds(client, today)
+
+
+def zones_unchanged(conn: sqlite3.Connection, row: dict[str, Any]) -> bool:
+    """Строка из зон повторяет последнюю строку из зон этого вида — писать не нужно."""
+    if row["source"] != "garmin_zones":
+        return False
+    last = last_zones_threshold(conn, row["sport"])
+    return last is not None and (last["lthr"], last["max_hr"]) == (row["lthr"], row["max_hr"])
 
 
 def sync(
@@ -191,7 +244,7 @@ def sync(
         with garmin_errors():
             metrics = read_metrics(client, day_list, pause)
             activities = read_activities(client, day_list[-1], day_list[0], pause)
-            threshold = read_threshold(client, today)
+            thresholds = read_thresholds(client, today)
     except GarminError as e:
         with conn:
             log(conn, started, "error", str(e))
@@ -204,7 +257,8 @@ def sync(
             upsert_activity(conn, activity)
             for row in sets:
                 upsert_strength_set(conn, row)
-        if threshold:
-            upsert_threshold(conn, threshold)
+        for threshold in thresholds:
+            if not zones_unchanged(conn, threshold):
+                upsert_threshold(conn, threshold)
         log(conn, started, "ok", message)
     return message

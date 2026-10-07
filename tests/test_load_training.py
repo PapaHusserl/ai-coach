@@ -9,6 +9,7 @@ from ai_coach.store.garmin_data import upsert_activity
 # TSS = часы * IF^2 * 100. В тестах rest_hr=50, lthr=170 (знаменатель 120).
 REST = 50
 LTHR = 170
+BY_SPORT: dict[str, float] = {"run": 170, "bike": 160, "swim": 150}
 
 
 def activity(
@@ -17,13 +18,14 @@ def activity(
     start: str,
     duration_s: float | None,
     avg_hr: float | None,
+    type_key: str = "running",
 ) -> None:
     upsert_activity(
         conn,
         {
             "activity_id": activity_id,
             "start_time_local": start,
-            "type_key": "running",
+            "type_key": type_key,
             "duration_s": duration_s,
             "avg_hr": avg_hr,
             "raw_json": {},
@@ -60,7 +62,7 @@ def test_daily_tss_sums_activities_of_one_local_day(conn: sqlite3.Connection) ->
     activity(conn, 1, "2026-03-03 07:00:00", 1800, 170)  # 0.5 ч * 1 * 100 = 50
     activity(conn, 2, "2026-03-03 19:00:00", 3600, 110)  # 1 ч * 0.25 * 100 = 25
     activity(conn, 3, "2026-03-01 07:00:00", 3600, 140)  # 56.25
-    result = daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr=LTHR)
+    result = daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr_by_sport=BY_SPORT)
     assert result == {
         "2026-03-01": pytest.approx(56.25),
         "2026-03-02": 0.0,
@@ -71,13 +73,13 @@ def test_daily_tss_sums_activities_of_one_local_day(conn: sqlite3.Connection) ->
 def test_daily_tss_ignores_activities_outside_period(conn: sqlite3.Connection) -> None:
     activity(conn, 1, "2026-02-28 07:00:00", 3600, 170)
     activity(conn, 2, "2026-03-04 07:00:00", 3600, 170)
-    result = daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr=LTHR)
+    result = daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr_by_sport=BY_SPORT)
     assert result == {"2026-03-01": 0.0, "2026-03-02": 0.0, "2026-03-03": 0.0}
 
 
 def test_daily_tss_activity_without_pulse_adds_zero(conn: sqlite3.Connection) -> None:
     activity(conn, 1, "2026-03-01 07:00:00", 3600, None)
-    result = daily_tss(conn, "2026-03-01", "2026-03-01", rest_hr=REST, lthr=LTHR)
+    result = daily_tss(conn, "2026-03-01", "2026-03-01", rest_hr=REST, lthr_by_sport=BY_SPORT)
     assert result == {"2026-03-01": 0.0}
 
 
@@ -126,7 +128,9 @@ def test_series_from_database_matches_manual_calculation(conn: sqlite3.Connectio
     activity(conn, 1, "2026-03-01 07:00:00", 3600, 140)
     activity(conn, 2, "2026-03-03 07:00:00", 1800, 170)
     activity(conn, 3, "2026-03-03 19:00:00", 3600, 110)
-    series = load_series(daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr=LTHR))
+    series = load_series(
+        daily_tss(conn, "2026-03-01", "2026-03-03", rest_hr=REST, lthr_by_sport=BY_SPORT)
+    )
     assert series[-1]["ctl"] == pytest.approx(3.061984, abs=1e-6)
     assert series[-1]["atl"] == pytest.approx(16.618076, abs=1e-6)
 
@@ -139,3 +143,40 @@ def test_hr_tss_zero_duration_is_zero() -> None:
 def test_hr_tss_lthr_not_above_rest_hr_raises(lthr: float) -> None:
     with pytest.raises(ValueError):
         hr_tss(3600, 150, REST, lthr)
+
+
+def day_tss(conn: sqlite3.Connection) -> float:
+    return daily_tss(conn, "2026-03-01", "2026-03-01", REST, BY_SPORT)["2026-03-01"]
+
+
+def test_bike_activity_uses_bike_threshold(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", 3600, 160, "cycling")
+    # IF = (160-50)/(160-50) = 1 по порогу вело; по беговому было бы (110/120)^2*100
+    assert day_tss(conn) == pytest.approx(100.0)
+
+
+def test_swim_activity_uses_swim_threshold(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", 3600, 150, "lap_swimming")
+    assert day_tss(conn) == pytest.approx(100.0)
+
+
+def test_unknown_cardio_type_key_uses_run_threshold(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", 3600, 170, "hiking")
+    assert day_tss(conn) == pytest.approx(100.0)
+
+
+def test_strength_is_35_tss_per_hour_regardless_of_pulse(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", 3600, None, "strength_training")
+    activity(conn, 2, "2026-03-01 19:00:00", 1800, 170, "strength_training")
+    assert day_tss(conn) == pytest.approx(52.5)
+
+
+def test_strength_without_duration_adds_zero(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", None, 120, "strength_training")
+    assert day_tss(conn) == 0.0
+
+
+@pytest.mark.parametrize("type_key", ["yoga", "stretching", "mobility"])
+def test_mobility_adds_zero_even_with_high_pulse(conn: sqlite3.Connection, type_key: str) -> None:
+    activity(conn, 1, "2026-03-01 07:00:00", 3600, 170, type_key)
+    assert day_tss(conn) == 0.0

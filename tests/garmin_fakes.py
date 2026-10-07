@@ -42,7 +42,8 @@ class FakeGarmin:
         self.calls: list[tuple[str, Any]] = []
         self.activities = load("activities_list.json")
         self.sets = load("activity_sets.json")
-        self.lactate = load("lactate_threshold.json")
+        self.lactate = load("latest_lactate_threshold.json")
+        self.zones = load("heart_rate_zones.json")
 
     def _enter(self, method: str, day: str) -> bool:
         self.calls.append((method, day))
@@ -85,11 +86,17 @@ class FakeGarmin:
             return []
         return for_day(load("training_readiness_2026-03-10.json"), cdate)
 
-    def get_lactate_threshold(self, *, latest: bool = True) -> Any:
-        self.calls.append(("get_lactate_threshold", latest))
-        if "get_lactate_threshold" in self.fail:
-            raise self.fail["get_lactate_threshold"]
+    def connectapi(self, path: str) -> Any:
+        self.calls.append(("connectapi", path))
+        if "connectapi" in self.fail:
+            raise self.fail["connectapi"]
         return self.lactate
+
+    def get_heart_rate_zones(self) -> Any:
+        self.calls.append(("get_heart_rate_zones", None))
+        if "get_heart_rate_zones" in self.fail:
+            raise self.fail["get_heart_rate_zones"]
+        return self.zones
 
     def get_activities_by_date(
         self, startdate: str, enddate: str | None = None, *a: Any, **k: Any

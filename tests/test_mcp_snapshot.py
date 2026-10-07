@@ -24,7 +24,16 @@ def fill(conn: sqlite3.Connection) -> None:
             "raw_json": {"secret": RAW, "sleep": {"restingHeartRate": 50}},
         },
     )
-    upsert_threshold(conn, {"calendar_date": "2026-09-30", "lthr": 170, "raw_json": {}})
+    upsert_threshold(
+        conn,
+        {
+            "sport": "run",
+            "source": "garmin_lt",
+            "calendar_date": "2026-09-30",
+            "lthr": 170,
+            "raw_json": {},
+        },
+    )
     upsert_activity(
         conn,
         {
@@ -157,3 +166,10 @@ def test_snapshot_without_data_does_not_fail(conn: sqlite3.Connection) -> None:
     assert snapshot["date"] == DAY
     assert snapshot["metrics"] == {"rows": [], "truncated": False}
     assert snapshot["last_sync"] is None
+
+
+def test_snapshot_has_thresholds_with_source(conn: sqlite3.Connection) -> None:
+    fill(conn)
+    thresholds = call(conn, "get_morning_snapshot", date=DAY)["thresholds"]
+    assert thresholds["run"]["source"] == "garmin_lt"
+    assert thresholds["bike"] == {"lthr": 163, "source": "derived", "date": "2026-09-30"}

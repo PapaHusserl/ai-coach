@@ -1,0 +1,46 @@
+[
+  {
+    "userProfilePK": 1000000,
+    "version": 3,
+    "calendarDate": "2026-03-09T10:02:15.12",
+    "sequence": 3,
+    "speed": 0.0036,
+    "hearRate": null,
+    "heartRateCycling": null,
+    "rowSpeed": null,
+    "heartRateRowing": null
+  },
+  {
+    "userProfilePK": 1000000,
+    "version": 3,
+    "calendarDate": "2026-03-09T10:02:15.12",
+    "sequence": 3,
+    "speed": null,
+    "hearRate": 170,
+    "heartRateCycling": null,
+    "rowSpeed": null,
+    "heartRateRowing": null
+  },
+  {
+    "userProfilePK": 1000000,
+    "version": 1,
+    "calendarDate": "2026-01-05T08:00:00.0",
+    "sequence": 1,
+    "speed": null,
+    "hearRate": 160,
+    "heartRateCycling": null,
+    "rowSpeed": null,
+    "heartRateRowing": null
+  },
+  {
+    "userProfilePK": 1000000,
+    "version": 2,
+    "calendarDate": "2026-02-20T09:00:00.0",
+    "sequence": 2,
+    "speed": null,
+    "hearRate": null,
+    "heartRateCycling": 158,
+    "rowSpeed": null,
+    "heartRateRowing": null
+  }
+]

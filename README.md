@@ -47,7 +47,7 @@
 - Регистрация (один раз; путь к репо свой):
   `claude mcp add ai-coach -- uv run --project /путь/к/ai-coach python -m ai_coach.mcp_server`
   База — `$AI_COACH_DB` или `~/.local/share/ai-coach/coach.db`.
-- Нагрузка (CTL/ATL): пульс покоя берётся из ответа сна в базе (последний день с данными), пороговый пульс (LTHR) `coach sync` забирает из Garmin (`get_lactate_threshold`, таблица `thresholds`). Нет данных — в снапшоте `load_error`, остальное работает.
+- Нагрузка (CTL/ATL): пульс покоя берётся из ответа сна в базе (последний день с данными, не старше 14 дней, иначе ошибка «сделай coach sync»). Пороговый пульс (LTHR) свой для каждого вида (бег/вело/плавание), таблица `thresholds` с историей: `coach sync` забирает беговой порог (endpoint `latestLactateThreshold`, source `garmin_lt`) и пороги видов из пульсовых зон Garmin (`get_heart_rate_zones`, source `garmin_zones`). Чего Garmin не дал, считается на лету (source `derived`): беговой минус смещение (вело −7, плавание −12, константы в `load/thresholds.py`), а без бегового порога — 0.89 × максимальный пульс из активностей. Силовая — 35 TSS/час, растяжка — 0, незнакомый вид — по беговому порогу. `get_load` отдаёт `thresholds` ({вид: {lthr, source, date}}), снапшот — тоже. Нет данных — в снапшоте `load_error`, остальное работает.
 - Скиллы лежат в `.claude/skills/` и подхватываются в этом репозитории: `/coach-morning` (утренний разбор и рекомендации по восстановлению, Sonnet), `/coach-plan` (план недели черновиками, Sonnet; форматы тренировок в `.claude/skills/coach-plan/spec-formats.md`). Поле `model` во frontmatter и имена инструментов `mcp__ai-coach__*` в `allowed-tools` на живом Claude Code не проверены.
 
 Подробности ресёрча: [docs/research-2026-10-03.md](docs/research-2026-10-03.md)
