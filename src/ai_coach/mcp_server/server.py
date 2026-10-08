@@ -32,7 +32,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "meds_today (курсы на сегодня; "
-        "training_day/before/after - только в день тренировки; нет - не отдаётся). "
+        "training_day/before/after - только в день тренировки; нет - не отдаётся), "
+        "catalog (сколько протоколов, добавок, курсов в справочниках; 0 - пусто). "
         "date — YYYY-MM-DD (сегодня).",
     ),
     "get_daily_metrics": (

@@ -98,7 +98,7 @@ def test_meal_skill_keeps_other_allowed_tools() -> None:
 
 
 def test_agent_describes_supplements_with_limits() -> None:
-    text = (ROOT / "agents" / "coach.md").read_text()
+    text = agent_text()
     assert "uv run coach supplement add" in text
     assert "uv run coach protocol add" in text
     assert "не медицинский совет" in text.lower()
@@ -108,8 +108,12 @@ def test_agent_describes_supplements_with_limits() -> None:
 # --- шаг 18: курсы витаминов и средств ---
 
 
-def agent_text() -> str:
+def coach_only_text() -> str:
     return (ROOT / "agents" / "coach.md").read_text()
+
+
+def agent_text() -> str:
+    return coach_only_text() + "\n" + (ROOT / "agents" / "coach-nutrition.md").read_text()
 
 
 def agent_tools() -> str:
@@ -246,3 +250,85 @@ def test_meal_training_nutrition_mentions_taken() -> None:
 def test_meal_training_nutrition_has_no_mark_after_rule() -> None:
     text = (SKILLS / "coach-meal" / "training-nutrition.md").read_text()
     assert "supplement take" not in text
+
+
+# --- шаг 20: проактивность тренера ---
+
+COACH_MAX_BYTES = 15360
+
+
+def test_coach_is_at_most_15360_bytes() -> None:
+    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= COACH_MAX_BYTES
+
+
+def test_coach_nutrition_can_be_read_without_prompt() -> None:
+    assert "Bash(cat .claude/agents/coach-nutrition.md)" in ALLOW
+
+
+def test_coach_references_nutrition_file() -> None:
+    assert "coach-nutrition.md" in coach_only_text()
+
+
+def test_coach_summary_mentions_meds_today_and_sport_nutrition_today() -> None:
+    text = coach_only_text()
+    assert "meds_today" in text
+    assert "sport_nutrition_today" in text
+
+
+def test_coach_summary_calls_unaccepted_supplements() -> None:
+    text = coach_only_text()
+    assert "sport_nutrition_today" in text
+    assert "(принято)" in text
+
+
+def test_coach_uses_catalog_triggers() -> None:
+    text = coach_only_text()
+    assert "catalog" in text
+    assert "catalog.protocols" in text
+    assert "catalog.meds" in text
+
+
+def test_coach_offers_training_nutrition_without_request() -> None:
+    text = coach_only_text()
+    assert "sport_nutrition_today.workouts" in text
+    assert "оценк" in text.lower()
+
+
+def test_coach_has_what_i_can_line() -> None:
+    assert "что умею" in coach_only_text()
+
+
+def test_coach_has_red_flags_and_doctor_itself() -> None:
+    text = coach_only_text().lower()
+    assert "красные флаги" in text
+    assert "к врачу" in text
+
+
+def test_coach_does_not_store_supplements_intake() -> None:
+    assert "supplements_intake" not in agent_text()
+    assert "supplements_intake" not in (ROOT / "agents" / "coach-onboarding.md").read_text()
+
+
+def test_coach_asks_what_he_takes_on_first_run_of_the_day() -> None:
+    text = coach_only_text()
+    assert "catalog.meds" in text
+    assert "meal_plan_today" in text
+    assert "med add" in text
+
+
+def test_onboarding_asks_about_vitamins_and_offers_courses_after_yes() -> None:
+    text = (ROOT / "agents" / "coach-onboarding.md").read_text()
+    assert "витамин" in text.lower()
+    assert "med add" in text
+    assert "supplement add" in text
+
+
+def test_coach_keeps_red_flags_commands() -> None:
+    text = coach_only_text()
+    assert "cancel_draft_workout" in text
+    assert "uv run coach feel" in text
+
+
+def test_server_describes_catalog_in_snapshot() -> None:
+    text = (ROOT.parent / "src" / "ai_coach" / "mcp_server" / "server.py").read_text()
+    assert "catalog (" in text

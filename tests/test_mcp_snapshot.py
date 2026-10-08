@@ -7,8 +7,14 @@ from ai_coach.mcp_server.tools import MAX_CHARS, SNAPSHOT_CHARS, SNAPSHOT_ROWS
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
 from ai_coach.store.goals import add_goal, add_phase
 from ai_coach.store.journal import add_food, add_sync_log, add_weight
-from ai_coach.store.meds import add_med
+from ai_coach.store.meds import add_med, delete_med
 from ai_coach.store.plans import add_plan_actual, add_planned_workout
+from ai_coach.store.sport_nutrition import (
+    add_protocol,
+    add_supplement,
+    delete_protocol,
+    delete_supplement,
+)
 
 RAW = "SECRET_RAW_PAYLOAD"
 DAY = "2026-10-07"
@@ -96,6 +102,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "pantry_expiring",
         "meal_plan_today",
         "recipes",
+        "catalog",
     }
 
 
@@ -229,3 +236,115 @@ def test_snapshot_with_many_big_meds_fits_total_limit(conn: sqlite3.Connection) 
             },
         )
     assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+
+
+# --- шаг 20: catalog ---
+
+
+def new_med(conn: sqlite3.Connection) -> int:
+    return add_med(
+        conn,
+        {
+            "name": "витамин D",
+            "kind": "vitamin",
+            "dose": 25.0,
+            "unit": "mcg",
+            "schedule": "daily",
+            "start_date": "2026-10-01",
+            "created_at": f"{DAY} 06:00:00",
+        },
+    )
+
+
+def new_protocol(conn: sqlite3.Connection, name: str = "гель") -> int:
+    return add_protocol(
+        conn,
+        {
+            "name": name,
+            "phase": "before",
+            "sport": None,
+            "min_duration_min": 0,
+            "offset_min": 30,
+            "carbs_g": 30.0,
+            "protein_g": 0.0,
+            "fluid_ml": 200.0,
+            "sodium_mg": 0.0,
+            "note": None,
+            "created_at": f"{DAY} 06:00:00",
+            "updated_at": f"{DAY} 06:00:00",
+        },
+    )
+
+
+def new_supplement(conn: sqlite3.Connection) -> int:
+    return add_supplement(
+        conn,
+        {
+            "name": "креатин",
+            "dose": 5.0,
+            "unit": "g",
+            "schedule": "daily",
+            "time_note": None,
+            "note": None,
+            "created_at": f"{DAY} 06:00:00",
+            "updated_at": f"{DAY} 06:00:00",
+        },
+    )
+
+
+def test_snapshot_catalog_is_zero_when_empty(conn: sqlite3.Connection) -> None:
+    catalog = call(conn, "get_morning_snapshot", date=DAY)["catalog"]
+    assert catalog == {"protocols": 0, "supplements": 0, "meds": 0}
+
+
+def test_snapshot_catalog_counts_one_each(conn: sqlite3.Connection) -> None:
+    new_protocol(conn)
+    new_supplement(conn)
+    new_med(conn)
+    catalog = call(conn, "get_morning_snapshot", date=DAY)["catalog"]
+    assert catalog == {"protocols": 1, "supplements": 1, "meds": 1}
+
+
+def test_snapshot_catalog_does_not_count_deleted(conn: sqlite3.Connection) -> None:
+    delete_protocol(conn, new_protocol(conn), f"{DAY} 12:00:00")
+    delete_supplement(conn, new_supplement(conn), f"{DAY} 12:00:00")
+    delete_med(conn, new_med(conn), f"{DAY} 12:00:00")
+    catalog = call(conn, "get_morning_snapshot", date=DAY)["catalog"]
+    assert catalog == {"protocols": 0, "supplements": 0, "meds": 0}
+
+
+def test_snapshot_catalog_counts_more_than_snapshot_rows(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        new_protocol(conn, f"гель {number}")
+    catalog = call(conn, "get_morning_snapshot", date=DAY)["catalog"]
+    assert catalog["protocols"] == SNAPSHOT_ROWS + 5
+
+
+def test_snapshot_catalog_is_kept_when_sections_are_cut(conn: sqlite3.Connection) -> None:
+    big = "я" * 300
+    new_protocol(conn)
+    new_supplement(conn)
+    new_med(conn)
+    for number in range(SNAPSHOT_ROWS * 2):
+        add_goal(conn, {"title": f"Цель {number} {big}", "status": "active"})
+        add_food(conn, {"logged_at": f"{DAY} 09:00:00", "text": f"еда {number} {big}"})
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert snapshot["catalog"] == {"protocols": 1, "supplements": 1, "meds": 1}
+
+
+def test_snapshot_training_without_protocol_keeps_empty_protocol_catalog(
+    conn: sqlite3.Connection,
+) -> None:
+    fill(conn)
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert snapshot["plan"]["rows"]
+    assert snapshot["catalog"]["protocols"] == 0
+
+
+def test_snapshot_training_today_without_protocol_has_workouts_and_no_rows(
+    conn: sqlite3.Connection,
+) -> None:
+    fill(conn)
+    part = call(conn, "get_morning_snapshot", date=DAY)["sport_nutrition_today"]
+    assert part["workouts"]
+    assert part["rows"] == []

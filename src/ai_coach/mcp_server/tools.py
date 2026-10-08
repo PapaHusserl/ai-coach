@@ -45,6 +45,7 @@ from ai_coach.store.journal import (
     list_wellbeing,
     update_food,
 )
+from ai_coach.store.meds import list_meds
 from ai_coach.store.pantry import has_meal_plan
 from ai_coach.store.plans import (
     add_planned_workout,
@@ -82,6 +83,7 @@ NOT_LISTS = (
     "warnings",
     "profile",
     "meal_plan_today",
+    "catalog",
 )
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
 
@@ -404,6 +406,11 @@ def morning_snapshot(
     if nutrition is not None:
         snapshot["sport_nutrition_today"] = nutrition
     snapshot |= _snapshot_meds(conn, date)
+    snapshot["catalog"] = {
+        "protocols": len(list_protocols(conn)),
+        "supplements": len(list_supplements(conn)),
+        "meds": len(list_meds(conn)),
+    }
     while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]
