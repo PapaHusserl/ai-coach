@@ -50,6 +50,7 @@ EXPECTED_TOOLS = {
     "get_sport_nutrition",
     "get_sport_nutrition_for",
     "get_meds",
+    "get_supplement_log",
 }
 
 

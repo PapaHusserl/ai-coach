@@ -36,6 +36,7 @@ from ai_coach.store.garmin_data import (
     list_daily_metrics,
     list_strength_sets,
 )
+from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
     last_sync_log,
     list_food,
@@ -261,9 +262,17 @@ def sport_nutrition_for(
 ) -> dict[str, Any]:
     """Питание к тренировкам дня (без отменённых): по каждой before / during / after, water_only
     (короче 75 минут - во время только вода), duration_unknown (длительности нет - спросить
-    пользователя). supplements: daily всегда, остальные - в день тренировки."""
+    пользователя). supplements: daily всегда, остальные - в день тренировки; taken - добавка
+    сегодня уже принята."""
     _day(date)
     return day_nutrition(conn, date)
+
+
+def supplement_log(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
+    """Приёмы добавок за период (включительно): id, item_id, name, date, taken_at, dose (None -
+    по норме добавки), unit, note. Только чтение: приём отмечает пользователь."""
+    _period(date_from, date_to)
+    return _cap(list_intake(conn, date_from, date_to), newest=True)
 
 
 def _snapshot_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any] | None:

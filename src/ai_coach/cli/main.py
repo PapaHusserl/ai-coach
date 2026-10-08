@@ -13,6 +13,7 @@ from ai_coach.cli.meds import med_app
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.cli.recipes import recipe_app
 from ai_coach.cli.sport_nutrition import protocol_app, supplement_app
+from ai_coach.cli.supplement_log import supplement_log, supplement_take, supplement_untake
 from ai_coach.garmin import (
     TOKEN_NAME,
     GarminAuthError,
@@ -54,6 +55,9 @@ app.add_typer(meal_app, name="meal")
 app.add_typer(recipe_app, name="recipe")
 app.add_typer(protocol_app, name="protocol")
 app.add_typer(supplement_app, name="supplement")
+supplement_app.command("take")(supplement_take)
+supplement_app.command("log")(supplement_log)
+supplement_app.command("untake")(supplement_untake)
 app.add_typer(med_app, name="med")
 app.command()(shop)
 

@@ -25,6 +25,8 @@
       "Bash(uv run coach supplement add:*)",
       "Bash(uv run coach supplement list:*)",
       "Bash(uv run coach supplement show:*)",
+      "Bash(uv run coach supplement take:*)",
+      "Bash(uv run coach supplement log:*)",
       "Bash(uv run coach med add:*)",
       "Bash(uv run coach med list:*)",
       "Bash(uv run coach med show:*)",

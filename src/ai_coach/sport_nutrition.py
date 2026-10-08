@@ -5,6 +5,7 @@ import json
 import sqlite3
 from typing import Any
 
+from ai_coach.store.intake import list_intake
 from ai_coach.store.plans import list_planned_workouts
 from ai_coach.store.sport_nutrition import list_protocols, list_supplements
 
@@ -14,6 +15,7 @@ SERVICE_FIELDS = ("created_at", "updated_at", "deleted_at")
 NAME_CUT = 40
 MAX_FLAGS = 10
 AMOUNTS = ("carbs_g", "protein_g", "fluid_ml")
+TAKEN_MARK = " (принято)"
 
 
 def workout_duration_min(workout: dict[str, Any]) -> int:
@@ -72,7 +74,8 @@ def without_service(row: dict[str, Any]) -> dict[str, Any]:
 
 def day_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     """Питание дня: workouts (тренировки без отменённых, у каждой before / during / after и
-    флаги) и supplements (daily всегда, остальные - если есть тренировка)."""
+    флаги) и supplements (daily всегда, остальные - если есть тренировка; taken - есть хоть один
+    приём за день)."""
     plan = list_planned_workouts(conn, day, day)
     workouts: list[dict[str, Any]] = []
     for workout in (w for w in plan if w["status"] != "cancelled"):
@@ -82,16 +85,17 @@ def day_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
         item |= {k: picked[k] for k in ("water_only", "duration_unknown")}
         workouts.append(item)
     supplements = supplements_for_day(conn, has_training(conn, day))
+    taken = {row["item_id"] for row in list_intake(conn, day, day)}
     return {
         "date": day,
         "workouts": workouts,
-        "supplements": [without_service(s) for s in supplements],
+        "supplements": [without_service(s) | {"taken": s["id"] in taken} for s in supplements],
     }
 
 
 def compact_nutrition(found: dict[str, Any]) -> dict[str, Any] | None:
     """Питание дня коротко для сводки: rows - имя, фаза, г/мл (без заметок), workouts - флаги,
-    supplements - одна строка. Нет тренировок и добавок - None."""
+    supplements - одна строка, принятые с пометкой. Нет тренировок и добавок - None."""
     if not found["workouts"] and not found["supplements"]:
         return None
     rows = [
@@ -106,5 +110,8 @@ def compact_nutrition(found: dict[str, Any]) -> dict[str, Any] | None:
         | {"name": w["name"][:NAME_CUT]}
         for w in found["workouts"][:MAX_FLAGS]
     ]
-    line = "; ".join(f"{s['name']} {s['dose']:g} {s['unit']}" for s in found["supplements"])
+    line = "; ".join(
+        f"{s['name']} {s['dose']:g} {s['unit']}" + (TAKEN_MARK if s["taken"] else "")
+        for s in found["supplements"]
+    )
     return {"rows": rows, "workouts": flags, "supplements": line}

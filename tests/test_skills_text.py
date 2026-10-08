@@ -1,7 +1,10 @@
 import json
+import re
+import sqlite3
 from pathlib import Path
 
 import pytest
+from mcp_fakes import tool_names
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 SKILLS = ROOT / "skills"
@@ -176,3 +179,70 @@ def test_agent_keeps_step_17_texts() -> None:
     text = agent_text()
     assert "uv run coach supplement add" in text
     assert "кофеин" in text.lower()
+
+
+# --- шаг 19в: журнал приёма ---
+
+
+def morning_text() -> str:
+    parts = [(SKILLS / "coach-morning" / "SKILL.md").read_text()]
+    parts += [p.read_text() for p in extra_files("coach-morning")]
+    return "\n".join(parts)
+
+
+def test_morning_describes_taken_and_evening_reminder() -> None:
+    text = morning_text()
+    assert "taken" in text
+    assert "непринят" in text.lower() or "не принят" in text.lower()
+    assert "вечер" in text.lower()
+
+
+def test_morning_training_nutrition_offers_to_mark_after_intake() -> None:
+    text = (SKILLS / "coach-morning" / "training-nutrition.md").read_text()
+    assert "uv run coach supplement take" in text
+    assert "after" in text
+
+
+def test_agent_has_get_supplement_log_in_tools() -> None:
+    assert "mcp__ai-coach__get_supplement_log" in agent_tools()
+
+
+def test_agent_describes_supplement_take_after_yes() -> None:
+    text = agent_text()
+    assert "uv run coach supplement take" in text
+    assert "get_supplement_log" in text
+    assert "после «да»" in text
+
+
+def test_agent_keeps_step_18_tools() -> None:
+    for tool in ["get_meds", "get_sport_nutrition_for", "cancel_draft_workout"]:
+        assert f"mcp__ai-coach__{tool}" in agent_tools()
+
+
+# --- шаг 19в, решения пользователя ---
+
+
+@pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
+def test_skill_tools_mentioned_in_files_are_in_allowed_tools(
+    path: Path, conn: sqlite3.Connection
+) -> None:
+    head = path.read_text().split("---")[1]
+    allowed = set(re.findall(r"mcp__ai-coach__(\w+)", head))
+    texts = [p.read_text() for p in path.parent.iterdir() if p.suffix == ".md"]
+    mentioned = {n for n in tool_names(conn) if any(re.search(rf"\b{n}\b", t) for t in texts)}
+    assert mentioned - allowed == set()
+
+
+def test_morning_has_get_supplement_log_in_allowed_tools() -> None:
+    head = (SKILLS / "coach-morning" / "SKILL.md").read_text().split("---")[1]
+    assert "mcp__ai-coach__get_supplement_log" in head
+
+
+def test_meal_training_nutrition_mentions_taken() -> None:
+    text = (SKILLS / "coach-meal" / "training-nutrition.md").read_text()
+    assert "taken" in text
+
+
+def test_meal_training_nutrition_has_no_mark_after_rule() -> None:
+    text = (SKILLS / "coach-meal" / "training-nutrition.md").read_text()
+    assert "supplement take" not in text

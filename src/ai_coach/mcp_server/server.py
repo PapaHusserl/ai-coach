@@ -29,7 +29,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "recipes (имена и КБЖУ на 100 г, до 30), "
         "meal_plan_today (рацион на сегодня уже предложен), "
         "самочувствие за 30 дней (все записи, до 60), отклонения, "
-        "sport_nutrition_today (питание к тренировкам дня и добавки; нет - не отдаётся), "
+        "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
+        "нет - не отдаётся), "
         "meds_today (курсы на сегодня; "
         "training_day/before/after - только в день тренировки; нет - не отдаётся). "
         "date — YYYY-MM-DD (сегодня).",
@@ -105,8 +106,14 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         tools.sport_nutrition_for,
         "Питание к тренировкам дня (без отменённых): по каждой before / during / after, "
         "water_only (короче 75 минут - во время только вода), duration_unknown (длительности "
-        "нет - спроси пользователя); supplements: daily всегда, остальные в день тренировки. "
-        "date - YYYY-MM-DD.",
+        "нет - спроси пользователя); supplements: daily всегда, остальные в день тренировки, "
+        "taken - добавка за этот день уже принята. date - YYYY-MM-DD.",
+    ),
+    "get_supplement_log": (
+        tools.supplement_log,
+        "Журнал приёма добавок за период (date_from, date_to - YYYY-MM-DD, до 92 дней): id, "
+        "item_id, name, date, taken_at, dose (null - по норме добавки), unit, note. "
+        "Отмечает пользователь командами coach supplement take / untake.",
     ),
     "get_meds": (
         tools.meds,
