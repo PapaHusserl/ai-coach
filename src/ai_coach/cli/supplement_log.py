@@ -15,7 +15,10 @@ from ai_coach.store.sport_nutrition import get_supplement
 def describe_intake(row: dict[str, Any]) -> str:
     dose = f"{row['dose']:g} {row['unit']}" if row["dose"] is not None else "по норме"
     note = f", {row['note']}" if row["note"] else ""
-    return f"{row['id']}  {row['date']} {row['taken_at'][11:16]}  {row['name']}  {dose}{note}"
+    # Время записи — время приёма, только если отмечено в тот же день, а не задним числом.
+    same_day = row["taken_at"][:10] == row["date"]
+    when = f"{row['date']} {row['taken_at'][11:16]}" if same_day else row["date"]
+    return f"{row['id']}  {when}  {row['name']}  {dose}{note}"
 
 
 def supplement_take(

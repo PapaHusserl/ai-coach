@@ -210,6 +210,15 @@ def test_log_shows_time_of_intake(isolated: Path) -> None:
     assert stamp[11:16] in run("supplement", "log").output
 
 
+def test_log_hides_time_for_backdated_intake(isolated: Path) -> None:
+    add_supplement()
+    run("supplement", "take", "креатин", "--date", YESTERDAY)
+    stamp = intake_rows(isolated)[0]["taken_at"]
+    line = run("supplement", "log", "--date", YESTERDAY).output
+    assert f"{YESTERDAY}  креатин" in line
+    assert stamp[11:16] not in line
+
+
 def test_log_empty_says_no_intakes(isolated: Path) -> None:
     result = run("supplement", "log")
     assert result.exit_code == 0
