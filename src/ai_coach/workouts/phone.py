@@ -9,7 +9,7 @@ from typing import Any
 
 PLAYER_VERSION = 1
 MAX_FRAGMENT = 2000
-PLAYER_URL = ""
+PLAYER_URL = "https://papahusserl.github.io/ai-coach/"
 PREFIX = f"v{PLAYER_VERSION}."
 
 
