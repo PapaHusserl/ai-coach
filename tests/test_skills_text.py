@@ -332,3 +332,31 @@ def test_coach_keeps_red_flags_commands() -> None:
 def test_server_describes_catalog_in_snapshot() -> None:
     text = (ROOT.parent / "src" / "ai_coach" / "mcp_server" / "server.py").read_text()
     assert "catalog (" in text
+
+
+# --- шаг 22: first_run_today ---
+
+
+def coach_item(prefix: str) -> str:
+    lines = [x for x in coach_only_text().splitlines() if x.startswith(prefix)]
+    assert len(lines) == 1
+    return lines[0]
+
+
+def test_coach_8a_uses_first_run_today() -> None:
+    assert "first_run_today" in coach_item("8а.")
+
+
+def test_coach_8a_has_no_meal_plan_today() -> None:
+    assert "meal_plan_today" not in coach_item("8а.")
+
+
+def test_coach_4a_keeps_meal_plan_today_without_first_run_note() -> None:
+    item = coach_item("4а.")
+    assert "meal_plan_today" in item
+    assert "(первый запуск за день)" not in item
+
+
+def test_server_describes_first_run_today_in_snapshot() -> None:
+    text = (ROOT.parent / "src" / "ai_coach" / "mcp_server" / "server.py").read_text()
+    assert "first_run_today (" in text

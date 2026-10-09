@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import date, timedelta
 
 from mcp_fakes import call, call_text
 
@@ -103,6 +104,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "meal_plan_today",
         "recipes",
         "catalog",
+        "first_run_today",
     }
 
 
@@ -348,3 +350,73 @@ def test_snapshot_training_today_without_protocol_has_workouts_and_no_rows(
     part = call(conn, "get_morning_snapshot", date=DAY)["sport_nutrition_today"]
     assert part["workouts"]
     assert part["rows"] == []
+
+
+# --- шаг 22: first_run_today ---
+
+
+def sync_at(
+    conn: sqlite3.Connection, started_at: str, kind: str = "sync", status: str = "ok"
+) -> None:
+    add_sync_log(conn, {"started_at": started_at, "kind": kind, "status": status})
+
+
+def first_run(conn: sqlite3.Connection) -> bool:
+    return call(conn, "get_morning_snapshot", date=DAY)["first_run_today"]
+
+
+def test_snapshot_first_run_today_with_empty_sync_log(conn: sqlite3.Connection) -> None:
+    assert first_run(conn) is True
+
+
+def test_snapshot_first_run_today_with_one_sync(conn: sqlite3.Connection) -> None:
+    sync_at(conn, f"{DAY} 06:00:00")
+    assert first_run(conn) is True
+
+
+def test_snapshot_not_first_run_today_with_two_syncs(conn: sqlite3.Connection) -> None:
+    sync_at(conn, f"{DAY} 06:00:00")
+    sync_at(conn, f"{DAY} 12:00:00")
+    assert first_run(conn) is False
+
+
+def test_snapshot_first_run_today_with_one_sync_yesterday_and_one_today(
+    conn: sqlite3.Connection,
+) -> None:
+    sync_at(conn, f"{date.fromisoformat(DAY) - timedelta(days=1)} 06:00:00")
+    sync_at(conn, f"{DAY} 06:00:00")
+    assert first_run(conn) is True
+
+
+def test_snapshot_not_first_run_today_when_error_and_ok_syncs(conn: sqlite3.Connection) -> None:
+    sync_at(conn, f"{DAY} 06:00:00", status="error")
+    sync_at(conn, f"{DAY} 06:05:00", status="ok")
+    assert first_run(conn) is False
+
+
+def test_snapshot_first_run_today_ignores_import(conn: sqlite3.Connection) -> None:
+    sync_at(conn, f"{DAY} 06:00:00", kind="import")
+    sync_at(conn, f"{DAY} 06:05:00", kind="sync")
+    assert first_run(conn) is True
+
+
+def test_snapshot_first_run_today_counts_both_started_at_formats(
+    conn: sqlite3.Connection,
+) -> None:
+    sync_at(conn, f"{DAY}T06:00:00")
+    sync_at(conn, f"{DAY} 12:00:00")
+    assert first_run(conn) is False
+
+
+def test_snapshot_first_run_today_is_kept_when_sections_are_cut(
+    conn: sqlite3.Connection,
+) -> None:
+    big = "я" * 300
+    sync_at(conn, f"{DAY} 06:00:00")
+    sync_at(conn, f"{DAY} 12:00:00")
+    for number in range(SNAPSHOT_ROWS * 2):
+        add_goal(conn, {"title": f"Цель {number} {big}", "status": "active"})
+        add_food(conn, {"logged_at": f"{DAY} 09:00:00", "text": f"еда {number} {big}"})
+    text = call_text(conn, "get_morning_snapshot", date=DAY)
+    assert len(text) <= MAX_CHARS
+    assert json.loads(text)["first_run_today"] is False

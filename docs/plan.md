@@ -412,3 +412,17 @@
 17. `get_workout_link` возвращает и прежние поля `{workout_id, name, date, url, length}`, и PNG с QR-кодом `url` (segno, error="m", scale ~6, border 2) — одним ответом инструмента (текст + ImageContent). Ошибки — как раньше.
 18. Описание инструмента: «показать ссылку как есть; QR — отсканировать камерой телефона».
 19. Тесты: ответ содержит ImageContent PNG (сигнатура `\x89PNG`), QR декодировать не нужно; поля ответа не изменились; CLI `coach link` без изменений (только url).
+
+## Шаг 22. Признак первого запуска за день (бэклог шага 20)
+
+Проблема: п. 8а coach.md спрашивает «что принимаешь» по `meal_plan_today = false`, а он ставится только после `coach meal done` — без КБЖУ-целей или при отказе от рациона вопрос повторяется каждый запуск. Решение пользователя: признак `first_run_today` из `sync_log` (вариант 1 папы-кабана).
+
+1. `store/journal.py`: `sync_runs_on(conn, day) -> int` — `COUNT(*)` по `sync_log` с `kind = 'sync'` и `substr(started_at, 1, 10) = day` (started_at бывает с «T» и с пробелом; status error считается; `kind='import'` — нет).
+2. `mcp_server/tools.py`, `morning_snapshot`: `snapshot["first_run_today"] = sync_runs_on(conn, date) <= 1`; ключ в `NOT_LISTS`.
+3. `server.py`, описание `get_morning_snapshot`: «first_run_today (первый запуск тренера за день: синхронизаций за дату не больше одной)».
+4. `coach.md` 8а: условие `catalog.meds = 0 и first_run_today = true`; в 4а убрать скобку «(первый запуск за день)» у `meal_plan_today`. coach.md ≤ 15360 Б.
+5. Документы: architecture (строка про meal_plan_today — «рацион уже предложен»), backlog — снять пункт, pipeline — строка.
+
+Тесты (TDD): tests/test_mcp_snapshot.py — набор ключей + first_run_today; пустой sync_log → True; одна строка sync за день → True; две → False; вчера + сегодня по одной → True; error + ok за день → False; import + sync → True; оба формата started_at; first_run_today остаётся при урезании по MAX_CHARS. tests/test_skills_text.py — first_run_today в 8а, в 8а нет meal_plan_today (в 4а есть), «first_run_today (» в server.py, лимит 15360 Б.
+
+Риск (принят): ручной `coach sync` до запуска тренера — в этот день вопрос не прозвучит.

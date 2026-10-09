@@ -124,3 +124,10 @@ def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
 def last_sync_log(conn: sqlite3.Connection) -> dict[str, Any] | None:
     """Последняя запись sync_log (по id)."""
     return fetch_one(conn, "SELECT * FROM sync_log ORDER BY id DESC LIMIT 1", ())
+
+
+def sync_runs_on(conn: sqlite3.Connection, day: str) -> int:
+    """Сколько запусков sync (любой статус) начато в указанный день."""
+    sql = "SELECT COUNT(*) AS n FROM sync_log WHERE kind = 'sync' AND substr(started_at, 1, 10) = ?"
+    row = fetch_one(conn, sql, (day,))
+    return row["n"] if row else 0

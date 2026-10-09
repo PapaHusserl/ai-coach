@@ -7,6 +7,7 @@ from ai_coach.store.journal import (
     last_sync_log,
     list_food,
     list_weights,
+    sync_runs_on,
     update_food,
 )
 
@@ -91,3 +92,32 @@ def test_last_sync_log_returns_latest_by_id(conn: sqlite3.Connection) -> None:
     assert row["status"] == "error"
     assert row["message"] == "429"
     assert row["finished_at"] == "2026-03-10T00:01:00"
+
+
+# --- шаг 22: sync_runs_on ---
+
+
+def test_sync_runs_on_is_zero_for_empty_log(conn: sqlite3.Connection) -> None:
+    assert sync_runs_on(conn, "2026-03-10") == 0
+
+
+def test_sync_runs_on_counts_sync_of_the_day_in_both_formats(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-03-10T06:00:00", "kind": "sync", "status": "ok"})
+    add_sync_log(conn, {"started_at": "2026-03-10 12:00:00", "kind": "sync", "status": "ok"})
+    assert sync_runs_on(conn, "2026-03-10") == 2
+
+
+def test_sync_runs_on_counts_error_status(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-03-10 06:00:00", "kind": "sync", "status": "error"})
+    assert sync_runs_on(conn, "2026-03-10") == 1
+
+
+def test_sync_runs_on_ignores_import(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-03-10 06:00:00", "kind": "import", "status": "ok"})
+    assert sync_runs_on(conn, "2026-03-10") == 0
+
+
+def test_sync_runs_on_ignores_other_days(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-03-09 23:59:59", "kind": "sync", "status": "ok"})
+    add_sync_log(conn, {"started_at": "2026-03-11T00:00:00", "kind": "sync", "status": "ok"})
+    assert sync_runs_on(conn, "2026-03-10") == 0

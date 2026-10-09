@@ -43,6 +43,7 @@ from ai_coach.store.journal import (
     list_food_pending,
     list_weights,
     list_wellbeing,
+    sync_runs_on,
     update_food,
 )
 from ai_coach.store.meds import list_meds
@@ -83,6 +84,7 @@ NOT_LISTS = (
     "warnings",
     "profile",
     "meal_plan_today",
+    "first_run_today",
     "catalog",
 )
 DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
@@ -402,6 +404,7 @@ def morning_snapshot(
     short_recipes = [{k: row[k] for k in names} for row in list_recipes(conn)]
     snapshot["recipes"] = _cap(short_recipes, SNAPSHOT_RECIPES, SNAPSHOT_CHARS)
     snapshot["meal_plan_today"] = has_meal_plan(conn, date)
+    snapshot["first_run_today"] = sync_runs_on(conn, date) <= 1
     nutrition = _snapshot_nutrition(conn, date)
     if nutrition is not None:
         snapshot["sport_nutrition_today"] = nutrition
