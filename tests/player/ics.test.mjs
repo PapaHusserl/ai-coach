@@ -91,3 +91,24 @@ test("hashText детерминирован, 8 hex-символов", () => {
 	assert.equal(hashText("v1.abc"), hashText("v1.abc"));
 	assert.match(hashText("v1.abc"), /^[0-9a-f]{8}$/);
 });
+
+test("длинные строки свёрнуты: каждая физическая строка <= 75 байт", () => {
+	const longUrl = "https://example.com/player/#v1." + "a".repeat(300);
+	const text = icsText(payload({ n: "Бег по лесу ".repeat(10) }), "v1.abc", longUrl, NOW);
+	for (const line of text.split("\r\n")) {
+		assert.ok(new TextEncoder().encode(line).length <= 75, line);
+	}
+});
+
+test("после разворачивания совпадает с исходным (русский DESCRIPTION, URL)", () => {
+	const longUrl = "https://example.com/player/#v1." + "b".repeat(300);
+	const text = icsText(payload({}), "v1.abc", longUrl, NOW);
+	const unfolded = text.replace(/\r\n /g, "");
+	assert.ok(unfolded.includes("URL:" + longUrl + "\r\n"));
+	assert.ok(unfolded.includes("DESCRIPTION:Тренировка: " + longUrl + "\r\n"));
+});
+
+test("многобайтный символ не режется при сворачивании", () => {
+	const text = icsText(payload({ n: "Ж".repeat(100) }), "v1.abc", URL_, NOW);
+	assert.ok(text.replace(/\r\n /g, "").includes("SUMMARY:" + "Ж".repeat(100) + "\r\n"));
+});

@@ -134,6 +134,28 @@ function icsUtc(date) {
 	);
 }
 
+// RFC 5545: строка не длиннее 75 октетов UTF-8, продолжение — CRLF + пробел.
+function foldLine(line) {
+	const encoder = new TextEncoder();
+	const parts = [];
+	let current = "";
+	let size = 0;
+	let limit = 75;
+	for (const char of line) {
+		const bytes = encoder.encode(char).length;
+		if (size + bytes > limit) {
+			parts.push(current);
+			current = "";
+			size = 0;
+			limit = 74;
+		}
+		current += char;
+		size += bytes;
+	}
+	parts.push(current);
+	return parts.join("\r\n ");
+}
+
 // .ics: без tm — событие на весь день, с tm — локальное (плавающее) время.
 // fragment — исходный фрагмент без "#" (для UID), url — ссылка на плеер, now — для DTSTAMP.
 export function icsText(payload, fragment, url, now = new Date()) {
@@ -155,5 +177,5 @@ export function icsText(payload, fragment, url, now = new Date()) {
 	lines.push("DESCRIPTION:" + escapeIcs("Тренировка: " + url));
 	lines.push("URL:" + url);
 	lines.push("END:VEVENT", "END:VCALENDAR");
-	return lines.join("\r\n") + "\r\n";
+	return lines.map(foldLine).join("\r\n") + "\r\n";
 }
