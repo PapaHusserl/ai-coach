@@ -1,0 +1,124 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	background: #111;
+	color: #f2f2f2;
+}
+
+#app {
+	max-width: 32rem;
+	margin: 0 auto;
+	padding: 1rem;
+}
+
+h1 {
+	font-size: 1.5rem;
+	margin: 0.5rem 0;
+}
+
+.meta,
+.progress,
+.next {
+	color: #aaa;
+}
+
+.message {
+	font-size: 1.2rem;
+	padding: 2rem 0;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 1rem 0;
+}
+
+button {
+	flex: 1 1 8rem;
+	min-height: 3rem;
+	font-size: 1.1rem;
+	border: 1px solid #555;
+	border-radius: 0.5rem;
+	background: #222;
+	color: inherit;
+}
+
+button.primary {
+	background: #2e7d32;
+	border-color: #2e7d32;
+}
+
+.qr {
+	max-width: 16rem;
+	margin: 0 auto;
+	background: #fff;
+}
+
+.qr:empty {
+	display: none;
+}
+
+.steps {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.step {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.6rem 0;
+	border-bottom: 1px solid #333;
+}
+
+.step-amount {
+	color: #aaa;
+	white-space: nowrap;
+}
+
+.step-rest .step-name,
+.step-recovery .step-name {
+	color: #8ab4f8;
+}
+
+.player {
+	text-align: center;
+	padding-top: 1.5rem;
+}
+
+.current {
+	font-size: 2rem;
+	margin: 0.5rem 0;
+}
+
+.clock {
+	font-size: 5rem;
+	font-weight: bold;
+	margin: 0.5rem 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.amount {
+	font-size: 2.5rem;
+	margin: 0.5rem 0;
+}
+
+.pace {
+	font-size: 1.5rem;
+}
+
+.note {
+	font-size: 1.1rem;
+	color: #ddd;
+}
+
+.player.step-rest,
+.player.step-recovery {
+	color: #8ab4f8;
+}

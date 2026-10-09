@@ -15,6 +15,7 @@
       "Bash(uv run coach pantry list:*)",
       "Bash(uv run coach pantry open:*)",
       "Bash(uv run coach shop:*)",
+      "Bash(uv run coach link:*)",
       "Bash(uv run coach meal done:*)",
       "Bash(uv run coach recipe add:*)",
       "Bash(uv run coach recipe list:*)",

@@ -1,0 +1,65 @@
+{
+  "spec": {
+    "name": "Силовая: ноги",
+    "exercises": [
+      {
+        "category": "SQUAT",
+        "exercise": "BARBELL_BACK_SQUAT",
+        "sets": 3,
+        "reps": 8,
+        "rest_seconds": 120,
+        "weight_kg": 40,
+        "title": "Приседания со штангой",
+        "note": "Спина прямая, колени по носкам"
+      },
+      {
+        "category": "PUSH_UP",
+        "exercise": "PUSH_UP",
+        "sets": 2,
+        "reps": 15,
+        "rest_seconds": 60,
+        "weight_kg": 0
+      }
+    ]
+  },
+  "payload": {
+    "v": 1,
+    "n": "Силовая: ноги",
+    "sp": "strength",
+    "d": "2026-10-09",
+    "tm": "18:30",
+    "b": [
+      {
+        "r": 3,
+        "t": "Приседания со штангой",
+        "s": [
+          {
+            "k": "work",
+            "reps": 8,
+            "kg": 40,
+            "note": "Спина прямая, колени по носкам"
+          },
+          {
+            "k": "rest",
+            "sec": 120
+          }
+        ]
+      },
+      {
+        "r": 2,
+        "t": "Push up",
+        "s": [
+          {
+            "k": "work",
+            "reps": 15
+          },
+          {
+            "k": "rest",
+            "sec": 60
+          }
+        ]
+      }
+    ]
+  },
+  "fragment": "v1.bY9BTsMwEEWvYs3alZwUquJTsEdsAKuVItLIdmFRRWq7YpcjIG4QAZUMFPcK4xvxnUisupv_x35__obuSN9syJKeSnLDXJGm55WtSFK1IH2hJNUrb-DyG5848C_3gk9pmzo-cp86KfibI__wAauAFUeBKaYd_J6PAFnTAD5v5Yi3xnm4ztyTLkrV3krymf-athzw7cCf-AhY6gRkFOkl7QfnA0FflDk4uTxz8phUXJ6Lmv0nXa_dUqwbyvoBulTlbFKoibrC23qsGtAo8ntuqIc-CA8Z1WDvvDX1wi-h_SN0MddTBfGE7PYP"
+}

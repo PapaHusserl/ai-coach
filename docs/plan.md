@@ -369,3 +369,39 @@
 7. Тесты: catalog (пусто, по 1, удалённые не считаются, не режется), тренировка без протокола; текстовые — склейка coach.md + coach-nutrition.md для старых проверок, красные флаги и «к врачу» в самом coach.md, размер coach.md ≤ 15360 Б, `meds_today`/`catalog`/`coach-nutrition.md`/«что умею» в coach.md, cat в ALLOW, catalog в описании server.py.
 
 Решения пользователя (2026-10-08): 1) «что принимает» — не хранить: спрашивать при первом запуске за день (признак — `meal_plan_today` = false), пока `catalog.meds` = 0; ключ профиля `supplements_intake` не заводить; 2) «что умею» — строкой в каждой сводке; 3) онбординг — да; план целиком — «да, кабаним».
+
+## Шаг 21. Тренировка на телефон без часов (ссылка на страницу-плеер)
+
+**Повод (пользователь, 2026-10-09):** у людей без Garmin свой агент-тренер в Claude Desktop с нашим MCP. Нужен самый простой путь: без часов, ботов и установки приложений.
+
+**Решения пользователя:**
+- ссылка на статическую страницу-плеер, тренировка сжата во фрагменте `#v1.…`; сервера, базы и аккаунтов нет;
+- хостинг — этот репозиторий публичным на GitHub + GitHub Pages из `player/`; перед публикацией проверить историю на утечки; публикация — отдельно, с подтверждением пользователя;
+- QR — на самой странице (кнопка «QR этой страницы»); картинка QR из MCP — спайк в 21в, зависимость `segno` только если спайк удался;
+- коды каталога Garmin в spec остаются обязательными; русские названия — новые необязательные `title`/`note`;
+- по рекомендациям папы-кабана: `node --test` в `make check` (понятная ошибка без node), CLI `coach link <id> [--time]` (allow), лимит фрагмента 2000 — жёсткая ошибка, время — параметр `time` у инструмента (без миграции).
+
+**Модель:** spec из `planned_workouts.workout_json` (`create_draft_workout`, валидация `build_workout` в `workouts/garmin_json.py`). Лишние ключи Garmin не трогают.
+
+### 21а — Python: payload, ссылка, MCP
+1. `workouts/phone.py`: `PLAYER_VERSION = 1`, `MAX_FRAGMENT = 2000`, env `AI_COACH_PLAYER_URL` → `PLAYER_URL` по умолчанию (пока пустой → ошибка «не задан адрес плеера»).
+2. `player_payload(sport, spec, date, time=None)` — компактная форма v1: `{"v":1,"n","sp","d","tm"?,"dur"?,"b":[{"r","t"?,"s":[{"k":warmup|work|recovery|cooldown|rest,"t","sec"|"m"|"reps","kg","pace":[медл,быстр],"note"}]}]}`, только непустые ключи. strength: упражнение → блок `r=sets`, `t=title` иначе код в читаемый вид («Barbell back squat»), шаги `work{reps,kg≠0,note}` + `rest{sec}`; mobility: шаг → блок r=1, `work{sec,t,note=description}`; run/bike/swim: шаги в один блок, `interval`→`work`.
+3. `encode_fragment`: JSON (`separators`, `ensure_ascii=False`, `sort_keys`) → raw deflate (`wbits=-15`, уровень 9) → base64url без `=` → префикс `v1.`. `decode_fragment` — зеркало, мусор/другой префикс → `ValueError`. `workout_url(fragment, base_url)`. Длина > 2000 → `ValueError` «ссылка N символов, лимит 2000: сократи заметки/названия или раздели тренировку».
+4. `mcp_server/tools.py: workout_link(conn, workout_id, time=None)`: нет → «Тренировки N нет.», cancelled → ошибка, `time` строго HH:MM; ответ `{workout_id, name, date, url, length}`. `server.py`: `get_workout_link` с описанием (показать ссылку как есть; для телефона беговые шаги лучше по времени), `INSTRUCTIONS` — фраза про ссылку.
+5. Описание `create_draft_workout` самодостаточное (Desktop не читает `spec-formats.md`): три формы spec, обязательные коды Garmin, `title`/`note`. `spec-formats.md` — те же ключи.
+6. CLI `coach link <id> [--time HH:MM]` — печатает URL; allow `Bash(uv run coach link:*)`.
+7. `coach.md`: инструмент в `tools` + строка «просит на телефон / нет часов → get_workout_link, ссылку как есть»; ≤ 15360 Б.
+8. Эталонные фикстуры `tests/fixtures/links/{strength,stretch,run}.json` — `{spec, payload, fragment}`, контракт Python ↔ JS; менять только с новой версией.
+
+### 21б — плеер `player/` (параллельно с 21а, контракт — фикстуры)
+9. `player/player.js` (ES-модуль, чистые функции отдельно от DOM): `parseFragment`, `inflate` (`DecompressionStream("deflate-raw")`), `expand` (блок × r, «подход i/r», последний rest остаётся), `formatPace` («4:15–4:05/км»), `formatClock`, `icsText` (без `tm` — `DTSTART;VALUE=DATE`, с `tm` — локальное время; экранирование; URL; CRLF; UID — хэш фрагмента), `totalSeconds`. Версия ≠ 1 → «ссылка от более новой версии тренера — обновите страницу»; неизвестный `k` — как work.
+10. `index.html` + `player.css`, mobile-first, по-русски, без сборки и CDN: экран списка (название, дата, длительность, шаги; «Старт», «В календарь», «QR этой страницы» — vendored MIT-генератор в `player/vendor/`); экран шага (крупно текущий, следующий, отсчёт для `sec` с автопереходом, «Готово» для reps/m, подсказка по темпу, пауза/назад/пропустить); звук Web Audio (разблокировка на «Старт»), `navigator.vibrate`, Wake Lock + повтор на `visibilitychange`; нет `DecompressionStream` → «обновите браузер»; пустой `#` → «откройте ссылку от тренера».
+11. `.github/workflows/pages.yml` — публикация `player/` (включается после публикации репо).
+12. `Makefile`: `player-test` (`node --test tests/player/`), входит в `check`.
+
+### 21в — спайк QR в Desktop и ручная проверка
+13. Спайк: инструмент возвращает `Image(png)` (segno) — FastMCP отдаёт `ImageContent`? Desktop показывает картинку? Не проверено.
+14. Ручная проверка: Android Chrome и iPhone Safari (декод, таймер, звук в беззвучном режиме, Wake Lock, .ics, скан QR с экрана); Claude Desktop — create_draft_workout → get_workout_link, ссылка не обрезана.
+15. README «Тренировка на телефон», `docs/pipeline.md`.
+
+**Вне скоупа:** упаковка `.mcpb` и установка на чужой комп; системный промпт для Desktop-агента; отметка «сделано» с телефона и план/факт без часов; PWA/офлайн, аналитика.

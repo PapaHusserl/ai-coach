@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import tools
+from ai_coach.mcp_server import links, tools
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
 
@@ -17,7 +17,9 @@ INSTRUCTIONS = (
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
     "propose_phase) и КБЖУ записи еды, у которой его ещё нет (save_food_nutrition). "
-    "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push."
+    "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
+    "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
+    "покажи её пользователю как есть."
 )
 
 # имя инструмента -> (функция из tools.py, описание для Claude)
@@ -137,11 +139,34 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "create_draft_workout": (
         tools.create_draft_workout,
         "Записать тренировку плана черновиком (draft). sport: strength / mobility / run / "
-        "bike / swim; spec — как для сборки тренировки Garmin (упражнения или шаги).",
+        "bike / swim; date - YYYY-MM-DD; name - название; spec - объект, форма зависит от sport. "
+        "Необязательно везде: estimated_duration_secs (секунды), у упражнения или шага "
+        "title (название по-русски для телефона) и note (заметка). "
+        'strength: {"exercises": [{"category": "BENCH_PRESS", "exercise": '
+        '"BARBELL_BENCH_PRESS", "sets": 3, "reps": 8, "rest_seconds": 90, "weight_kg": 40, '
+        '"title": "Жим лёжа"}]} - category и exercise обязательны, это коды каталога Garmin '
+        "(SQUAT / BARBELL_BACK_SQUAT, ROW / BARBELL_ROW и т.п.); упражнение - sets подходов "
+        "с отдыхом. "
+        'mobility (растяжка): {"steps": [{"exercise": "STRETCH_CAT_COW", "seconds": 40, '
+        '"description": "Техника по-русски, коротко", "title": "Кошка-корова"}]} - exercise '
+        "обязателен, код STRETCH_* / WARM_UP_* каталога Garmin, description обязателен. "
+        'run / bike / swim: {"steps": [{"type": "warmup", "seconds": 600}, {"type": '
+        '"interval", "meters": 5000, "pace_sec_per_km": [360, 330], "note": "ровно"}, '
+        '{"type": "cooldown", "seconds": 300}]} - type: warmup / interval / recovery / '
+        "cooldown / rest; шаг - seconds или meters; pace_sec_per_km - [медленнее, быстрее], "
+        "сек на км. Для телефона беговые шаги лучше задавать по времени (seconds).",
     ),
     "cancel_draft_workout": (
         tools.cancel_draft_workout,
         "Отменить черновик тренировки по id (только draft; утверждённые и отправленные нельзя).",
+    ),
+    "get_workout_link": (
+        links.workout_link,
+        "Ссылка на страницу-плеер с тренировкой плана по id (для телефона без часов; "
+        "отменённые нельзя). time - HH:MM, необязательно, для календаря. Ответ: url, length. "
+        "Покажи url пользователю как есть, не сокращай и не меняй. Для телефона беговые шаги "
+        "лучше по времени, а не по метрам. Ссылка длиннее 2000 символов - ошибка: сократи "
+        "заметки и названия или раздели тренировку.",
     ),
     "propose_phase": (tools.propose_phase, "Предложить фазу (proposed); принимает пользователь."),
 }

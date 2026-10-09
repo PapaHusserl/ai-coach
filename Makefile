@@ -4,9 +4,9 @@ SMELLS_MAX ?= 0
 # Модули для мутаций: по умолчанию изменённые относительно HEAD, иначе весь пакет.
 MOD ?= $(or $(shell git diff --name-only HEAD -- src/ai_coach | grep '\.py$$' | sed -e 's|^src/||' -e 's|/__init__\.py$$||' -e 's|\.py$$||' -e 's|/|.|g' -e 's|$$|.*|'),ai_coach.*)
 
-.PHONY: check lint fmt types smells dead cov mutate mutate-report install-trener
+.PHONY: check lint fmt types smells dead cov player-test mutate mutate-report install-trener
 
-check: lint types smells dead cov
+check: lint types smells dead cov player-test
 	@echo "check: OK"
 
 lint:
@@ -30,6 +30,11 @@ dead:
 
 cov:
 	uv run pytest --cov
+
+# JS-тесты плеера (нужен node >= 18).
+player-test:
+	@command -v node >/dev/null 2>&1 || { echo "player-test: не найден node — установите Node.js (brew install node)"; exit 1; }
+	node --test "tests/player/*.test.mjs"
 
 # Мутации: запускать фоном вне агента. Отчёт — reports/mutmut.txt.
 mutate:

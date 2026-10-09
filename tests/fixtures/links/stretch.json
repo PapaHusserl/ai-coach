@@ -1,0 +1,50 @@
+{
+  "spec": {
+    "name": "Растяжка после бега",
+    "steps": [
+      {
+        "exercise": "STRETCH_CHILDS_POSE",
+        "seconds": 45,
+        "title": "Поза ребёнка",
+        "description": "Таз к пяткам, вытяни руки вперёд"
+      },
+      {
+        "exercise": "STRETCH_HAMSTRING",
+        "seconds": 30,
+        "title": "Задняя поверхность бедра",
+        "description": "Наклон к прямой ноге"
+      }
+    ]
+  },
+  "payload": {
+    "v": 1,
+    "n": "Растяжка после бега",
+    "sp": "mobility",
+    "d": "2026-10-10",
+    "b": [
+      {
+        "r": 1,
+        "s": [
+          {
+            "k": "work",
+            "sec": 45,
+            "t": "Поза ребёнка",
+            "note": "Таз к пяткам, вытяни руки вперёд"
+          }
+        ]
+      },
+      {
+        "r": 1,
+        "s": [
+          {
+            "k": "work",
+            "sec": 30,
+            "t": "Задняя поверхность бедра",
+            "note": "Наклон к прямой ноге"
+          }
+        ]
+      }
+    ]
+  },
+  "fragment": "v1.hY_LTsJAGIVfZfKvx6TgZdFXIWy4LAhqDTQaQ5oAxpUmDStWRuMTFGgBK4VXOP8bcWbAtckseqbn8s1IWhI2RjKQsGZl6L_7EspTNOiLlfso7lLhGxk2BqXBQVOdoqTeWYOlvulUU1TYGh3rC39seYsDCsoZcnYMu20Jr66txK7pE3tskNGNAgtaKlcmSTOx_1J8cLXELxuqM8uY2zvqH8OePVYo_gYvg_PgnKEcFbFTJmhaerZXF9AJ6d8NFmTJSeQ5mlY6DNaD-s1FLeBxBK7pC5kPpFg7Zt-mE_IUp4YV81x_oPcuavVue_Ez9SPflBwB"
+}

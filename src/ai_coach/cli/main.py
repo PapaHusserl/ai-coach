@@ -1,4 +1,4 @@
-"""Команды `coach`: sync, import, approve, push, status, weight, food, feel, profile, goal,
+"""Команды `coach`: sync, import, approve, push, link, status, weight, food, feel, profile, goal,
 pantry, shop, meal, recipe, protocol, supplement, med, log, edit, delete."""
 
 from datetime import date, datetime
@@ -35,10 +35,10 @@ from ai_coach.plan import (
 from ai_coach.profile import current_profile, set_value
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import add_wellbeing
-from ai_coach.store.plans import list_planned_workouts
+from ai_coach.store.plans import get_planned_workout, list_planned_workouts
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
-from ai_coach.workouts import describe_workout
+from ai_coach.workouts import describe_workout, workout_link_url
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
 profile_app = typer.Typer(help="Профиль спортсмена", no_args_is_help=True)
@@ -146,6 +146,22 @@ def approve_(workout_id: Annotated[int, typer.Argument(help="id трениров
         conn.commit()
         typer.echo(f"Тренировка {workout_id} утверждена.")
     except PlanError as e:
+        fail(str(e))
+    finally:
+        conn.close()
+
+
+@app.command()
+def link(
+    workout_id: Annotated[int, typer.Argument(help="id тренировки")],
+    time: Annotated[str | None, typer.Option("--time", help="Время, HH:MM")] = None,
+) -> None:
+    """Ссылка на страницу-плеер с тренировкой (для телефона без часов)."""
+    conn = open_db()
+    try:
+        row = get_planned_workout(conn, workout_id)
+        typer.echo(workout_link_url(row, workout_id, time)["url"])
+    except ValueError as e:
         fail(str(e))
     finally:
         conn.close()

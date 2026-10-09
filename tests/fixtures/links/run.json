@@ -1,0 +1,61 @@
+{
+  "spec": {
+    "name": "Темповый бег",
+    "steps": [
+      {
+        "type": "warmup",
+        "seconds": 600
+      },
+      {
+        "type": "interval",
+        "meters": 1000,
+        "pace_sec_per_km": [
+          255,
+          245
+        ]
+      },
+      {
+        "type": "recovery",
+        "seconds": 90
+      },
+      {
+        "type": "cooldown",
+        "seconds": 300
+      }
+    ]
+  },
+  "payload": {
+    "v": 1,
+    "n": "Темповый бег",
+    "sp": "run",
+    "d": "2026-10-11",
+    "b": [
+      {
+        "r": 1,
+        "s": [
+          {
+            "k": "warmup",
+            "sec": 600
+          },
+          {
+            "k": "work",
+            "m": 1000,
+            "pace": [
+              255,
+              245
+            ]
+          },
+          {
+            "k": "recovery",
+            "sec": 90
+          },
+          {
+            "k": "cooldown",
+            "sec": 300
+          }
+        ]
+      }
+    ]
+  },
+  "fragment": "v1.PY5BCsIwEEWvIrNOYRJtwVxFuqhpVrVNiLRFSk_gLbyBigtB9ArjjZyIcTf89-fNTLAFvZkggJYC9t-5AQ1jFdreA0fWgC4QZ_EDLjQct9xHRAG-Mpa3VJ4LtcrLVAvWuMGGQzKs_wLj3K52Y5fIkt3lXAqoGSpURSYxk5JxxwGd6EYPetGTLu8j3Rd05uAal30800fPwM_MHw"
+}

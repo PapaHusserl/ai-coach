@@ -1,6 +1,6 @@
 # spec для create_draft_workout
 
-`sport`: strength / mobility / run / bike / swim. `name` подставляется в spec сам. `estimated_duration_secs` - необязательно (секунды), по умолчанию 0.
+`sport`: strength / mobility / run / bike / swim. `name` подставляется в spec сам. `estimated_duration_secs` - необязательно (секунды), по умолчанию 0. У упражнения или шага необязательно `title` (название по-русски, показывается на телефоне; иначе берётся из кода) и `note` (заметка).
 
 ## strength
 ```json
