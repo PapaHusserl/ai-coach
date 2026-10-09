@@ -1,10 +1,13 @@
 import asyncio
+import base64
+import json
 import sqlite3
 from typing import Any
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, db_file
+from mcp.types import ImageContent, TextContent
+from mcp_fakes import call, call_content, db_file
 
 from ai_coach.mcp_server import build_server
 from ai_coach.mcp_server.server import INSTRUCTIONS
@@ -188,6 +191,78 @@ def test_link_at_exact_limit_passes(
     length = call(conn, "get_workout_link", workout_id=workout_id)["length"]
     monkeypatch.setattr(phone, "MAX_FRAGMENT", length)
     assert call(conn, "get_workout_link", workout_id=workout_id)["length"] == length
+
+
+# --- QR-картинка в ответе ---
+
+
+def images(conn: sqlite3.Connection, **arguments: Any) -> list[ImageContent]:
+    blocks = call_content(conn, "get_workout_link", **arguments)
+    return [b for b in blocks if isinstance(b, ImageContent)]
+
+
+def test_link_has_one_image(conn: sqlite3.Connection) -> None:
+    assert len(images(conn, workout_id=draft(conn, **RUN))) == 1
+
+
+def test_link_image_is_png_mime(conn: sqlite3.Connection) -> None:
+    image = images(conn, workout_id=draft(conn, **RUN))[0]
+    assert image.mime_type == "image/png"
+
+
+def test_link_image_data_starts_with_png_signature(conn: sqlite3.Connection) -> None:
+    image = images(conn, workout_id=draft(conn, **RUN))[0]
+    assert base64.b64decode(image.data)[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_link_with_time_has_image(conn: sqlite3.Connection) -> None:
+    assert len(images(conn, workout_id=draft(conn, **RUN), time="07:30")) == 1
+
+
+def test_link_text_block_first_then_image(conn: sqlite3.Connection) -> None:
+    workout_id = draft(conn, **RUN)
+    blocks = call_content(conn, "get_workout_link", workout_id=workout_id)
+    url = call(conn, "get_workout_link", workout_id=workout_id)["url"]
+    assert isinstance(blocks[0], TextContent)
+    assert json.loads(blocks[0].text)["url"] == url
+    assert isinstance(blocks[1], ImageContent)
+
+
+def test_link_fields_unchanged_next_to_image(conn: sqlite3.Connection) -> None:
+    result = call(conn, "get_workout_link", workout_id=draft(conn, **RUN))
+    assert set(result) == {"workout_id", "name", "date", "url", "length"}
+
+
+def test_link_unknown_workout_has_no_image(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError, match="999"):
+        call_content(conn, "get_workout_link", workout_id=999)
+
+
+def test_link_over_limit_has_no_image(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workout_id = draft(conn, **RUN)
+    monkeypatch.setattr(phone, "MAX_FRAGMENT", 10)
+    with pytest.raises(ToolError, match="лимит"):
+        call_content(conn, "get_workout_link", workout_id=workout_id)
+
+
+def test_link_without_player_url_has_no_image(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workout_id = draft(conn, **RUN)
+    monkeypatch.delenv("AI_COACH_PLAYER_URL")
+    monkeypatch.setattr(phone, "PLAYER_URL", "")
+    with pytest.raises(ToolError, match="адрес плеера"):
+        call_content(conn, "get_workout_link", workout_id=workout_id)
+
+
+def test_link_tool_description_mentions_qr(conn: sqlite3.Connection) -> None:
+    assert "QR" in descriptions(conn)["get_workout_link"]
+
+
+def test_link_tool_description_says_scan_with_camera(conn: sqlite3.Connection) -> None:
+    assert "камер" in descriptions(conn)["get_workout_link"]
 
 
 # --- тексты для Claude Desktop ---

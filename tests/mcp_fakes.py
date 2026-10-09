@@ -20,11 +20,15 @@ def tool_names(conn: sqlite3.Connection) -> set[str]:
     return {tool.name for tool in asyncio.run(server.list_tools())}
 
 
-def call(conn: sqlite3.Connection, name: str, /, **arguments: Any) -> Any:
-    """Данные ответа (объект); отказ инструмента — исключение ToolError."""
+def _result(conn: sqlite3.Connection, name: str, arguments: dict[str, Any]) -> Any:
     conn.commit()
     server = build_server(db_file(conn))
-    result = asyncio.run(server.call_tool(name, arguments))
+    return asyncio.run(server.call_tool(name, arguments))
+
+
+def call(conn: sqlite3.Connection, name: str, /, **arguments: Any) -> Any:
+    """Данные ответа (объект); отказ инструмента — исключение ToolError."""
+    result = _result(conn, name, arguments)
     data = result.structured_content  # type: ignore[union-attr]
     if data is None:
         return json.loads(result.content[0].text)  # type: ignore[union-attr]
@@ -38,3 +42,8 @@ def call_text(conn: sqlite3.Connection, name: str, /, **arguments: Any) -> str:
 
 def rows(conn: sqlite3.Connection, name: str, /, **arguments: Any) -> list[dict[str, Any]]:
     return call(conn, name, **arguments)["rows"]
+
+
+def call_content(conn: sqlite3.Connection, name: str, /, **arguments: Any) -> list[Any]:
+    """Все блоки content ответа (текст, картинки); отказ инструмента — ToolError."""
+    return list(_result(conn, name, arguments).content)
