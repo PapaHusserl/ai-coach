@@ -47,6 +47,14 @@
 - `coach weight 82.4` — записать вес; `coach food "борщ 300 г, хлеб 40 г"` — записать еду текстом, у каждого продукта граммы (без них /coach-food спросит). Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
 - КБЖУ считает скилл `/coach-food` через MCP (`get_food_pending`, `save_food_nutrition`); записи с КБЖУ он не меняет.
 
+## Тренировка на телефон (без часов)
+- Страница-плеер: https://papahusserl.github.io/ai-coach/ (папка `player/`, публикуется GitHub Actions `pages.yml`). Тренировка целиком в ссылке после `#` (`v1.` + сжатый JSON), сервера и базы нет, данные на сервер не уходят.
+- Ссылку отдают MCP-инструмент `get_workout_link(workout_id, time?)` — поля и картинка с QR-кодом — и команда `coach link <id> [--time HH:MM]`. Адрес плеера — `$AI_COACH_PLAYER_URL` или `PLAYER_URL` в `workouts/phone.py`. Ссылка длиннее 2000 символов — ошибка: сократить заметки или разделить тренировку.
+- На телефон: отсканировать QR камерой или открыть тот же чат в мобильном Claude. На странице — шаги, «Старт» (таймер, звук, вибрация, экран не гаснет), «В календарь» (.ics), «QR этой страницы».
+- Claude Desktop: в `claude_desktop_config.json` → `mcpServers.ai-coach` с той же командой, что и для `claude mcp add` ниже.
+- Ограничения: на iPhone нет вибрации, в беззвучном режиме нет звука; без GPS шаги по метрам закрываются кнопкой «Готово».
+- Локально: `python -m http.server` из `player/`, тесты плеера — `make player-test` (входит в `make check`, нужен Node.js).
+
 ## MCP и скиллы тренера (Claude Code)
 - MCP-сервер (stdio) читает агрегаты из базы (без raw_json); списки отдаются как `{rows, truncated}`, до 60 строк и 20 000 символов, у рядов по датам остаются самые новые строки. Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (только draft -> cancelled), `propose_phase`. Инструментов отправки на часы и удаления нет, в Garmin сервер не ходит: утверждает и отправляет пользователь (`coach approve`, `coach push`).
 - Регистрация (один раз; путь к репо свой):

@@ -36,3 +36,4 @@ data/
 *.gpx
 *.tcx
 
+.dashboard.json
