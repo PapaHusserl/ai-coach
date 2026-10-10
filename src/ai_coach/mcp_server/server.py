@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import links, tools
+from ai_coach.mcp_server import links, tools, workload
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
 
@@ -19,7 +19,10 @@ INSTRUCTIONS = (
     "propose_phase) и КБЖУ записи еды, у которой его ещё нет (save_food_nutrition). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
-    "покажи её пользователю как есть."
+    "покажи её пользователю как есть. "
+    "Нагрузка вне тренировок (get_workload): календарь, туду и груминг берутся из базы, "
+    "их кладёт coach sync; к календарю MCP не ходит; названия событий — только "
+    "get_workload(events=true) на один день."
 )
 
 # имя инструмента -> (функция из tools.py, описание для Claude)
@@ -32,6 +35,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "meal_plan_today (рацион на сегодня уже предложен), "
         "first_run_today (первый запуск тренера за день: синхронизаций за дату не больше одной), "
         "самочувствие за 30 дней (все записи, до 60), отклонения, "
+        "workload (нагрузка вне тренировок за 7 дней: часы встреч, вечера, туду, груминг), "
+        "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "meds_today (курсы на сегодня; "
@@ -45,6 +50,16 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_activities": (tools.activities, "Активности за период."),
     "get_strength_sets": (tools.strength_sets, "Подходы силовой активности."),
+    "get_workload": (
+        workload.workload,
+        "Нагрузка вне тренировок по дням (date_from, date_to - YYYY-MM-DD, до 92 дней): "
+        "weekend (сб/вс); work/personal/hobby/rest_hours "
+        "(часы встреч календаря) и _evening_hours "
+        "(после 19:00); all_day_work (рабочее событие на весь день); счётчики todo_open "
+        "(снимок на дату последнего sync), todo_closed (закрыто за день), grooming_done, "
+        "grooming_pending (null - не считались). events=true - только на один день "
+        "(date_from = date_to): ещё и events с названиями. Пишет coach sync.",
+    ),
     "get_goals": (tools.goals_list, "Цели; status: active / done / cancelled, без него — все."),
     "get_goals_on": (tools.goals_on, "Какие цели были на конец дня."),
     "get_phases": (

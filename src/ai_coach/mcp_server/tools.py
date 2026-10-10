@@ -57,6 +57,7 @@ from ai_coach.store.plans import (
 )
 from ai_coach.store.recipes import list_recipes
 from ai_coach.store.sport_nutrition import list_protocols, list_supplements
+from ai_coach.workload import workload_series
 from ai_coach.workouts import SPORTS, build_workout
 
 MAX_ROWS = 60
@@ -74,6 +75,8 @@ MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
 WELLBEING_DAYS = 30
+WORKLOAD_AHEAD_DAYS = 7
+AHEAD_SKIP = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
 WEEKEND_ONLY_SPORT = "bike"
 SATURDAY = 5
 NOT_LISTS = (
@@ -87,7 +90,16 @@ NOT_LISTS = (
     "first_run_today",
     "catalog",
 )
-DATE_SERIES = ("load", "metrics", "activities", "plan_actual", "weights", "food_today", "wellbeing")
+DATE_SERIES = (
+    "load",
+    "metrics",
+    "activities",
+    "plan_actual",
+    "weights",
+    "food_today",
+    "wellbeing",
+    "workload",
+)
 
 
 def _clean(row: dict[str, Any]) -> dict[str, Any]:
@@ -102,7 +114,7 @@ def _clean(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _cap(
+def cap(
     rows: list[dict[str, Any]],
     max_rows: int = MAX_ROWS,
     max_chars: int = MAX_CHARS,
@@ -124,7 +136,7 @@ def _day(value: str) -> date:
         raise ToolError(f"Дата должна быть YYYY-MM-DD, получено: {value!r}") from None
 
 
-def _period(start: str, end: str) -> None:
+def period(start: str, end: str) -> None:
     first, last = _day(start), _day(end)
     if last < first:
         raise ToolError("Конец периода раньше начала.")
@@ -137,61 +149,61 @@ def _shift(day: str, days: int) -> str:
 
 
 def daily_metrics(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_daily_metrics(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_daily_metrics(conn, start, end), newest=True)
 
 
 def activities(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_activities(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_activities(conn, start, end), newest=True)
 
 
 def strength_sets(conn: sqlite3.Connection, activity_id: int) -> dict[str, Any]:
-    return _cap(list_strength_sets(conn, activity_id))
+    return cap(list_strength_sets(conn, activity_id))
 
 
 def goals_list(conn: sqlite3.Connection, status: str | None = None) -> dict[str, Any]:
-    return _cap(goals.list_goals(conn, status))
+    return cap(goals.list_goals(conn, status))
 
 
 def goals_on(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     _day(day)
-    return _cap(goals.goals_on(conn, day))
+    return cap(goals.goals_on(conn, day))
 
 
 def phases_list(conn: sqlite3.Connection, status: str | None = None) -> dict[str, Any]:
-    return _cap(goals.list_phases(conn, status))
+    return cap(goals.list_phases(conn, status))
 
 
 def plan(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_planned_workouts(conn, start, end))
+    period(start, end)
+    return cap(list_planned_workouts(conn, start, end))
 
 
 def plan_actual(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_plan_actual(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_plan_actual(conn, start, end), newest=True)
 
 
 def weights(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_weights(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_weights(conn, start, end), newest=True)
 
 
 def food(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    _period(start, end)
-    return _cap(list_food(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_food(conn, start, end), newest=True)
 
 
 def food_pending(conn: sqlite3.Connection) -> dict[str, Any]:
     """Записи еды без КБЖУ (за все дни), старые первыми."""
-    return _cap(list_food_pending(conn))
+    return cap(list_food_pending(conn))
 
 
 def wellbeing(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """Самочувствие по времени; основная оценка дня — последняя запись этой даты."""
-    _period(start, end)
-    return _cap(list_wellbeing(conn, start, end), newest=True)
+    period(start, end)
+    return cap(list_wellbeing(conn, start, end), newest=True)
 
 
 def _day_deviations(
@@ -213,8 +225,8 @@ def deviations(
     try:
         load_row = load(conn, date, date)["rows"][-1]
     except ToolError as error:
-        return {**_cap(_day_deviations(conn, date, None)), "load_error": str(error)}
-    return _cap(_day_deviations(conn, date, load_row))
+        return {**cap(_day_deviations(conn, date, None)), "load_error": str(error)}
+    return cap(_day_deviations(conn, date, load_row))
 
 
 def profile(
@@ -243,13 +255,13 @@ def profile(
 
 def pantry(conn: sqlite3.Connection) -> dict[str, Any]:
     """Продукты дома (остаток больше 0): item, qty, unit, updated_at, expires_on, opened."""
-    return _cap(stock(conn))
+    return cap(stock(conn))
 
 
 def recipes(conn: sqlite3.Connection) -> dict[str, Any]:
     """Рецепты (живые): id, name, КБЖУ на 100 г, yield_g, items (состав)."""
     skip = ("created_at", "updated_at", "deleted_at")
-    return _cap([{k: v for k, v in row.items() if k not in skip} for row in list_recipes(conn)])
+    return cap([{k: v for k, v in row.items() if k not in skip} for row in list_recipes(conn)])
 
 
 def sport_nutrition(
@@ -257,7 +269,7 @@ def sport_nutrition(
 ) -> dict[str, Any]:
     """Протоколы спортивного питания (kind=protocol) или добавки (kind=supplement), живые."""
     found = list_protocols(conn) if kind == "protocol" else list_supplements(conn)
-    return _cap([without_service(row) for row in found])
+    return cap([without_service(row) for row in found])
 
 
 def sport_nutrition_for(
@@ -275,8 +287,8 @@ def sport_nutrition_for(
 def supplement_log(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
     """Приёмы добавок за период (включительно): id, item_id, name, date, taken_at, dose (None -
     по норме добавки), unit, note. Только чтение: приём отмечает пользователь."""
-    _period(date_from, date_to)
-    return _cap(list_intake(conn, date_from, date_to), newest=True)
+    period(date_from, date_to)
+    return cap(list_intake(conn, date_from, date_to), newest=True)
 
 
 def _snapshot_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any] | None:
@@ -284,7 +296,7 @@ def _snapshot_nutrition(conn: sqlite3.Connection, day: str) -> dict[str, Any] | 
     found = compact_nutrition(day_nutrition(conn, day))
     if found is None:
         return None
-    result = _cap(found["rows"], SNAPSHOT_NUTRITION_ROWS, SNAPSHOT_CHARS)
+    result = cap(found["rows"], SNAPSHOT_NUTRITION_ROWS, SNAPSHOT_CHARS)
     return result | {"workouts": found["workouts"], "supplements": found["supplements"]}
 
 
@@ -293,13 +305,13 @@ def meds(
     date: str | None = None,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
 ) -> dict[str, Any]:
     """Курсы витаминов и безрецептурных средств: на дату (date) или все живые (без date)."""
-    return _cap(public_meds(conn, _day(date).isoformat() if date else None))
+    return cap(public_meds(conn, _day(date).isoformat() if date else None))
 
 
 def _snapshot_meds(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     """Курсы на день для сводки, компактно (без заметок): {"meds_today": ...}; нет курсов - {}."""
     short = short_meds(conn, day)
-    return {"meds_today": _cap(short, SNAPSHOT_MEDS, SNAPSHOT_CHARS)} if short else {}
+    return {"meds_today": cap(short, SNAPSHOT_MEDS, SNAPSHOT_CHARS)} if short else {}
 
 
 def _today() -> date:
@@ -330,11 +342,11 @@ def load(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """TSS, CTL, ATL по дням start..end; расчёт идёт с запасом назад, чтобы CTL/ATL прогрелись.
     Кроме rows и truncated отдаёт thresholds: {вид: {lthr, source, date}} и warnings — виды
     без порога (их активности считаются с TSS 0)."""
-    _period(start, end)
+    period(start, end)
     rest_hr, thresholds, warnings = _hr_params(conn, end)
     lthr_by_sport = {sport: t["lthr"] for sport, t in thresholds.items()}
     tss = daily_tss(conn, _shift(start, -LOAD_WARMUP_DAYS), end, rest_hr, lthr_by_sport)
-    result = _cap([row for row in load_series(tss) if row["date"] >= start], newest=True)
+    result = cap([row for row in load_series(tss) if row["date"] >= start], newest=True)
     result["thresholds"] = thresholds
     result["warnings"] = warnings
     return result
@@ -370,7 +382,7 @@ def morning_snapshot(
     _day(date)
 
     def part(rows: list[dict[str, Any]], newest: bool = False) -> dict[str, Any]:
-        return _cap(rows, SNAPSHOT_ROWS, SNAPSHOT_CHARS, newest)
+        return cap(rows, SNAPSHOT_ROWS, SNAPSHOT_CHARS, newest)
 
     snapshot: dict[str, Any] = {"date": date}
     load_row: dict[str, Any] | None = None
@@ -393,16 +405,21 @@ def morning_snapshot(
     snapshot["weights"] = part(list_weights(conn, _shift(date, -14), date), True)
     snapshot["food_today"] = part(list_food(conn, date, date), True)
     marks = list_wellbeing(conn, _shift(date, -(WELLBEING_DAYS - 1)), date)
-    snapshot["wellbeing"] = _cap(marks, newest=True)
+    snapshot["wellbeing"] = cap(marks, newest=True)
     snapshot["deviations"] = part(_day_deviations(conn, date, load_row))
+    snapshot["workload"] = part(workload_series(conn, _shift(date, -6), date), True)
+    ahead = workload_series(conn, _shift(date, 1), _shift(date, WORKLOAD_AHEAD_DAYS))
+    snapshot["workload_ahead"] = part(
+        [{k: v for k, v in r.items() if k not in AHEAD_SKIP} for r in ahead]
+    )
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]
-    snapshot["pantry"] = _cap(short, SNAPSHOT_PANTRY, SNAPSHOT_CHARS)
-    snapshot["pantry_expiring"] = _cap(expiring(conn, date), SNAPSHOT_EXPIRING, SNAPSHOT_CHARS)
+    snapshot["pantry"] = cap(short, SNAPSHOT_PANTRY, SNAPSHOT_CHARS)
+    snapshot["pantry_expiring"] = cap(expiring(conn, date), SNAPSHOT_EXPIRING, SNAPSHOT_CHARS)
     names = ("name", "kcal_100", "protein_100", "fat_100", "carbs_100")
     short_recipes = [{k: row[k] for k in names} for row in list_recipes(conn)]
-    snapshot["recipes"] = _cap(short_recipes, SNAPSHOT_RECIPES, SNAPSHOT_CHARS)
+    snapshot["recipes"] = cap(short_recipes, SNAPSHOT_RECIPES, SNAPSHOT_CHARS)
     snapshot["meal_plan_today"] = has_meal_plan(conn, date)
     snapshot["first_run_today"] = sync_runs_on(conn, date) <= 1
     nutrition = _snapshot_nutrition(conn, date)

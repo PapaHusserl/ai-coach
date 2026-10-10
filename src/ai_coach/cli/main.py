@@ -1,5 +1,5 @@
-"""Команды `coach`: sync, import, approve, push, link, status, weight, food, feel, profile, goal,
-pantry, shop, meal, recipe, protocol, supplement, med, log, edit, delete."""
+"""Команды `coach`: sync (Garmin и нагрузка), import, approve, push, link, status, weight, food,
+feel, profile, goal, pantry, shop, meal, recipe, protocol, supplement, med, log, edit, delete."""
 
 from datetime import date, datetime
 from getpass import getpass
@@ -38,6 +38,7 @@ from ai_coach.store.journal import add_wellbeing
 from ai_coach.store.plans import get_planned_workout, list_planned_workouts
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
+from ai_coach.sync import sync_workload as run_workload
 from ai_coach.workouts import describe_workout, workout_link_url
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
@@ -97,19 +98,22 @@ def login() -> None:
 
 @app.command()
 def sync(days: Annotated[int, typer.Option(help="За сколько последних дней")] = 7) -> None:
-    """Загрузить метрики, активности и подходы силовой из Garmin в базу."""
-    try:
-        client = load_client()
-    except GarminError as e:
-        fail(str(e))
-        return
+    """Загрузить метрики, активности и подходы силовой из Garmin и нагрузку (календарь, туду,
+    груминг) в базу. Ошибка Garmin нагрузку не прерывает, код выхода остаётся 1."""
     conn = open_db()
+    failed = False
     try:
-        typer.echo(run_sync(conn, client, days, pause=0.5))
-    except GarminError as e:
-        fail(str(e))
+        try:
+            client = load_client()
+            typer.echo(run_sync(conn, client, days, pause=0.5))
+        except GarminError as e:
+            typer.echo(str(e), err=True)
+            failed = True
+        typer.echo(run_workload(conn, days))
     finally:
         conn.close()
+    if failed:
+        raise typer.Exit(1)
 
 
 @app.command("import")

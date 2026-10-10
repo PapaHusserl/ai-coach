@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+
 from ai_coach.store.sport_nutrition import (
     add_protocol,
     add_supplement,
