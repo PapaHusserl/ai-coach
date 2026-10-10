@@ -2,23 +2,24 @@
 mood/stress - в wellbeing_log, часы - в day_counters (source manual, kind work_hours и т.д.)."""
 
 import sqlite3
-from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fake_clock import freeze
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
 
 runner = CliRunner()
-TODAY = date.today().isoformat()
+TODAY = "2026-10-14"
 
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     db = tmp_path / "coach.db"
     monkeypatch.setenv("AI_COACH_DB", str(db))
+    freeze(monkeypatch, f"{TODAY} 12:00:00")
     monkeypatch.setenv("AI_COACH_GARMIN_DIR", str(tmp_path / "garmin"))
 
     def no_network(*args: Any, **kwargs: Any) -> None:

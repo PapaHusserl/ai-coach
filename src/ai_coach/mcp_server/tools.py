@@ -6,7 +6,7 @@
 
 import json
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -49,6 +49,7 @@ from ai_coach.store.journal import (
     list_wellbeing,
     sync_runs_on,
     update_food,
+    wellbeing_day,
 )
 from ai_coach.store.meds import list_meds
 from ai_coach.store.pantry import has_meal_plan
@@ -320,6 +321,10 @@ def _snapshot_meds(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     return {"meds_today": cap(short, SNAPSHOT_MEDS, SNAPSHOT_CHARS)} if short else {}
 
 
+def _now() -> datetime:
+    return datetime.now()
+
+
 def _today() -> date:
     return date.today()
 
@@ -424,7 +429,8 @@ def morning_snapshot(
         ]
     )
     snapshot["overload"] = overload_report(conn, date, tss)
-    snapshot["evening_done_today"] = evening_done(conn, date)
+    evening_day = wellbeing_day(_now()) if date == _today().isoformat() else date
+    snapshot["evening_done_today"] = evening_done(conn, evening_day)
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]

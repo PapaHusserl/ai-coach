@@ -1,9 +1,12 @@
 """Журналы: weight_log, food_log, wellbeing_log, sync_log."""
 
 import sqlite3
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from ai_coach.store.db import fetch_all, fetch_one, insert
+
+EVENING_CUTOFF = time(4, 0)  # чек-ин раньше этого времени относится к прошедшему вечеру
 
 
 def add_weight(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
@@ -103,6 +106,14 @@ def delete_food(conn: sqlite3.Connection, food_id: int, deleted_at: str) -> bool
     """Пометка удаления. True - удалена; False - записи нет или уже удалена."""
     sql = "UPDATE food_log SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL"
     return conn.execute(sql, (deleted_at, food_id)).rowcount > 0
+
+
+def wellbeing_day(moment: datetime) -> str:
+    """День самочувствия: вчера, если сейчас раньше EVENING_CUTOFF, иначе сегодня."""
+    day = moment.date()
+    if moment.time() < EVENING_CUTOFF:
+        day -= timedelta(days=1)
+    return day.isoformat()
 
 
 def add_wellbeing(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

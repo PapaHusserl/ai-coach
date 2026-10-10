@@ -34,7 +34,7 @@ from ai_coach.plan import (
 )
 from ai_coach.profile import current_profile, set_value
 from ai_coach.store.db import open_db
-from ai_coach.store.journal import add_wellbeing
+from ai_coach.store.journal import add_wellbeing, wellbeing_day
 from ai_coach.store.plans import get_planned_workout, list_planned_workouts
 from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
@@ -260,20 +260,22 @@ def feel(
     text: Annotated[str | None, typer.Argument(help="Пояснение, как есть")] = None,
     mood: Annotated[int | None, typer.Option(help="Настроение от 1 до 5")] = None,
     stress: Annotated[int | None, typer.Option(help="Стресс от 1 до 5")] = None,
-    work: Annotated[str | None, typer.Option(help="Часы работы за сегодня")] = None,
-    hobby: Annotated[str | None, typer.Option(help="Часы хобби за сегодня")] = None,
-    rest: Annotated[str | None, typer.Option(help="Часы отдыха за сегодня")] = None,
+    work: Annotated[str | None, typer.Option(help="Часы работы за день")] = None,
+    hobby: Annotated[str | None, typer.Option(help="Часы хобби за день")] = None,
+    rest: Annotated[str | None, typer.Option(help="Часы отдыха за день")] = None,
 ) -> None:
     """Записать самочувствие (время — сейчас), вечером ещё настроение, стресс и часы за день.
-    Записи самочувствия только добавляются; часы за день перезаписываются."""
+    Записи самочувствия только добавляются; часы за день перезаписываются.
+    До 04:00 запись и часы идут на вчера."""
     for name, value in (("Оценка", score), ("Настроение", mood), ("Стресс", stress)):
         if value is not None and not MIN_SCORE <= value <= MAX_SCORE:
             fail(f"{name}: от {MIN_SCORE} до {MAX_SCORE}.")
     hours = {"work_hours": work, "hobby_hours": hobby, "rest_hours": rest}
     given = {kind: parse_hours(kind, value) for kind, value in hours.items() if value is not None}
     moment = now()
+    day = wellbeing_day(datetime.fromisoformat(moment))
     values = {
-        "date": moment[:10],
+        "date": day,
         "logged_at": moment,
         "score": score,
         "text": text,
@@ -285,7 +287,7 @@ def feel(
         with conn:
             add_wellbeing(conn, values)
             for kind, value in given.items():
-                counter = {"date": moment[:10], "kind": kind, "value": value}
+                counter = {"date": day, "kind": kind, "value": value}
                 upsert_counter(conn, {**counter, "source": "manual", "synced_at": moment})
     finally:
         conn.close()

@@ -1,14 +1,15 @@
 import sqlite3
-from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fake_clock import freeze
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
 
 runner = CliRunner()
+TODAY = "2026-10-14"
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +17,7 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """База — во временной папке; Garmin и сеть недоступны."""
     db = tmp_path / "coach.db"
     monkeypatch.setenv("AI_COACH_DB", str(db))
+    freeze(monkeypatch, f"{TODAY} 12:00:00")
     monkeypatch.setenv("AI_COACH_GARMIN_DIR", str(tmp_path / "garmin"))
 
     def no_network(*args: Any, **kwargs: Any) -> None:
@@ -57,8 +59,8 @@ def test_text_is_saved(isolated: Path) -> None:
 def test_saved_with_todays_date_and_time(isolated: Path) -> None:
     runner.invoke(main.app, ["feel", "3"])
     row = rows(isolated)[0]
-    assert row["date"] == date.today().isoformat()
-    assert row["logged_at"].startswith(date.today().isoformat())
+    assert row["date"] == TODAY
+    assert row["logged_at"].startswith(TODAY)
 
 
 def test_two_scores_in_a_day_are_two_rows(isolated: Path) -> None:
