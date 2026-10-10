@@ -12,7 +12,7 @@
 - `calendar_events(id, source DEFAULT 'apple_calendar', uid, date, start_at, end_at, all_day, calendar, category CHECK IN (work, personal, hobby, rest, unknown), title, status, my_status, synced_at, raw_json)`, `UNIQUE (source, uid, start_at)`, индекс `(date)`. Время местное, `date` — день начала. В `raw_json` нет участников и адресов.
 - `day_counters(date, kind, value REAL, source, synced_at, raw_json, PK (date, kind))` — расширяемый журнал признаков: новый признак = новый `kind` без миграции (белый список kind — в Python). Стартовые: `todo_open`, `todo_closed`, `grooming_done`, `grooming_pending`; v2.2 — ручные `work_hours`, `hobby_hours`, `rest_hours` (source `manual`).
 - Метрики календаря (часы встреч, вечера, выходные) не материализуются — считаются на чтении из `calendar_events`.
-- Календарь — замена окна `[today−days, today+AHEAD_DAYS=14]` (удалить и вставить заново); история вне окна остаётся.
+- Календарь — замена окна `[today−days, today+AHEAD_DAYS=14]` (upsert и удаление исчезнувших, неизменённые строки не перезаписываются — повторный sync не меняет базу; Влад 2026-10-10 по аудиту v2.1); история вне окна остаётся.
 - `todo_closed`, `grooming_done` — upsert за каждый день окна; `todo_open`, `grooming_pending` — снимок за `today` (последний sync дня побеждает).
 
 **Конфиг вне репо:** `~/.config/ai-coach/workload.toml` (`tomllib`; переопределяется `$AI_COACH_WORKLOAD_CONFIG`): `[calendar] work/personal/hobby/rest/ignore = [названия календарей]`, `[paths] todo, hb_watch`. Неразмеченный календарь → `unknown` (хранится, в нагрузку не входит, замечание в итоге sync). Нет конфига → календарь пропускается, туду/груминг по умолчаниям.
