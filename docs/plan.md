@@ -426,3 +426,9 @@
 Тесты (TDD): tests/test_mcp_snapshot.py — набор ключей + first_run_today; пустой sync_log → True; одна строка sync за день → True; две → False; вчера + сегодня по одной → True; error + ok за день → False; import + sync → True; оба формата started_at; first_run_today остаётся при урезании по MAX_CHARS. tests/test_skills_text.py — first_run_today в 8а, в 8а нет meal_plan_today (в 4а есть), «first_run_today (» в server.py, лимит 15360 Б.
 
 Риск (принят): ручной `coach sync` до запуска тренера — в этот день вопрос не прозвучит.
+
+---
+
+## Версия 2: веллбиинг-коуч
+
+Шаги v2.0–v2.5 — в [plan-v2.md](plan-v2.md), ТЗ — [v2-wellbeing-plan.md](v2-wellbeing-plan.md).
