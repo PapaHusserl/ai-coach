@@ -106,7 +106,8 @@ def delete_food(conn: sqlite3.Connection, food_id: int, deleted_at: str) -> bool
 
 
 def add_wellbeing(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
-    """values: date, logged_at, score (1-5), text (может быть пуст). Только добавление."""
+    """values: date, logged_at, score (1-5), text (может быть пуст); необязательно mood и stress
+    (1-5, вечерний чек-ин). Только добавление."""
     return insert(conn, "wellbeing_log", values)
 
 
@@ -114,6 +115,16 @@ def list_wellbeing(conn: sqlite3.Connection, start: str, end: str) -> list[dict[
     """Записи с датой date start..end включительно, по времени (последняя за день — основная)."""
     sql = "SELECT * FROM wellbeing_log WHERE date BETWEEN ? AND ? ORDER BY logged_at, id"
     return fetch_all(conn, sql, (start, end))
+
+
+def evening_done(conn: sqlite3.Connection, day: str) -> bool:
+    """Вечерний чек-ин за день сделан: есть запись самочувствия с настроением или стрессом."""
+    sql = (
+        "SELECT COUNT(*) AS n FROM wellbeing_log "
+        "WHERE date = ? AND (mood IS NOT NULL OR stress IS NOT NULL)"
+    )
+    row = fetch_one(conn, sql, (day,))
+    return bool(row and row["n"])
 
 
 def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

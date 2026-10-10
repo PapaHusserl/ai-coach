@@ -34,6 +34,7 @@
       "Bash(cat .claude/agents/coach-onboarding.md)",
       "Bash(cat .claude/agents/coach-nutrition.md)",
       "Bash(cat .claude/agents/coach-wellbeing.md)",
+      "Bash(cat .claude/skills/coach-evening/SKILL.md)",
       "Bash(cat .claude/skills/coach-food/SKILL.md)",
       "Bash(cat .claude/skills/coach-meal/SKILL.md)",
       "Bash(cat .claude/skills/coach-plan/SKILL.md)",

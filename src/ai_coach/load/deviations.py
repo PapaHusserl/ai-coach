@@ -3,10 +3,24 @@
 from typing import Any
 
 WELLBEING_MAX = 2
+MOOD_MAX = 2
+STRESS_MIN = 4
 READINESS_MIN = 33
 BAD_HRV_STATUSES = ("LOW", "UNBALANCED")
 ATL_OVER_CTL_MAX = 15
 SLEEP_MIN_HOURS = 6
+
+
+def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Основная запись дня (последняя); mood и stress - последние непустые за день, чтобы вечерняя
+    оценка не терялась от более поздней записи без неё. Записей нет - None."""
+    if not marks:
+        return None
+    main = dict(marks[-1])
+    for key in ("mood", "stress"):
+        given = [m[key] for m in marks if m[key] is not None]
+        main[key] = given[-1] if given else None
+    return main
 
 
 def find_deviations(
@@ -19,6 +33,10 @@ def find_deviations(
     found: list[dict[str, Any]] = []
     if wellbeing and wellbeing["score"] <= WELLBEING_MAX:
         found.append({"kind": "wellbeing", "value": wellbeing["score"], "limit": WELLBEING_MAX})
+    if wellbeing and wellbeing.get("mood") is not None and wellbeing["mood"] <= MOOD_MAX:
+        found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
+    if wellbeing and wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
+        found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
     if metrics:
         readiness = metrics["readiness_score"]
         if readiness is not None and readiness < READINESS_MIN:

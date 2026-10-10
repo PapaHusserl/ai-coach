@@ -53,6 +53,7 @@ EXPECTED_TOOLS = {
     "get_supplement_log",
     "get_workout_link",
     "get_workload",
+    "get_overload",
 }
 
 

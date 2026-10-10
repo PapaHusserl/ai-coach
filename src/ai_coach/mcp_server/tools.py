@@ -17,8 +17,11 @@ from ai_coach.load import (
     daily_tss,
     find_deviations,
     load_series,
+    main_wellbeing,
+    overload_report,
     resolve_thresholds,
 )
+from ai_coach.load.overload import overloaded
 from ai_coach.meds import public_meds, short_meds
 from ai_coach.pantry import expiring, stock
 from ai_coach.profile import (
@@ -38,6 +41,7 @@ from ai_coach.store.garmin_data import (
 )
 from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
+    evening_done,
     last_sync_log,
     list_food,
     list_food_pending,
@@ -88,6 +92,8 @@ NOT_LISTS = (
     "profile",
     "meal_plan_today",
     "first_run_today",
+    "evening_done_today",
+    "overload",
     "catalog",
 )
 DATE_SERIES = (
@@ -211,7 +217,7 @@ def _day_deviations(
 ) -> list[dict[str, Any]]:
     marks = list_wellbeing(conn, day, day)
     metrics = list_daily_metrics(conn, day, day)
-    return find_deviations(marks[-1] if marks else None, metrics[0] if metrics else None, load_row)
+    return find_deviations(main_wellbeing(marks), metrics[0] if metrics else None, load_row)
 
 
 def deviations(
@@ -386,10 +392,12 @@ def morning_snapshot(
 
     snapshot: dict[str, Any] = {"date": date}
     load_row: dict[str, Any] | None = None
+    tss: dict[str, float] = {}
     try:
         loaded = load(conn, _shift(date, -6), date)
         snapshot["load"] = part(loaded["rows"], True)
         load_row = loaded["rows"][-1] if loaded["rows"] else None
+        tss = {r["date"]: r["tss"] for r in loaded["rows"]}
         snapshot["thresholds"] = loaded["thresholds"]
         snapshot["warnings"] = loaded["warnings"]
     except ToolError as e:
@@ -410,8 +418,13 @@ def morning_snapshot(
     snapshot["workload"] = part(workload_series(conn, _shift(date, -6), date), True)
     ahead = workload_series(conn, _shift(date, 1), _shift(date, WORKLOAD_AHEAD_DAYS))
     snapshot["workload_ahead"] = part(
-        [{k: v for k, v in r.items() if k not in AHEAD_SKIP} for r in ahead]
+        [
+            {**{k: v for k, v in r.items() if k not in AHEAD_SKIP}, "overloaded": overloaded(r)}
+            for r in ahead
+        ]
     )
+    snapshot["overload"] = overload_report(conn, date, tss)
+    snapshot["evening_done_today"] = evening_done(conn, date)
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]

@@ -12,6 +12,9 @@ COUNTER_KINDS = (
     "todo_closed",
     "grooming_done",
     "grooming_pending",
+    "work_hours",
+    "hobby_hours",
+    "rest_hours",
 )
 
 

@@ -36,6 +36,7 @@ from ai_coach.profile import current_profile, set_value
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import add_wellbeing
 from ai_coach.store.plans import get_planned_workout, list_planned_workouts
+from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
 from ai_coach.sync import sync_workload as run_workload
@@ -65,6 +66,7 @@ app.command()(shop)
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
 MIN_SCORE = 1
 MAX_SCORE = 5
+MAX_HOURS = 24
 
 
 def fail(message: str) -> None:
@@ -241,20 +243,50 @@ def status(
         )
 
 
+def parse_hours(kind: str, text: str) -> float:
+    """Часы дня из текста (запятая как точка), от 0 до MAX_HOURS; иначе ошибка и выход."""
+    try:
+        value = float(text.replace(",", "."))
+    except ValueError:
+        value = -1
+    if not 0 <= value <= MAX_HOURS:
+        fail(f"Часы ({kind}) должны быть числом от 0 до {MAX_HOURS}.")
+    return value
+
+
 @app.command()
 def feel(
     score: Annotated[int, typer.Argument(help="Самочувствие от 1 до 5")],
     text: Annotated[str | None, typer.Argument(help="Пояснение, как есть")] = None,
+    mood: Annotated[int | None, typer.Option(help="Настроение от 1 до 5")] = None,
+    stress: Annotated[int | None, typer.Option(help="Стресс от 1 до 5")] = None,
+    work: Annotated[str | None, typer.Option(help="Часы работы за сегодня")] = None,
+    hobby: Annotated[str | None, typer.Option(help="Часы хобби за сегодня")] = None,
+    rest: Annotated[str | None, typer.Option(help="Часы отдыха за сегодня")] = None,
 ) -> None:
-    """Записать самочувствие (время — сейчас). Записи только добавляются."""
-    if not MIN_SCORE <= score <= MAX_SCORE:
-        fail(f"Оценка должна быть от {MIN_SCORE} до {MAX_SCORE}.")
+    """Записать самочувствие (время — сейчас), вечером ещё настроение, стресс и часы за день.
+    Записи самочувствия только добавляются; часы за день перезаписываются."""
+    for name, value in (("Оценка", score), ("Настроение", mood), ("Стресс", stress)):
+        if value is not None and not MIN_SCORE <= value <= MAX_SCORE:
+            fail(f"{name}: от {MIN_SCORE} до {MAX_SCORE}.")
+    hours = {"work_hours": work, "hobby_hours": hobby, "rest_hours": rest}
+    given = {kind: parse_hours(kind, value) for kind, value in hours.items() if value is not None}
     moment = now()
-    values = {"date": moment[:10], "logged_at": moment, "score": score, "text": text}
+    values = {
+        "date": moment[:10],
+        "logged_at": moment,
+        "score": score,
+        "text": text,
+        "mood": mood,
+        "stress": stress,
+    }
     conn = open_db()
     try:
         with conn:
             add_wellbeing(conn, values)
+            for kind, value in given.items():
+                counter = {"date": moment[:10], "kind": kind, "value": value}
+                upsert_counter(conn, {**counter, "source": "manual", "synced_at": moment})
     finally:
         conn.close()
     typer.echo(f"Самочувствие {score} записано.")

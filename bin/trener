@@ -1,4 +1,8 @@
 #!/bin/sh
 # Запуск тренера: claude --agent coach в папке проекта. Работает и через symlink.
+# `тренер вечер` - вечерний чек-ин вместо утренней сводки.
 cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+if [ "$1" = "вечер" ]; then
+    exec claude --agent coach "Начни сессию: sync и вечерний чек-ин (вечер)."
+fi
 exec claude --agent coach "Начни сессию: sync и сводка."

@@ -8,6 +8,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from ai_coach.mcp_server import links, tools, workload
+from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
 
@@ -36,7 +37,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "first_run_today (первый запуск тренера за день: синхронизаций за дату не больше одной), "
         "самочувствие за 30 дней (все записи, до 60), отклонения, "
         "workload (нагрузка вне тренировок за 7 дней: часы встреч, вечера, туду, груминг), "
-        "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков), "
+        "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков; overloaded - "
+        "день перегружен только по календарю, без тренировок: нет флага - не гарантия), "
+        "overload (как get_overload), evening_done_today (чек-ин сделан), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "meds_today (курсы на сегодня; "
@@ -59,6 +62,16 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(снимок на дату последнего sync), todo_closed (закрыто за день), grooming_done, "
         "grooming_pending (null - не считались). events=true - только на один день "
         "(date_from = date_to): ещё и events с названиями. Пишет coach sync.",
+    ),
+    "get_overload": (
+        overload_tool.overload,
+        "Общая нагрузка и сигналы перегруза (date - YYYY-MM-DD): total - нагрузка дня одним "
+        "числом (тренировки + работа + хобби + вечер/выходные + туду и груминг), days - 7 дней "
+        "до date (date, total, ручные часы manual_work/hobby/rest_hours, null - не вводились), "
+        "signals - total_streak, evening_streak, weekend_work, recovery_drop, todo_growth "
+        "(kind, value, limit; у recovery_drop value и limit - объекты по readiness/mood/stress); "
+        "пустой список - перегруза нет. Нет нагрузки тренировок - "
+        "TSS считается нулём, причина в load_error. Ручные часы пишет coach feel.",
     ),
     "get_goals": (tools.goals_list, "Цели; status: active / done / cancelled, без него — все."),
     "get_goals_on": (tools.goals_on, "Какие цели были на конец дня."),
@@ -85,7 +98,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_food": (tools.food, "Записи еды (текст и КБЖУ, если посчитаны)."),
     "get_wellbeing": (
         tools.wellbeing,
-        "Самочувствие (оценка 1-5, текст) по времени; основная оценка дня - последняя запись. "
+        "Самочувствие (оценка 1-5, текст, mood и stress 1-5 из вечернего чек-ина - null, если не "
+        "спрашивали) по времени; основная оценка дня - последняя запись. "
         "Пишет пользователь командой coach feel.",
     ),
     "get_deviations": (
