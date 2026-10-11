@@ -57,6 +57,7 @@ EXPECTED_TOOLS = {
     "get_practices",
     "get_habits",
     "get_habit_log",
+    "get_weekly_review",
 }
 
 

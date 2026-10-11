@@ -86,4 +86,6 @@
 
 MCP `get_weekly_review(weeks=4)` (по неделям: TSS, часы работы/вечера/выходные, туду, mood/stress/сон/readiness и дельты; выводы — агент); `review_log` + `coach review done`, флаг `week_review_due`; `coach.md` — ядро + файлы (`coach-wellbeing.md`, `coach-nutrition.md`, `coach-week.md`), тесты ≤ 15360 и «каждый файл в allow»; README/architecture финал. Готово: Влад прогнал обзор недели.
 
+**Решения v2.5 (Влад, 2026-10-11):** неделя — ISO Пн–Вс, текущая неделя неполная (`partial`); `week_review_due` — в Вс и Пн, пока нет записи `review_log` за эту неделю (Вс — текущая, Пн — прошедшая); вынос из `coach.md` — как в плане: ядро + `coach-wellbeing.md`, `coach-nutrition.md` (есть, дополнить) и новый `coach-week.md`, блоки переносятся без смены смысла. По ревью: поля `total` и `days_with_data` сверх плана — оставить; повтор `review done` без заметки старую не затирает; нет пульса покоя → `tss` недели `None`.
+
 **Общие риски:** отдельный `kind='workload'` в sync_log; приватность (названия только в базе и `events=true`); TCC привязан к терминалу; рост snapshot — проверять `MAX_CHARS`; лимиты Max 5 при 5 циклах подряд; mutmut — фоном вне агента.

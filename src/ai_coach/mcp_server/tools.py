@@ -31,6 +31,7 @@ from ai_coach.profile import (
     remaining,
     resting_hr,
 )
+from ai_coach.review import review_due
 from ai_coach.sport_nutrition import compact_nutrition, day_nutrition, without_service
 from ai_coach.store.db import fetch_one
 from ai_coach.store.garmin_data import (
@@ -96,6 +97,7 @@ NOT_LISTS = (
     "meal_plan_today",
     "first_run_today",
     "evening_done_today",
+    "week_review_due",
     "overload",
     "catalog",
 )
@@ -440,6 +442,7 @@ def morning_snapshot(
     snapshot["overload"] = overload_report(conn, date, tss)
     evening_day = wellbeing_day(_now()) if date == _today().isoformat() else date
     snapshot["evening_done_today"] = evening_done(conn, evening_day)
+    snapshot["week_review_due"] = review_due(conn, evening_day)
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]

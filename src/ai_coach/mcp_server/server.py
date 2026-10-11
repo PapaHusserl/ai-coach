@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import habits, links, tools, workload
+from ai_coach.mcp_server import habits, links, review, tools, workload
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
@@ -23,7 +23,10 @@ INSTRUCTIONS = (
     "покажи её пользователю как есть. "
     "Нагрузка вне тренировок (get_workload): календарь, туду и груминг берутся из базы, "
     "их кладёт coach sync; к календарю MCP не ходит; названия событий — только "
-    "get_workload(events=true) на один день."
+    "get_workload(events=true) на один день. "
+    "Недельный обзор (get_weekly_review): цифры по неделям Пн-Вс и дельты, без выводов; "
+    "в сводке week_review_due - пора проводить обзор, его отмечает пользователь командой "
+    "coach review done."
 )
 
 # имя инструмента -> (функция из tools.py, описание для Claude)
@@ -148,6 +151,14 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "logged_at. "
         "Нет строки за день - не спрашивали. Отмечает пользователь командами coach habit "
         "done / undo.",
+    ),
+    "get_weekly_review": (
+        review.weekly,
+        "Недельный обзор: последние weeks ISO-недель (Пн-Вс, от 1 до 12, по умолчанию 4), от "
+        "старой к новой, последняя - текущая неполная (partial). По неделе: tss, total (общая "
+        "нагрузка), work_hours, evening_hours, weekend_work_hours, todo_closed, todo_open, mood, "
+        "stress, sleep, readiness (средние, null - данных нет), days_with_data, delta - разница "
+        "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
     ),
     "get_sport_nutrition": (
         tools.sport_nutrition,

@@ -47,7 +47,7 @@ METRICS_DAYS = RECOVERY_RECENT_DAYS + RECOVERY_BASELINE_DAYS
 MANUAL_HOURS = ("work_hours", "hobby_hours", "rest_hours")
 
 
-def _hours(day: dict[str, Any], key: str) -> float:
+def hours(day: dict[str, Any], key: str) -> float:
     """Часы дня: ручные (manual_<key>) главнее календарных (<key>); нет данных - 0."""
     manual = day.get(f"manual_{key}")
     return manual if manual is not None else (day.get(key) or 0)
@@ -57,11 +57,11 @@ def total_load(day: dict[str, Any]) -> float:
     """Общая нагрузка дня одним числом. Ключи дня (нет или None - 0): tss, work_hours,
     hobby_hours, work_evening_hours, weekend, todo_closed, grooming_done и ручные
     manual_work_hours, manual_hobby_hours (заданные заменяют календарные, 0 тоже)."""
-    work = _hours(day, "work_hours")
+    work = hours(day, "work_hours")
     total = (
         W_TSS * (day.get("tss") or 0)
         + W_WORK * work
-        + W_HOBBY * _hours(day, "hobby_hours")
+        + W_HOBBY * hours(day, "hobby_hours")
         + W_EVENING * (day.get("work_evening_hours") or 0)
         + W_TODO * (day.get("todo_closed") or 0)
         + W_GROOMING * (day.get("grooming_done") or 0)
@@ -127,7 +127,7 @@ def find_overload(
     evening = _streak([(d.get("work_evening_hours") or 0) > 0 for d in days])
     if evening >= EVENING_STREAK_DAYS:
         found.append({"kind": "evening_streak", "value": evening, "limit": EVENING_STREAK_DAYS})
-    weekend = round(sum(_hours(d, "work_hours") for d in days if d.get("weekend")), 2)
+    weekend = round(sum(hours(d, "work_hours") for d in days if d.get("weekend")), 2)
     if weekend >= WEEKEND_WORK_MIN:
         found.append({"kind": "weekend_work", "value": weekend, "limit": WEEKEND_WORK_MIN})
     drop = _recovery_drop(metrics, date.fromisoformat(days[-1]["date"]))
@@ -141,23 +141,32 @@ def find_overload(
     return found
 
 
+def day_entries(
+    conn: sqlite3.Connection, first: str, last: str, tss: dict[str, float]
+) -> list[dict[str, Any]]:
+    """Дни first..last включительно: workload_series, tss (нет дня - 0), ручные часы
+    manual_work/hobby/rest_hours (None - не вводились) и total (total_load)."""
+    manual: dict[tuple[str, str], float] = {}
+    for kind in MANUAL_HOURS:
+        for counter in list_counters(conn, first, last, kind):
+            manual[(counter["date"], kind)] = counter["value"]
+    days: list[dict[str, Any]] = []
+    for row in workload_series(conn, first, last):
+        entry = {**row, "tss": tss.get(row["date"], 0)}
+        for kind in MANUAL_HOURS:
+            entry[f"manual_{kind}"] = manual.get((row["date"], kind))
+        entry["total"] = total_load(entry)
+        days.append(entry)
+    return days
+
+
 def overload_report(conn: sqlite3.Connection, day: str, tss: dict[str, float]) -> dict[str, Any]:
     """Нагрузка за OVERLOAD_DAYS дней до day включительно и сигналы перегруза. tss - TSS
     тренировок по дням (нет дня - 0). Ответ: date, total (нагрузка day), days (date, total и
     ручные часы manual_work/hobby/rest_hours, None - не вводились), signals (find_overload)."""
     last = date.fromisoformat(day)
     first = (last - timedelta(days=OVERLOAD_DAYS - 1)).isoformat()
-    manual: dict[tuple[str, str], float] = {}
-    for kind in MANUAL_HOURS:
-        for counter in list_counters(conn, first, day, kind):
-            manual[(counter["date"], kind)] = counter["value"]
-    days: list[dict[str, Any]] = []
-    for row in workload_series(conn, first, day):
-        entry = {**row, "tss": tss.get(row["date"], 0)}
-        for kind in MANUAL_HOURS:
-            entry[f"manual_{kind}"] = manual.get((row["date"], kind))
-        entry["total"] = total_load(entry)
-        days.append(entry)
+    days = day_entries(conn, first, day, tss)
     start = (last - timedelta(days=METRICS_DAYS - 1)).isoformat()
     moods: dict[str, dict[str, Any]] = {}
     for mark in list_wellbeing(conn, start, day):

@@ -12,6 +12,7 @@ LIMITS = {
     "coach-wellbeing.md": 6144,
     "coach-nutrition.md": 6144,
     "coach-onboarding.md": 6144,
+    "coach-week.md": 6144,
 }
 
 
