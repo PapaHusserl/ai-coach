@@ -56,13 +56,15 @@ def _moment(value: Any, name: str) -> datetime:
 
 
 def _category(kind: str, given: str | None) -> str | None:
-    """Категория для нагрузки: у отдыха и сна по умолчанию rest; у задачи - как задана (нет -
-    None, в нагрузку не входит); у тренировки, практики и чек-ина нет."""
+    """Категория для нагрузки: у отдыха и сна по умолчанию rest; у задачи обязательна;
+    у тренировки, практики и чек-ина нет."""
     if given is not None and given not in CATEGORIES:
         raise AgendaError(f"category должна быть из {list(CATEGORIES)}, получено: {given!r}")
     if kind in REST_KINDS:
         return given or "rest"
     if kind == "task":
+        if given is None:
+            raise AgendaError("У задачи нужна категория: work, hobby или personal.")
         return given
     if given is not None:
         raise AgendaError(f"category только у task, rest и sleep, а kind={kind}.")

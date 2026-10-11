@@ -251,7 +251,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "checkin / task; title - название; start_at, end_at - местное время YYYY-MM-DDTHH:MM "
         "(день начала от 30 дней назад до 14 вперёд, не длиннее 24 часов). category "
         "(work / personal / hobby / rest) - как событие считается в нагрузке: у rest и sleep по "
-        "умолчанию rest, у task задавай явно, у training / practice / checkin не задаётся. "
+        "умолчанию rest, у task обязательна, у training / practice / checkin не задаётся. "
         "alarm_min - за сколько минут напомнить; repeat=daily - только у checkin, один на всех; "
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
         "all_day - на весь день. Ответ: draft_id. В календарь кладёт пользователь командой "

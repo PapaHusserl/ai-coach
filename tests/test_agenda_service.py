@@ -126,8 +126,9 @@ def test_rest_and_sleep_default_to_rest_category(conn: sqlite3.Connection, kind:
     assert check(conn, kind=kind, category=None)["category"] == "rest"
 
 
-def test_task_without_category_stays_none(conn: sqlite3.Connection) -> None:
-    assert check(conn, category=None)["category"] is None
+def test_task_without_category_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, category=None)
 
 
 def test_task_keeps_given_category(conn: sqlite3.Connection) -> None:

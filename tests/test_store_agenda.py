@@ -7,7 +7,6 @@ from ai_coach.store.agenda import (
     category_by_uid,
     find_by_uid,
     get_event,
-    list_by_status,
     list_events,
     update_event,
 )
@@ -53,16 +52,6 @@ def test_list_events_filters_by_statuses(conn: sqlite3.Connection) -> None:
         add_event(conn, coach_event(status=status))
     found = list_events(conn, "2026-10-10", "2026-10-10", ("draft", "written"))
     assert sorted(e["status"] for e in found) == ["draft", "written"]
-
-
-def test_list_by_status(conn: sqlite3.Connection) -> None:
-    add_event(conn, coach_event(status="draft"))
-    written = add_event(conn, coach_event(status="written"))
-    assert [e["id"] for e in list_by_status(conn, "written")] == [written]
-
-
-def test_list_by_status_empty(conn: sqlite3.Connection) -> None:
-    assert list_by_status(conn, "removed") == []
 
 
 def test_category_by_uid(conn: sqlite3.Connection) -> None:

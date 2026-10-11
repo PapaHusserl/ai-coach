@@ -38,12 +38,6 @@ def list_events(
     return fetch_all(conn, sql + " ORDER BY start_at, id", args)
 
 
-def list_by_status(conn: sqlite3.Connection, status: str) -> list[dict[str, Any]]:
-    """События в этом статусе, по дате начала и id."""
-    sql = "SELECT * FROM coach_events WHERE status = ? ORDER BY date, id"
-    return fetch_all(conn, sql, (status,))
-
-
 def category_by_uid(conn: sqlite3.Connection, calendar_uid: str) -> str | None:
     """Категория события с этим calendar_uid; нет события или категории - None."""
     found = find_by_uid(conn, calendar_uid)

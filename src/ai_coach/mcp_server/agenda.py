@@ -29,7 +29,7 @@ def create_draft_event(
     """Черновик события календаря (status=draft). kind: training / practice / rest / sleep /
     checkin / task; start_at, end_at - местное время YYYY-MM-DDTHH:MM; день начала от 30 дней
     назад до 14 вперёд; не длиннее 24 часов. category (work / personal / hobby / rest) - для
-    нагрузки, у rest и sleep по умолчанию rest, у task задаётся явно, у остальных не задаётся.
+    нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у остальных не задаётся.
     alarm_min - за сколько минут напомнить. repeat=daily - только у checkin и один на всех."""
     values = {
         "kind": kind,

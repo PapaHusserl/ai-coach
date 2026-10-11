@@ -10,7 +10,7 @@ from mcp_fakes import call, call_text
 from workload_fakes import coach_event
 
 from ai_coach.mcp_server.tools import MAX_CHARS
-from ai_coach.store.agenda import add_event, get_event, list_by_status
+from ai_coach.store.agenda import add_event, get_event
 
 TODAY = date.today()
 TOMORROW = (TODAY + timedelta(days=1)).isoformat()
@@ -40,9 +40,14 @@ def test_create_draft_event_returns_id_and_stores_draft(conn: sqlite3.Connection
     assert row["calendar_uid"] is None
 
 
+def count(conn: sqlite3.Connection, status: str) -> int:
+    sql = "SELECT COUNT(*) FROM coach_events WHERE status = ?"
+    return conn.execute(sql, (status,)).fetchone()[0]
+
+
 def test_create_never_writes_to_calendar(conn: sqlite3.Connection) -> None:
     create(conn)
-    assert list_by_status(conn, "written") == []
+    assert count(conn, "written") == 0
 
 
 @pytest.mark.parametrize(
@@ -60,7 +65,7 @@ def test_create_never_writes_to_calendar(conn: sqlite3.Connection) -> None:
 def test_invalid_draft_is_rejected(conn: sqlite3.Connection, bad: dict[str, Any]) -> None:
     with pytest.raises(ToolError):
         create(conn, **bad)
-    assert list_by_status(conn, "draft") == []
+    assert count(conn, "draft") == 0
 
 
 def test_draft_too_far_ahead_is_rejected(conn: sqlite3.Connection) -> None:
