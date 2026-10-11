@@ -88,4 +88,30 @@ MCP `get_weekly_review(weeks=4)` (по неделям: TSS, часы работ�
 
 **Решения v2.5 (Влад, 2026-10-11):** неделя — ISO Пн–Вс, текущая неделя неполная (`partial`); `week_review_due` — в Вс и Пн, пока нет записи `review_log` за эту неделю (Вс — текущая, Пн — прошедшая); вынос из `coach.md` — как в плане: ядро + `coach-wellbeing.md`, `coach-nutrition.md` (есть, дополнить) и новый `coach-week.md`, блоки переносятся без смены смысла. По ревью и аудиту (подтверждено Владом): поля `total` и `days_with_data` сверх плана — оставить; повтор `review done` без заметки старую не затирает; `--week` не понедельник → ошибка; `review done` запускает тренер сам в конце обзора (в allow); `weeks` 1–12; «Красные флаги» — только в ядре `coach.md` (дубль из `coach-nutrition.md` убран); нет пульса покоя → `tss` недели `None`.
 
+## Шаг v2.6. Запись тренера в Apple Calendar
+
+Из бэклога (Влад, 2026-10-11). План — папа-кабан, оценка — кабан-тесть («по бабкам ок»: разработка $0 сверх Max, эксплуатация +$1–1.5/мес). Схема как у тренировок: MCP пишет только черновик, в календарь пишет CLI после «да» Влада.
+
+**Решения Влада (2026-10-11, все по рекомендации):** (1) отдельный календарь коуча в iCloud, название — `workload.toml [coach] calendar`, чужие календари недостижимы; (2) двойное подтверждение — «да» в чате + `coach event write/remove` не в allow (`event list/cancel` — в allow); (3) правка = `remove` + новый черновик, `move` — в закрома при частых переносах; (4) нагрузка по категории события из `coach_events.category` по uid: тренировки/практики/чек-ин — не считаются, отдых/сон — `rest`, «буду …» — work/hobby/personal; события, добавленные в календарь коуча руками, пропускаются; (5) доступ — запись из CLI в том же терминале, Swift-хелпер — только если спайк не пройдёт; (6) «буду …» — тренер всегда предлагает черновик `task` (уточняет время и категорию); постфактум — черновик с прошлой датой до 30 дней + напомнить часы в `coach feel`; вопрос на вечернем чек-ине — не добавлять; (7) одно ежедневное напоминание о чек-ине (`checkin`, `repeat=daily`), черновиком по «да»; (8) слот тренировки — после approve/push, связь `workout_id`, отмена тренировки → предложить снять слот. Окно `agenda` в snapshot — −1..+7 (удешевление кабана-тестя не берём).
+
+**Задачи:**
+0. Мини-спайк записи (Влад в своём терминале) `spikes/workload/calendar_write.py`: найти календарь, создать событие с будильником, прочитать по `eventIdentifier`, удалить; повторяющееся — создать/удалить с будущими. Зафиксировать: новый промпт TCC, стабильность `eventIdentifier` после iCloud-синка, задержку на iPhone. Отчёт — дополнение в `spike-workload-2026-10-10.md` без названий. Без спайка код не пишется.
+1. Миграция 0019 `coach_events`: `kind` (training/practice/rest/sleep/checkin/task), title, date, start_at/end_at, all_day, note, `category` (work/personal/hobby/rest или NULL), alarm_min, `repeat` (daily, только checkin), `workout_id`, `practice_id`, `status` draft/written/cancelled/removed, `calendar_uid`, created/written/removed_at, `removed_by` cli/calendar.
+2. `store/agenda.py` — CRUD, `list_events`, `category_by_uid`, `find_by_uid`.
+3. `agenda/service.py` — `validate_draft` (kind, start < end, ≤ 24 ч, −30..+14 дней, repeat только у checkin и один активный, workout/practice живы, категория по умолчанию), переходы write/remove/cancel; порядок EventKit → база, при сбое базы uid в сообщении.
+4. `agenda/calendar_write.py` — `CalendarWriter` (write → uid, remove с проверкой «событие в календаре коуча»), ленивый EventKit, общие `_request_access`/`_ns_date`; MCP его не импортирует.
+5. `workload/config.py` — `[coach] calendar`, конфликт с другими секциями → ошибка, категория `coach`.
+6. `sync/workload_sync.py` — свои события по uid с категорией из `coach_events`, чужие в календаре коуча — пропуск со счётчиком в итоге, пропавшие свои `written` → `removed_by='calendar'`; одна транзакция.
+7. MCP `mcp_server/agenda.py`: `create_draft_event`, `cancel_draft_event`, `get_agenda` (≤ 92 дня); snapshot `agenda` (−1..+7, draft/written); `INSTRUCTIONS`.
+8. CLI `coach event list/write/remove/cancel` (`write` по нескольким id, коммит после каждого).
+9. Роль: `.claude/agents/coach-agenda.md` ≤ 6144 Б (в allow), триггер в `coach.md`, ссылки из `coach-wellbeing.md` и `coach-week.md`; `coach-evening` не трогать.
+10. `test_mcp_no_push.py` — новые инструменты, запрет импорта писателя, EventKit не грузится с сервером.
+11. Документы: architecture (раздел v2.6), README (календарь коуча, `[coach]`, команды), pipeline, handoff, строку из backlog снять.
+
+**Тесты (TDD):** миграция 0019 (CHECK, индексы); store; `validate_draft` на границах; переходы (write только из draft, повторный write не создаёт второе событие); `FakeCalendarWriter` (ошибка календаря → база не меняется; ошибка базы → uid в сообщении); CLI (`write 1 2 3` с плохим 2, remove чужого uid, нет `[coach]` → ошибка до EventKit); MCP (статусы, > 92 дней, snapshot ≤ `MAX_CHARS` при 20 событиях, состав инструментов); sync (work-событие → `work_hours`/`weekend_work`, NULL-категория не хранится, чужой uid пропущен, удалённое руками → removed, идемпотентность, ошибка календаря не помечает removed); config; тексты и лимиты; todo/hb-watch не меняются.
+
+**Риски:** форма возврата pyobjc при сохранении/удалении и стабильность `eventIdentifier` в iCloud — только спайк; повторяющийся чек-ин (один uid на все вхождения); лимиты текстов (`coach-wellbeing.md` запас 104 Б, `coach-evening` 6 Б); TCC привязан к терминалу; приватность — названия только в базе; рост snapshot.
+
+**Ручная проверка:** календарь коуча в Calendar.app + `[coach]`; спайк; слот тренировки после утверждения виден в Calendar.app и на iPhone; «в сб буду работать 10–12» → write → sync → `weekend_work` в сводке; постфактум; `event remove`; удалить своё руками → после sync `removed`; напоминание о чек-ине пришло; повторный sync ничего не меняет; чужие календари целы.
+
 **Общие риски:** отдельный `kind='workload'` в sync_log; приватность (названия только в базе и `events=true`); TCC привязан к терминалу; рост snapshot — проверять `MAX_CHARS`; лимиты Max 5 при 5 циклах подряд; mutmut — фоном вне агента.

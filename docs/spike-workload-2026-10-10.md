@@ -26,3 +26,15 @@
 ## Выбранный способ доступа
 
 Вариант А — `pyobjc-framework-EventKit` из CLI (`coach sync`). Право выдано терминалу Влада; при смене терминала или обновлении macOS — повторный промпт (в README v2.1).
+
+## Дополнение v2.6: запись (2026-10-11)
+
+Скрипт `spikes/workload/calendar_write.py`, календарь коуча в iCloud, терминал Влада. Только синтетические события «ai-coach spike».
+
+- **Доступ:** `authorizationStatus` 3 (полный) до и после, нового промпта TCC нет — запись из того же CLI без доп. разрешений. Swift-хелпер не нужен.
+- **Календарь** ищется по точному названию (регистр важен), `allowsContentModifications` = True.
+- **pyobjc:** `saveEvent_span_commit_error_` и `removeEvent_span_commit_error_` возвращают кортеж `(True, None)` — проверять первый элемент, второй — ошибка.
+- **Чтение назад** по `eventIdentifier`: заголовок, календарь, заметка, начало, конец, таймзона (Asia/Tashkent), будильник −10 мин — совпадают.
+- **Идентификаторы:** `eventIdentifier` = `<id календаря>:<calendarItemExternalIdentifier>`; после синка с iCloud (`--keep`, затем `--remove`) событие найдено по тому же `eventIdentifier` и удалено — id стабилен, хранить его как `calendar_uid` достаточно.
+- **Повторяющееся** (ежедневное, 3 вхождения): у всех вхождений один `eventIdentifier`; удаление с `EKSpanFutureEvents` убирает все (0 осталось).
+- Задержка появления на iPhone не замерялась.
