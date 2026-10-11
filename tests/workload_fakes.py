@@ -6,6 +6,7 @@
 import hashlib
 import json
 import os
+import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -99,3 +100,63 @@ def tree_state(*roots: Path) -> dict[str, tuple[str, float]]:
         for p in files:
             state[str(p)] = (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mtime)
     return state
+
+
+def coach_event(**fields: Any) -> dict[str, Any]:
+    """Значения для store.agenda.add_event: черновик задачи «буду работать» (синтетика)."""
+    base: dict[str, Any] = {
+        "kind": "task",
+        "title": "Синтетическая задача коуча",
+        "date": "2026-10-10",
+        "start_at": "2026-10-10T10:00:00",
+        "end_at": "2026-10-10T12:00:00",
+        "all_day": 0,
+        "category": "work",
+        "created_at": "2026-10-09T09:00:00",
+    }
+    return base | fields
+
+
+class FakeCalendarWriter:
+    """Подмена CalendarWriter: write(event) -> uid, remove(uid, future). Календарь не нужен.
+
+    error - исключение на любой вызов; foreign - uid, которых нет в календаре коуча
+    (remove по ним падает CalendarError, как у настоящего писателя)."""
+
+    def __init__(self, error: Exception | None = None, foreign: tuple[str, ...] = ()):
+        self.error = error
+        self.foreign = foreign
+        self.written: list[dict[str, Any]] = []
+        self.removed: list[tuple[str, bool]] = []
+
+    def write(self, event: dict[str, Any]) -> str:
+        if self.error is not None:
+            raise self.error
+        self.written.append(dict(event))
+        return f"fake-uid-{len(self.written)}"
+
+    def remove(self, uid: str, future: bool = False) -> None:
+        if self.error is not None:
+            raise self.error
+        if uid in self.foreign:
+            from ai_coach.workload.calendar_eventkit import CalendarError
+
+            raise CalendarError("событие не в календаре коуча")
+        self.removed.append((uid, future))
+
+
+class FlakyCommitConn:
+    """Обёртка над соединением: первые `fail` вызовов commit() падают OperationalError."""
+
+    def __init__(self, conn: Any, fail: int = 1):
+        self._conn = conn
+        self.fail = fail
+
+    def commit(self) -> None:
+        if self.fail > 0:
+            self.fail -= 1
+            raise sqlite3.OperationalError("disk I/O error")
+        self._conn.commit()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)

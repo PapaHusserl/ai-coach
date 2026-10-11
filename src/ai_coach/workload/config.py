@@ -10,6 +10,7 @@ CONFIG_ENV = "AI_COACH_WORKLOAD_CONFIG"
 CATEGORIES = ("work", "personal", "hobby", "rest")
 IGNORE = "ignore"
 UNKNOWN = "unknown"
+COACH = "coach"
 
 
 class WorkloadConfigError(Exception):
@@ -19,22 +20,26 @@ class WorkloadConfigError(Exception):
 @dataclass(frozen=True)
 class WorkloadConfig:
     """categories: название календаря (strip) -> категория; ignore - названия, которые
-    пропускаем; todo_path и hb_watch_path - откуда читать туду и груминг."""
+    пропускаем; todo_path и hb_watch_path - откуда читать туду и груминг; coach_calendar -
+    название календаря коуча (None - не задан), его события пишет и читает тренер."""
 
     categories: dict[str, str]
     ignore: frozenset[str]
     todo_path: Path
     hb_watch_path: Path
+    coach_calendar: str | None = None
 
     @property
     def has_calendar(self) -> bool:
         """Календари размечены (в конфиге есть хоть одно название); нет - календарь не читаем."""
-        return bool(self.categories or self.ignore)
+        return bool(self.categories or self.ignore or self.coach_calendar)
 
     def category(self, calendar: str) -> str:
         """Категория по названию календаря без крайних пробелов: work/personal/hobby/rest,
-        ignore (пропустить) или unknown (не размечен)."""
+        coach (календарь коуча), ignore (пропустить) или unknown (не размечен)."""
         name = calendar.strip()
+        if name == self.coach_calendar:
+            return COACH
         if name in self.ignore:
             return IGNORE
         return self.categories.get(name, UNKNOWN)
@@ -78,6 +83,22 @@ def _path(paths: dict[str, Any], key: str, default: Path) -> str | Path:
     return value
 
 
+def _coach_calendar(section: dict[str, Any], marked: set[str]) -> str | None:
+    """Название календаря коуча без крайних пробелов; нет или пустое - None. Не строка или уже
+    размеченное в [calendar] - ошибка."""
+    value = section.get("calendar", "")
+    if not isinstance(value, str):
+        raise WorkloadConfigError("Конфиг нагрузки: coach.calendar должен быть строкой.")
+    name = value.strip()
+    if not name:
+        return None
+    if name in marked:
+        raise WorkloadConfigError(
+            "Конфиг нагрузки: календарь коуча (coach.calendar) указан и в [calendar]."
+        )
+    return name
+
+
 def load_config(path: str | Path | None = None) -> WorkloadConfig:
     """Читает конфиг. Нет файла - default_config(); битый toml - WorkloadConfigError."""
     target = config_path(path)
@@ -92,6 +113,7 @@ def load_config(path: str | Path | None = None) -> WorkloadConfig:
     paths = _table(data, "paths")
     categories = {n: c for c in CATEGORIES for n in _names(section, c)}
     ignore = frozenset(_names(section, "ignore"))
+    coach = _coach_calendar(_table(data, "coach"), set(categories) | ignore)
     todo = Path(_path(paths, "todo", fallback.todo_path)).expanduser()
     hb_watch = Path(_path(paths, "hb_watch", fallback.hb_watch_path)).expanduser()
-    return WorkloadConfig(categories, ignore, todo, hb_watch)
+    return WorkloadConfig(categories, ignore, todo, hb_watch, coach)

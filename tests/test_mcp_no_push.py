@@ -10,7 +10,13 @@ from mcp_fakes import tool_names
 import ai_coach.mcp_server as package
 
 FORBIDDEN_WORDS = ["push", "send", "delete", "remove", "schedule", "upload", "garmin", "approve"]
-FORBIDDEN_MODULES = ["garminconnect", "ai_coach.garmin", "ai_coach.plan", "ai_coach.sync"]
+FORBIDDEN_MODULES = [
+    "garminconnect",
+    "ai_coach.garmin",
+    "ai_coach.plan",
+    "ai_coach.sync",
+    "ai_coach.agenda.calendar_write",
+]
 SOURCES = sorted(Path(package.__file__ or "").parent.glob("*.py"))
 
 
@@ -58,6 +64,9 @@ EXPECTED_TOOLS = {
     "get_habits",
     "get_habit_log",
     "get_weekly_review",
+    "create_draft_event",
+    "cancel_draft_event",
+    "get_agenda",
 }
 
 
@@ -84,6 +93,17 @@ def test_garmin_client_is_not_loaded_with_server() -> None:
     code = (
         "import sys; import ai_coach.mcp_server.server;"
         "bad = [m for m in sys.modules if m == 'garminconnect' or m.startswith('ai_coach.garmin')];"
+        "print(bad); sys.exit(1 if bad else 0)"
+    )
+    result = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout
+
+
+def test_event_kit_and_calendar_writer_are_not_loaded_with_server() -> None:
+    code = (
+        "import sys; import ai_coach.mcp_server.server;"
+        "names = ('EventKit', 'ai_coach.agenda.calendar_write');"
+        "bad = [m for m in sys.modules if m in names];"
         "print(bad); sys.exit(1 if bad else 0)"
     )
     result = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True)

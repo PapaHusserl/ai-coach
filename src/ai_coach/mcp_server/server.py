@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import habits, links, review, tools, workload
+from ai_coach.mcp_server import agenda, habits, links, review, tools, workload
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
@@ -17,7 +17,8 @@ INSTRUCTIONS = (
     f"Списки — не больше {MAX_ROWS} строк и {MAX_CHARS} символов: ответ {{rows, truncated}}, "
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
-    "propose_phase) и КБЖУ записи еды, у которой его ещё нет (save_food_nutrition). "
+    "create_draft_event, cancel_draft_event — только draft, propose_phase) и КБЖУ записи еды, "
+    "у которой его ещё нет (save_food_nutrition). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
@@ -26,7 +27,9 @@ INSTRUCTIONS = (
     "get_workload(events=true) на один день. "
     "Недельный обзор (get_weekly_review): цифры по неделям Пн-Вс и дельты, без выводов; "
     "в сводке week_review_due - пора проводить обзор, после обзора тренер "
-    "отмечает его командой coach review done (CLI, не MCP)."
+    "отмечает его командой coach review done (CLI, не MCP). "
+    "События в календаре тренера (get_agenda): MCP пишет только черновики, в календарь их "
+    "кладёт пользователь командой coach event write (CLI, не MCP)."
 )
 
 # имя инструмента -> (функция из tools.py, описание для Claude)
@@ -49,7 +52,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "отмечено «нет», null - не отмечена, amount; нет привычек - rows пуст), "
         "meds_today (курсы на сегодня; "
         "training_day/before/after - только в день тренировки; нет - не отдаётся), "
-        "catalog (сколько протоколов, добавок, курсов в справочниках; 0 - пусто). "
+        "catalog (сколько протоколов, добавок, курсов в справочниках; 0 - пусто), "
+        "agenda (события тренера в календаре: черновики и записанные, день назад и 7 вперёд). "
         "date — YYYY-MM-DD (сегодня).",
     ),
     "get_daily_metrics": (
@@ -160,6 +164,15 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "stress, sleep, readiness (средние, null - данных нет), days_with_data, delta - разница "
         "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
     ),
+    "get_agenda": (
+        agenda.agenda,
+        "События тренера в календаре (date_from, date_to - YYYY-MM-DD, до 92 дней): черновики "
+        "(draft) и записанные в календарь (written) с днём начала в периоде, плюс активный "
+        "повторяющийся чек-ин: id, kind (training/practice/rest/sleep/checkin/task), title, date, "
+        "start_at, end_at, all_day, note, category (для нагрузки или null), alarm_min, repeat, "
+        "workout_id, practice_id, status. Записывает в календарь пользователь командой "
+        "coach event write.",
+    ),
     "get_sport_nutrition": (
         tools.sport_nutrition,
         "Протоколы спортивного питания (kind=protocol: name, phase before/during/after, sport или "
@@ -231,6 +244,22 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "камерой телефона. Для телефона беговые шаги лучше по времени, а не по метрам. "
         "Ссылка длиннее 2000 символов - ошибка: сократи "
         "заметки и названия или раздели тренировку.",
+    ),
+    "create_draft_event": (
+        agenda.create_draft_event,
+        "Записать событие календаря черновиком (draft). kind: training / practice / rest / sleep / "
+        "checkin / task; title - название; start_at, end_at - местное время YYYY-MM-DDTHH:MM "
+        "(день начала от 30 дней назад до 14 вперёд, не длиннее 24 часов). category "
+        "(work / personal / hobby / rest) - как событие считается в нагрузке: у rest и sleep по "
+        "умолчанию rest, у task задавай явно, у training / practice / checkin не задаётся. "
+        "alarm_min - за сколько минут напомнить; repeat=daily - только у checkin, один на всех; "
+        "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
+        "all_day - на весь день. Ответ: draft_id. В календарь кладёт пользователь командой "
+        "coach event write.",
+    ),
+    "cancel_draft_event": (
+        agenda.cancel_draft_event,
+        "Отменить черновик события календаря по id (только draft; записанные в календарь нельзя).",
     ),
     "propose_phase": (tools.propose_phase, "Предложить фазу (proposed); принимает пользователь."),
 }

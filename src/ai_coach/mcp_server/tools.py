@@ -12,6 +12,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
+from ai_coach.agenda import agenda_rows
 from ai_coach.load import (
     THRESHOLD_SPORTS,
     daily_tss,
@@ -84,6 +85,9 @@ REST_HR_MAX_AGE_DAYS = 14
 LOAD_WARMUP_DAYS = 120
 WELLBEING_DAYS = 30
 WORKLOAD_AHEAD_DAYS = 7
+AGENDA_BACK_DAYS = 1
+AGENDA_AHEAD_DAYS = 7
+AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
 AHEAD_SKIP = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
 WEEKEND_ONLY_SPORT = "bike"
 SATURDAY = 5
@@ -439,6 +443,10 @@ def morning_snapshot(
             for r in ahead
         ]
     )
+    found_agenda = agenda_rows(
+        conn, _shift(date, -AGENDA_BACK_DAYS), _shift(date, AGENDA_AHEAD_DAYS)
+    )
+    snapshot["agenda"] = part([{k: row[k] for k in AGENDA_FIELDS} for row in found_agenda])
     snapshot["overload"] = overload_report(conn, date, tss)
     evening_day = wellbeing_day(_now()) if date == _today().isoformat() else date
     snapshot["evening_done_today"] = evening_done(conn, evening_day)

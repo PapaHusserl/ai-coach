@@ -453,7 +453,7 @@ def test_allow_has_no_wildcard_that_covers_edit_and_delete() -> None:
     rules = allow()
     assert "Bash(uv run coach:*)" not in rules
     assert "Bash(uv run coach *)" not in rules
-    assert not [r for r in rules if r.startswith("Bash(uv run coach e")]
+    assert not [r for r in rules if r.startswith("Bash(uv run coach ed")]
     assert not [r for r in rules if r.startswith("Bash(uv run coach d") and "delete" in r]
 
 

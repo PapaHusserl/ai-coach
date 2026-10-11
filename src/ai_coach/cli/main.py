@@ -1,6 +1,6 @@
 """Команды `coach`: sync (Garmin и нагрузка), import, approve, push, link, status, weight, food,
 feel, profile, goal, pantry, shop, meal, recipe, practice, habit, protocol, supplement,
-med, log, edit, delete."""
+med, event, log, edit, delete."""
 
 from datetime import date, datetime
 from getpass import getpass
@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 import typer
 
+from ai_coach.cli.agenda import event_app
 from ai_coach.cli.habits import habit_app
 from ai_coach.cli.journal import check_date, delete_app, edit_app, food, log_app, weight
 from ai_coach.cli.meds import med_app
@@ -62,6 +63,7 @@ app.add_typer(recipe_app, name="recipe")
 app.add_typer(practice_app, name="practice")
 app.add_typer(habit_app, name="habit")
 app.add_typer(review_app, name="review")
+app.add_typer(event_app, name="event")
 app.add_typer(protocol_app, name="protocol")
 app.add_typer(supplement_app, name="supplement")
 supplement_app.command("take")(supplement_take)
