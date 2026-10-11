@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import links, tools, workload
+from ai_coach.mcp_server import habits, links, tools, workload
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.store.db import open_db
@@ -42,6 +42,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "overload (как get_overload), evening_done_today (чек-ин сделан), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
+        "habits_today (привычки на день самочувствия: name, unit, done true - сделано, false - "
+        "отмечено «нет», null - не отмечена, amount; нет привычек - rows пуст), "
         "meds_today (курсы на сегодня; "
         "training_day/before/after - только в день тренировки; нет - не отдаётся), "
         "catalog (сколько протоколов, добавок, курсов в справочниках; 0 - пусто). "
@@ -127,6 +129,25 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Справочник рецептов: id, name, kcal_100, protein_100, fat_100, carbs_100 (на 100 г "
         "готового), yield_g (вес готового или null), items (product, qty, unit). "
         "Меняет пользователь командами coach recipe.",
+    ),
+    "get_practices": (
+        habits.practices,
+        "Справочник практик восстановления: id, name, kind (breathing/pause/walk/sleep), "
+        "minutes, trigger (когда применять или null), steps (шаги текстом). "
+        "Меняет пользователь командами coach practice.",
+    ),
+    "get_habits": (
+        habits.habits,
+        "Привычки: id, name, unit (единица числа или null). Меняет пользователь командами "
+        "coach habit.",
+    ),
+    "get_habit_log": (
+        habits.habit_log,
+        "Отметки привычек за период (date_from, date_to - YYYY-MM-DD, до 92 дней): date, "
+        "habit_id, name, unit, done (1 - сделано, 0 - отмечено «нет»), amount (число или null), "
+        "logged_at. "
+        "Нет строки за день - не спрашивали. Отмечает пользователь командами coach habit "
+        "done / undo.",
     ),
     "get_sport_nutrition": (
         tools.sport_nutrition,

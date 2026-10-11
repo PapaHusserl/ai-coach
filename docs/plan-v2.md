@@ -80,6 +80,8 @@
 
 Миграция 0017 — `practice` (как `recipe`: name, kind breathing/pause/walk/sleep, minutes, trigger, steps, soft delete) и `habit`/`habit_log` (состав — груминг v2.4); `coach practice add/list/show` (allow), edit/delete — нет; `coach habit …` по грумингу; MCP `get_practices`, snapshot `habits_today`; подбор практики — в промпте. Готово: CRUD + лимиты + тексты; Влад завёл 2–3 практики.
 
+**Груминг v2.4 (Влад, 2026-10-11):** привычка — да/нет за день + необязательное число (`habit`: name, unit?, soft delete; `habit_log`: date+habit, done 0/1, amount?); отметка — вечерний чек-ин (`coach-evening` спрашивает по активным привычкам) + CLI; команды `coach habit add/list/done/undo/edit/delete` (delete — soft, история остаётся); дата отметки — правило «до 04:00 — вчера», как у `coach feel`. В allow — `habit add/list/done/undo`; `edit/delete` — только с подтверждением Влада. MCP сверх плана — `get_habits`, `get_habit_log` — Влад оставил. «Не сделал» пишется (`habit done --no` → done=0, вечером тоже); число без `unit` — отказ.
+
 ## Шаг v2.5. Недельный обзор и роль коуча
 
 MCP `get_weekly_review(weeks=4)` (по неделям: TSS, часы работы/вечера/выходные, туду, mood/stress/сон/readiness и дельты; выводы — агент); `review_log` + `coach review done`, флаг `week_review_due`; `coach.md` — ядро + файлы (`coach-wellbeing.md`, `coach-nutrition.md`, `coach-week.md`), тесты ≤ 15360 и «каждый файл в allow»; README/architecture финал. Готово: Влад прогнал обзор недели.

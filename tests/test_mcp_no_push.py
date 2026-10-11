@@ -54,6 +54,9 @@ EXPECTED_TOOLS = {
     "get_workout_link",
     "get_workload",
     "get_overload",
+    "get_practices",
+    "get_habits",
+    "get_habit_log",
 }
 
 

@@ -39,6 +39,7 @@ from ai_coach.store.garmin_data import (
     list_daily_metrics,
     list_strength_sets,
 )
+from ai_coach.store.habits import habits_on
 from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
     evening_done,
@@ -75,6 +76,7 @@ SNAPSHOT_EXPIRING = 10
 SNAPSHOT_RECIPES = 30
 SNAPSHOT_NUTRITION_ROWS = 10
 SNAPSHOT_MEDS = 10
+SNAPSHOT_HABITS = 10
 MAX_DAYS = 92
 MAX_NUTRITION = 10000
 REST_HR_MAX_AGE_DAYS = 14
@@ -321,6 +323,13 @@ def _snapshot_meds(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     return {"meds_today": cap(short, SNAPSHOT_MEDS, SNAPSHOT_CHARS)} if short else {}
 
 
+def _snapshot_habits(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Привычки на день для сводки: {"habits_today": ...} (done None - не отмечена)."""
+    names = ("name", "unit", "done", "amount")
+    short = [{k: row[k] for k in names} for row in habits_on(conn, day)]
+    return {"habits_today": cap(short, SNAPSHOT_HABITS, SNAPSHOT_CHARS)}
+
+
 def _now() -> datetime:
     return datetime.now()
 
@@ -445,6 +454,7 @@ def morning_snapshot(
     if nutrition is not None:
         snapshot["sport_nutrition_today"] = nutrition
     snapshot |= _snapshot_meds(conn, date)
+    snapshot |= _snapshot_habits(conn, evening_day)
     snapshot["catalog"] = {
         "protocols": len(list_protocols(conn)),
         "supplements": len(list_supplements(conn)),

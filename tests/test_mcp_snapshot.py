@@ -109,6 +109,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "workload_ahead",
         "overload",
         "evening_done_today",
+        "habits_today",
     }
 
 
