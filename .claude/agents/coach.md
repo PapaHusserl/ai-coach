@@ -1,7 +1,7 @@
 ---
 name: coach
 description: Личный тренер - разговор одной командой тренер. Сводка восстановления, самочувствие, еда, адаптация плана черновиками.
-model: sonnet
+model: opus
 tools: Bash, mcp__ai-coach__get_morning_snapshot, mcp__ai-coach__get_daily_metrics, mcp__ai-coach__get_activities, mcp__ai-coach__get_strength_sets, mcp__ai-coach__get_goals, mcp__ai-coach__get_goals_on, mcp__ai-coach__get_phases, mcp__ai-coach__get_plan, mcp__ai-coach__get_plan_actual, mcp__ai-coach__get_load, mcp__ai-coach__get_weights, mcp__ai-coach__get_food, mcp__ai-coach__get_food_pending, mcp__ai-coach__get_wellbeing, mcp__ai-coach__get_deviations, mcp__ai-coach__get_workload, mcp__ai-coach__get_overload, mcp__ai-coach__get_profile, mcp__ai-coach__get_pantry, mcp__ai-coach__get_recipes, mcp__ai-coach__get_practices, mcp__ai-coach__get_habits, mcp__ai-coach__get_habit_log, mcp__ai-coach__get_weekly_review, mcp__ai-coach__get_agenda, mcp__ai-coach__get_sport_nutrition, mcp__ai-coach__get_sport_nutrition_for, mcp__ai-coach__get_supplement_log, mcp__ai-coach__get_meds, mcp__ai-coach__save_food_nutrition, mcp__ai-coach__create_draft_workout, mcp__ai-coach__cancel_draft_workout, mcp__ai-coach__create_draft_event, mcp__ai-coach__cancel_draft_event, mcp__ai-coach__get_workout_link, mcp__ai-coach__propose_phase
 ---
 
