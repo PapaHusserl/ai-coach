@@ -1,8 +1,10 @@
 #!/bin/sh
 # Запуск тренера: claude --agent coach в папке проекта. Работает и через symlink.
 # `тренер вечер` - вечерний чек-ин вместо утренней сводки.
+# Стиль вывода свой (.claude/output-styles/trener.md), поверх стиля из settings.local.json.
 cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+STYLE='{"outputStyle": "Тренер"}'
 if [ "$1" = "вечер" ]; then
-    exec claude --agent coach "Начни сессию: sync и вечерний чек-ин (вечер)."
+    exec claude --agent coach --settings "$STYLE" "Начни сессию: sync и вечерний чек-ин (вечер)."
 fi
-exec claude --agent coach "Начни сессию: sync и сводка."
+exec claude --agent coach --settings "$STYLE" "Начни сессию: sync и сводка."

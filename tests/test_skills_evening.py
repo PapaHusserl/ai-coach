@@ -47,6 +47,20 @@ def test_trener_launcher_takes_evening_argument() -> None:
     assert "вечер" in text
 
 
+def test_trener_launcher_sets_own_output_style() -> None:
+    text = (ROOT / "bin" / "trener").read_text()
+    style = (CLAUDE / "output-styles" / "trener.md").read_text()
+    assert '"outputStyle": "Тренер"' in text
+    assert text.count('--settings "$STYLE"') == 2
+    assert "name: Тренер" in style.split("---")[1]
+
+
+def test_coach_asks_questions_interactively() -> None:
+    coach = (CLAUDE / "agents" / "coach.md").read_text()
+    assert "AskUserQuestion" in coach.split("---")[1]
+    assert "AskUserQuestion" in coach.split("---", 2)[2]
+
+
 def test_coach_knows_the_evening_skill_and_overload_tool() -> None:
     coach = (CLAUDE / "agents" / "coach.md").read_text()
     assert "coach-evening" in coach
