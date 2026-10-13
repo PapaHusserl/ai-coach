@@ -11,6 +11,7 @@ from urllib.parse import quote
 from common import aw_get, save_json, say
 
 DAYS = 7
+MIN_AFK_HOURS = 2  # меньше данных — вердикт про чередование afk ложный, «рано судить»
 
 
 def main() -> None:
@@ -63,6 +64,9 @@ def main() -> None:
         say("ВЕРДИКТ: afk не определяется — проверь Input Monitoring (afk-бакета нет)")
     elif not afk_total:
         say("ВЕРДИКТ: afk-бакет есть, но событий за 7 дней нет (норма в день 0)")
+    elif sum(afk_total.values()) < MIN_AFK_HOURS * 3600:
+        hours = sum(afk_total.values()) / 3600
+        say(f"ВЕРДИКТ: рано судить — afk-данных {hours:.1f} ч, нужно от {MIN_AFK_HOURS} ч")
     elif afk_total.get("afk") and afk_total.get("not-afk"):
         say("ВЕРДИКТ: afk чередуется (есть и afk, и not-afk)")
     elif afk_total.get("afk"):
