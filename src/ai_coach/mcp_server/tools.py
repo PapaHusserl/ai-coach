@@ -24,6 +24,7 @@ from ai_coach.load import (
 )
 from ai_coach.load.overload import overloaded
 from ai_coach.meds import public_meds, short_meds
+from ai_coach.nutrition.groups import FOOD_GROUPS
 from ai_coach.pantry import expiring, stock
 from ai_coach.profile import (
     current_profile,
@@ -44,6 +45,7 @@ from ai_coach.store.garmin_data import (
 from ai_coach.store.habits import habits_on
 from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
+    add_food_groups,
     evening_done,
     last_sync_log,
     list_food,
@@ -510,13 +512,20 @@ def save_food_nutrition(
     protein_g: float,
     fat_g: float,
     carbs_g: float,
+    groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """КБЖУ записи еды (оценка тренера). Только для записи без КБЖУ: посчитанные не меняет."""
+    """КБЖУ записи еды (оценка тренера) и, если переданы, группы продуктов. Только для записи
+    без КБЖУ: посчитанные не меняет."""
     if not all(0 <= x <= MAX_NUTRITION for x in (kcal, protein_g, fat_g, carbs_g)):
         raise ToolError(f"КБЖУ записи: ккал и граммы от 0 до {MAX_NUTRITION}.")
+    unknown = [g for g in groups or [] if g not in FOOD_GROUPS]
+    if unknown:
+        raise ToolError(f"Неизвестные группы {unknown}. Допустимые: {', '.join(FOOD_GROUPS)}.")
     values = {"kcal": kcal, "protein_g": protein_g, "fat_g": fat_g, "carbs_g": carbs_g}
     with conn:
         saved = update_food(conn, food_id, values)
+        if saved and groups:
+            add_food_groups(conn, food_id, groups)
     if not saved:
         row = fetch_one(conn, "SELECT deleted_at FROM food_log WHERE id = ?", (food_id,))
         if row is None:

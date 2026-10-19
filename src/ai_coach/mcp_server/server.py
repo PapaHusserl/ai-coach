@@ -7,9 +7,10 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import agenda, habits, links, review, tools, workload
+from ai_coach.mcp_server import agenda, habits, links, review, tools, variety, workload
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
+from ai_coach.nutrition.groups import FOOD_GROUPS, GROUP_MAX_DAYS, GROUP_MIN_DAYS
 from ai_coach.store.db import open_db
 
 INSTRUCTIONS = (
@@ -18,7 +19,7 @@ INSTRUCTIONS = (
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
     "create_draft_event, cancel_draft_event — только draft, propose_phase) и КБЖУ записи еды, "
-    "у которой его ещё нет (save_food_nutrition). "
+    "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
@@ -164,6 +165,30 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "stress, sleep, readiness (средние, null - данных нет), days_with_data, delta - разница "
         "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
     ),
+    "get_food_variety": (
+        variety.food_variety,
+        "Разнообразие питания: последние weeks ISO-недель (Пн-Вс, от 1 до 12, по умолчанию 4), "
+        "от старой к новой, последняя - текущая неполная (partial). По неделе: days_with_data "
+        "(дней с записями еды), groups (группа -> в сколько дней была; группы: "
+        + ", ".join(f"{key} - {name}" for key, (name, _) in FOOD_GROUPS.items())
+        + "), low (ниже порога: group, days, min_days, nutrients; пороги дней в неделю: "
+        + ", ".join(f"{k} {v}" for k, v in GROUP_MIN_DAYS.items())
+        + "), high (выше планки: group, days, max_days; планка: "
+        + ", ".join(f"{k} {v}" for k, v in GROUP_MAX_DAYS.items())
+        + "). Записи до шага 24 без групп - при малом days_with_data или нулях это нехватка "
+        "данных, а не рациона. Выводов нет - их делает тренер.",
+    ),
+    "get_nutrient_norms": (
+        variety.nutrient_norms,
+        "Нормы нутриентов, мужчины: nutrient, norm (МР 2.3.1.0253-21, norm_source), upper "
+        "(верхний уровень КТС № 299 для суточной дозы БАД, upper_source), unit, food_typical "
+        "(типичное потребление с едой в тех же единицах; food_source; food_confidence: "
+        "высокая/средняя/низкая), supplement_max = upper - food_typical, не меньше 0 (сколько "
+        "остаётся на все добавки вместе; дозы курсов из get_meds "
+        "вычитай сам), note (особые строки; null - нет); "
+        "у витамина D ещё norm_iu, upper_iu, supplement_max_iu (МЕ). Цифры брать отсюда, "
+        "не из памяти.",
+    ),
     "get_agenda": (
         agenda.agenda,
         "События тренера в календаре (date_from, date_to - YYYY-MM-DD, до 92 дней): черновики "
@@ -209,7 +234,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "save_food_nutrition": (
         tools.save_food_nutrition,
         "Записать КБЖУ (kcal, protein_g, fat_g, carbs_g — на всю порцию записи) для записи "
-        "еды без КБЖУ по food_id; посчитанные не меняет.",
+        "еды без КБЖУ по food_id; посчитанные не меняет. groups - необязательно, список ключей "
+        "групп продуктов записи (" + ", ".join(FOOD_GROUPS) + "); неизвестный ключ - отказ.",
     ),
     "create_draft_workout": (
         tools.create_draft_workout,

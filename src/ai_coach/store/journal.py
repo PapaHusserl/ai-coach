@@ -39,6 +39,29 @@ def update_food(conn: sqlite3.Connection, food_id: int, values: dict[str, Any]) 
     return conn.execute(sql, args).rowcount > 0
 
 
+def add_food_groups(conn: sqlite3.Connection, food_id: int, groups: list[str]) -> bool:
+    """Группы продуктов записи, если их ещё нет. True - записано; False - группы уже есть.
+    Неизвестный ключ - sqlite3.IntegrityError (CHECK в миграции 0020)."""
+    if conn.execute("SELECT 1 FROM food_group WHERE food_id = ?", (food_id,)).fetchone():
+        return False
+    conn.executemany(
+        "INSERT INTO food_group (food_id, group_key) VALUES (?, ?)",
+        [(food_id, key) for key in dict.fromkeys(groups)],
+    )
+    return True
+
+
+def list_food_groups(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Группы живых записей с датой logged_at start..end включительно: food_id, day, group_key."""
+    sql = (
+        "SELECT g.food_id, substr(f.logged_at, 1, 10) AS day, g.group_key "
+        "FROM food_group g JOIN food_log f ON f.id = g.food_id "
+        "WHERE substr(f.logged_at, 1, 10) BETWEEN ? AND ? AND f.deleted_at IS NULL "
+        "ORDER BY f.logged_at, g.food_id, g.group_key"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def list_food(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Записи с датой logged_at start..end включительно, по времени."""
     sql = (
@@ -82,8 +105,8 @@ def edit_food(
     logged_at: str | None = None,
 ) -> bool:
     """Правка текста и/или времени записи еды (что не None). Новый текст сбрасывает КБЖУ в NULL
-    (посчитает /coach-food), одно время - не трогает. True - исправлено; False - записи нет
-    или она удалена."""
+    и группы продуктов (посчитает /coach-food), одно время - не трогает. True - исправлено;
+    False - записи нет или она удалена."""
     if (
         conn.execute(
             "SELECT 1 FROM food_log WHERE id = ? AND deleted_at IS NULL", (food_id,)
@@ -97,6 +120,7 @@ def edit_food(
             "carbs_g = NULL WHERE id = ?"
         )
         conn.execute(sql, (text, food_id))
+        conn.execute("DELETE FROM food_group WHERE food_id = ?", (food_id,))
     if logged_at is not None:
         conn.execute("UPDATE food_log SET logged_at = ? WHERE id = ?", (logged_at, food_id))
     return True
