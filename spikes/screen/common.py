@@ -67,6 +67,13 @@ def title_regex(patterns: list[str]) -> str:
     return "(?i)(?:" + "|".join(patterns) + ")"
 
 
+def _query_literal(value: Any) -> str:
+    """Литерал для query2. Парсер query2 не снимает экранирование JSON: `\\\\w` дошло бы до regex
+    как `\\\\w` (литеральный слэш), поэтому слэши отдаём как есть. Кавычки в regex запрещены
+    (load_rules), иначе `\\"` сломало бы разбор."""
+    return json.dumps(value, ensure_ascii=False).replace("\\\\", "\\")
+
+
 def screen_query(rules: Rules) -> list[str]:
     """Без [title.*] — слияние по app. Приложения из [title.<app>] размечает сам сервер
     (categorize по title) и сливает по (app, $category)."""
@@ -91,7 +98,7 @@ def screen_query(rules: Rules) -> list[str]:
         ]
         lines += [
             f"t{n} = filter_keyvals(events, \"app\", {json.dumps([app])});",
-            f"t{n} = categorize(t{n}, {json.dumps(classes, ensure_ascii=False)});",
+            f"t{n} = categorize(t{n}, {_query_literal(classes)});",
             f't{n} = merge_events_by_keys(t{n}, ["app", "$category"]);',
             f"res = concat(res, t{n});",
         ]
@@ -166,6 +173,9 @@ def load_rules(path: Path | None = None) -> Rules:
         for cat in TITLE_CATS:
             if not cats.get(cat):
                 continue
+            if any('"' in pattern for pattern in cats[cat]):
+                print(f'screen_rules.toml: кавычка в regex [title."{app}"].{cat} не поддерживается')
+                sys.exit(1)
             try:
                 re.compile(title_regex(cats[cat]))  # склеенная строка, как уйдёт на сервер
             except re.error as e:
