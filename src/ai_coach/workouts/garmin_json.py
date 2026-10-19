@@ -81,12 +81,17 @@ def _workout(
 
 def build_strength(spec: dict[str, Any]) -> dict[str, Any]:
     """Силовая. spec: name, estimated_duration_secs, exercises (category, exercise — коды
-    каталога Garmin, sets, reps, rest_seconds, weight_kg). Упражнение — группа повторов:
-    подход и отдых."""
+    каталога Garmin, sets, reps или seconds (ровно одно: повторы или статика на время),
+    rest_seconds, weight_kg). Упражнение — группа повторов: подход и отдых."""
     steps: list[dict[str, Any]] = []
     order = 1
     for item in spec["exercises"]:
-        work = _step(order + 1, "interval", END_REPS, item["reps"])
+        if ("seconds" in item) == ("reps" in item):
+            raise ValueError("у упражнения должно быть ровно одно из reps / seconds")
+        if "seconds" in item:
+            work = _step(order + 1, "interval", END_TIME, item["seconds"])
+        else:
+            work = _step(order + 1, "interval", END_REPS, item["reps"])
         work["category"] = item["category"]
         work["exerciseName"] = item["exercise"]
         work["weightValue"] = float(item["weight_kg"])

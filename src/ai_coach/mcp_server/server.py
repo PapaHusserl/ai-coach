@@ -221,7 +221,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         '"BARBELL_BENCH_PRESS", "sets": 3, "reps": 8, "rest_seconds": 90, "weight_kg": 40, '
         '"title": "Жим лёжа"}]} - category и exercise обязательны, это коды каталога Garmin '
         "(SQUAT / BARBELL_BACK_SQUAT, ROW / BARBELL_ROW и т.п.); упражнение - sets подходов "
-        "с отдыхом. "
+        "с отдыхом. У упражнения reps (повторы) или seconds (статика на время: планка, вис), "
+        "ровно одно; weight_kg обязателен, для планки 0. "
         'mobility (растяжка): {"steps": [{"exercise": "STRETCH_CAT_COW", "seconds": 40, '
         '"description": "Техника по-русски, коротко", "title": "Кошка-корова"}]} - exercise '
         "обязателен, код STRETCH_* / WARM_UP_* каталога Garmin, description обязателен. "

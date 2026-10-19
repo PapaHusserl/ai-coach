@@ -55,6 +55,24 @@ test("totalSeconds суммирует sec с учётом повторов", () 
 	assert.equal(totalSeconds(payload), 360);
 });
 
+const plank = { b: [{ r: 3, t: "Планка", s: [{ k: "work", sec: 60 }, { k: "rest", sec: 60 }] }] };
+
+test("планка: totalSeconds == 360", () => {
+	assert.equal(totalSeconds(plank), 360);
+});
+
+test("планка: expand даёт 6 шагов", () => {
+	assert.equal(expand(plank).length, 6);
+});
+
+test("планка: у work sec == 60", () => {
+	assert.equal(expand(plank)[0].sec, 60);
+});
+
+test("планка: название из блока", () => {
+	assert.equal(expand(plank)[0].title, "Планка");
+});
+
 test("totalSeconds без времени == 0", () => {
 	assert.equal(totalSeconds({ b: [{ r: 1, s: [{ k: "work", reps: 5 }] }] }), 0);
 });

@@ -7,7 +7,7 @@
 {"exercises": [{"category": "BENCH_PRESS", "exercise": "BARBELL_BENCH_PRESS",
                 "sets": 3, "reps": 8, "rest_seconds": 90, "weight_kg": 40}]}
 ```
-`category` и `exercise` - коды каталога Garmin (BENCH_PRESS / BARBELL_BENCH_PRESS, SQUAT / BARBELL_BACK_SQUAT, ROW / BARBELL_ROW и т.п.). Одно упражнение - sets подходов с отдыхом между ними.
+`category` и `exercise` - коды каталога Garmin (BENCH_PRESS / BARBELL_BENCH_PRESS, SQUAT / BARBELL_BACK_SQUAT, ROW / BARBELL_ROW и т.п.). Одно упражнение - sets подходов с отдыхом между ними. Вместо `reps` можно `seconds` (статика на время: планка, вис), ровно одно из двух; `weight_kg` обязателен, для планки 0: `{"category": "PLANK", "exercise": "PLANK", "sets": 3, "seconds": 60, "rest_seconds": 60, "weight_kg": 0}`.
 
 ## mobility (растяжка)
 ```json

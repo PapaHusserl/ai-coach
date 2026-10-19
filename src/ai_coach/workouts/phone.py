@@ -39,7 +39,11 @@ def _clean(values: dict[str, Any]) -> dict[str, Any]:
 def _strength_blocks(spec: dict[str, Any]) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for item in spec["exercises"]:
-        work = {"k": "work", "reps": item["reps"], "kg": _num(item["weight_kg"])}
+        work = {"k": "work", "kg": _num(item["weight_kg"])}
+        if "seconds" in item:
+            work["sec"] = _num(item["seconds"])
+        else:
+            work["reps"] = item["reps"]
         work = _clean(work | {"note": item.get("note")})
         steps = [work]
         if item["rest_seconds"]:

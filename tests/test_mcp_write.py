@@ -51,6 +51,31 @@ def test_strength_workout_is_saved_as_draft(conn: sqlite3.Connection) -> None:
     assert [(r["sport"], r["status"]) for r in saved(conn)] == [("strength", "draft")]
 
 
+def plank_args(**timing: Any) -> dict[str, Any]:
+    item = {**STRENGTH["spec"]["exercises"][0], "category": "PLANK", "exercise": "PLANK"}
+    del item["reps"]
+    return {**STRENGTH, "spec": {"exercises": [item | timing]}}
+
+
+def test_strength_seconds_workout_is_saved_with_seconds(conn: sqlite3.Connection) -> None:
+    call(conn, "create_draft_workout", **plank_args(seconds=60))
+    rows = saved(conn)
+    assert [r["status"] for r in rows] == ["draft"]
+    assert json.loads(rows[0]["workout_json"])["exercises"][0]["seconds"] == 60
+
+
+def test_strength_with_reps_and_seconds_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, "create_draft_workout", **plank_args(reps=8, seconds=60))
+    assert saved(conn) == []
+
+
+def test_strength_without_reps_and_seconds_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, "create_draft_workout", **plank_args())
+    assert saved(conn) == []
+
+
 def test_draft_keeps_spec_with_name(conn: sqlite3.Connection) -> None:
     call(conn, "create_draft_workout", **RUN)
     spec = json.loads(saved(conn)[0]["workout_json"])

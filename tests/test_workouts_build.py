@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from ai_coach.workouts import build_workout
+from ai_coach.workouts import build_workout, describe_workout
 
 REFERENCE = Path(__file__).parent / "fixtures" / "workouts"
 
@@ -95,6 +95,59 @@ def test_strength_repeats_set_count_and_has_rest_step() -> None:
     assert group["numberOfIterations"] == 3
     assert [s["stepType"]["stepTypeKey"] for s in group["workoutSteps"]] == ["interval", "rest"]
     assert group["workoutSteps"][1]["endConditionValue"] == 120.0
+
+
+def plank_spec(**timing: Any) -> dict[str, Any]:
+    item = {"category": "PLANK", "exercise": "PLANK", "sets": 3, "rest_seconds": 60,
+            "weight_kg": 0}  # fmt: skip
+    return {"name": "Планка", "estimated_duration_secs": 360, "exercises": [item | timing]}
+
+
+def plank_group(**timing: Any) -> dict[str, Any]:
+    return build_workout("strength", plank_spec(**timing))["workoutSegments"][0]["workoutSteps"][0]
+
+
+def test_strength_seconds_work_step_ends_by_time() -> None:
+    work = plank_group(seconds=60)["workoutSteps"][0]
+    assert work["endCondition"]["conditionTypeKey"] == "time"
+
+
+def test_strength_seconds_work_step_has_duration_as_float() -> None:
+    work = plank_group(seconds=60)["workoutSteps"][0]
+    assert work["endConditionValue"] == 60.0
+
+
+def test_strength_seconds_keeps_exercise_and_weight() -> None:
+    work = plank_group(seconds=60)["workoutSteps"][0]
+    assert (work["exerciseName"], work["weightValue"]) == ("PLANK", 0.0)
+
+
+def test_strength_seconds_keeps_sets_and_rest() -> None:
+    group = plank_group(seconds=60)
+    assert group["numberOfIterations"] == 3
+    assert [s["stepType"]["stepTypeKey"] for s in group["workoutSteps"]] == ["interval", "rest"]
+    assert group["workoutSteps"][1]["endConditionValue"] == 60.0
+
+
+def test_describe_workout_shows_plank_seconds() -> None:
+    workout = build_workout("strength", plank_spec(seconds=60))
+    assert "interval: 60 с, PLANK/PLANK, 0 кг" in describe_workout(workout)
+
+
+def test_strength_reps_work_step_still_ends_by_reps() -> None:
+    work = plank_group(reps=8)["workoutSteps"][0]
+    assert work["endCondition"]["conditionTypeKey"] == "reps"
+    assert work["endConditionValue"] == 8.0
+
+
+def test_strength_with_reps_and_seconds_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        build_workout("strength", plank_spec(reps=8, seconds=60))
+
+
+def test_strength_without_reps_and_seconds_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        build_workout("strength", plank_spec())
 
 
 def test_mobility_matches_reference() -> None:

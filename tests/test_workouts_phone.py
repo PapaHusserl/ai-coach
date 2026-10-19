@@ -104,6 +104,44 @@ def test_strength_without_title_gets_readable_code() -> None:
     assert payload["b"][0]["t"] == "Barbell back squat"
 
 
+def plank_payload(**extra: Any) -> dict[str, Any]:
+    item = {"category": "PLANK", "exercise": "PLANK", "sets": 3, "seconds": 60,
+            "rest_seconds": 60, "weight_kg": 0}  # fmt: skip
+    spec = {"name": "Планка", "exercises": [item | extra]}
+    return phone.player_payload("strength", spec, "2026-10-09")
+
+
+def test_strength_seconds_becomes_sec_without_reps_and_kg() -> None:
+    assert plank_payload()["b"][0]["s"][0] == {"k": "work", "sec": 60}
+
+
+def test_strength_seconds_with_weight_keeps_kg() -> None:
+    assert plank_payload(weight_kg=10)["b"][0]["s"][0] == {"k": "work", "sec": 60, "kg": 10}
+
+
+def test_strength_seconds_block_repeats_sets_and_has_rest() -> None:
+    block = plank_payload()["b"][0]
+    assert block["r"] == 3
+    assert block["s"][1] == {"k": "rest", "sec": 60}
+
+
+def test_strength_seconds_block_title_is_readable_code() -> None:
+    assert plank_payload()["b"][0]["t"] == "Plank"
+
+
+def test_strength_seconds_fragment_fits_limit() -> None:
+    assert len(phone.encode_fragment(plank_payload())) <= phone.MAX_FRAGMENT
+
+
+def test_strength_reps_has_reps_and_no_sec() -> None:
+    item = {"category": "PLANK", "exercise": "PLANK", "sets": 3, "reps": 8,
+            "rest_seconds": 60, "weight_kg": 0}  # fmt: skip
+    spec = {"name": "Планка", "exercises": [item]}
+    work = phone.player_payload("strength", spec, "2026-10-09")["b"][0]["s"][0]
+    assert work["reps"] == 8
+    assert "sec" not in work
+
+
 def test_strength_block_repeats_equal_sets() -> None:
     assert [b["r"] for b in build("strength")["b"]] == [3, 2]
 
