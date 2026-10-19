@@ -54,7 +54,7 @@ def main() -> None:
     start = end - timedelta(days=args.days - 1)
     rules = load_rules()
     days = [start + timedelta(days=i) for i in range(args.days)]
-    screen = screen_seconds([day_bounds(d, DAY_FROM_HOUR) for d in days])
+    screen = screen_seconds([day_bounds(d, DAY_FROM_HOUR) for d in days], rules)
 
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
