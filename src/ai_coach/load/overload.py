@@ -1,7 +1,7 @@
 """Общая нагрузка дня и сигналы перегруза (подступающее выгорание).
 
 Веса и пороги - константы и пока догадка: калибруются по 2-3 неделям данных, меняются только
-они. Формула - в docs/architecture-2026-10-06.md (раздел v2.2+v2.3).
+они. Формула - в docs/architecture.md (раздел v2.2+v2.3).
 
 total_load = W_TSS * tss + W_WORK * work + W_HOBBY * hobby + W_EVENING * work_evening
              + W_WEEKEND * work (в сб/вс) + W_TODO * todo_closed + W_GROOMING * grooming_done.

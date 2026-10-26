@@ -52,7 +52,7 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Еда: копится текстом через CLI, /coach-food раз в день пачкой.
 
 ## Итоги спайка Garmin (2026-10-06)
-Отчёт: [spike-garmin-2026-10-06.md](spike-garmin-2026-10-06.md). Развилка 5 не нужна — силовая грузится на FR970.
+Отчёт: [research-garmin.md](research-garmin.md). Развилка 5 не нужна — силовая грузится на FR970.
 - Силовая: сериализация = `spikes/garmin/reference/strength.json`. `weightValue` — в кг; `create_strength_set` из garminconnect 0.3.17 пишет граммы (баг) — не использовать как есть.
 - Растяжка: `sportType` = `mobility` (id 11), шаги с упражнениями каталога `WARM_UP/STRETCH_*` (`garminconnect/exercises.py`), эталон `reference/stretch_mobility_named.json`. Анимаций упражнений на часах нет — краткая техника по-русски пишется в `description` шага (на часах — заметка).
 - Бег/вело/плавание: эталоны `reference/run.json`, `bike.json`, `swim.json`; цели по темпу и шаги по дистанции работают.
