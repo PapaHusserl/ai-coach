@@ -38,8 +38,43 @@ def test_evening_skill_tools_are_in_allowed_tools() -> None:
     assert "mcp__ai-coach__get_morning_snapshot" in head
 
 
+def test_evening_skill_runs_coach_screen_before_the_snapshot() -> None:
+    body = EVENING.read_text().split("---", 2)[2]
+    assert "uv run coach screen" in body
+    assert body.index("uv run coach screen") < body.index("get_morning_snapshot")
+
+
+def test_evening_skill_continues_when_screen_is_unavailable() -> None:
+    line = next(x for x in EVENING.read_text().splitlines() if "uv run coach screen" in x)
+    assert "не настроен" in line
+    assert "не ответил" in line
+    assert "дальше" in line
+
+
+def test_evening_skill_offers_screen_hours_and_writes_them_with_feel() -> None:
+    text = EVENING.read_text()
+    assert "screen_work_hours" in text
+    assert "экран:" in text
+    assert "записать так" in text
+    assert "--work N --hobby M" in text
+
+
+def test_evening_skill_still_asks_hours_without_screen() -> None:
+    assert "нет - спроси сам" in EVENING.read_text()
+
+
+def test_evening_skill_has_no_application_or_window_names() -> None:
+    text = EVENING.read_text().lower()
+    for word in ("заголовок", "window title", "obsidian"):
+        assert word not in text
+
+
 def test_feel_command_is_allowed() -> None:
     assert "Bash(uv run coach feel:*)" in allow()
+
+
+def test_screen_command_is_allowed() -> None:
+    assert "Bash(uv run coach screen:*)" in allow()
 
 
 def test_trener_launcher_takes_evening_argument() -> None:

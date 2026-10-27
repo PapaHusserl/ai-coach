@@ -3,6 +3,7 @@
     "allow": [
       "mcp__ai-coach",
       "Bash(uv run coach sync:*)",
+      "Bash(uv run coach screen:*)",
       "Bash(uv run coach food:*)",
       "Bash(uv run coach feel:*)",
       "Bash(uv run coach status:*)",

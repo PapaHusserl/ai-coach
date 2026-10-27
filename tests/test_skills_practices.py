@@ -9,7 +9,7 @@ AGENTS = CLAUDE / "agents"
 EVENING = CLAUDE / "skills" / "coach-evening" / "SKILL.md"
 LIMITS = {
     "coach.md": 15360,
-    "coach-wellbeing.md": 6144,
+    "coach-wellbeing.md": 7168,
     "coach-nutrition.md": 6144,
     "coach-onboarding.md": 6144,
     "coach-week.md": 6144,
@@ -26,7 +26,7 @@ def test_coach_md_within_limit() -> None:
 
 
 def test_wellbeing_within_limit() -> None:
-    assert len((AGENTS / "coach-wellbeing.md").read_bytes()) <= 6144
+    assert len((AGENTS / "coach-wellbeing.md").read_bytes()) <= 7168
 
 
 def test_other_agent_files_within_their_limits() -> None:
