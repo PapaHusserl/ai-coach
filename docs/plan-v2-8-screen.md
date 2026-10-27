@@ -65,10 +65,11 @@
 
 Новые:
 - `workload/screen.py` — `ScreenError`; `ScreenReader` (Protocol, `fetch(periods) -> list[dict[tuple[str, str],
-  float]]`, как `EventReader`); `AwReader(url)` — `screen_query(config)` (перенос из спайка: окна ∩ (not-afk ∪
+  float]]`, как `EventReader`); `AwReader(config)` — `screen_query(config)` (перенос из спайка: окна ∩ (not-afk ∪
   окна `[meeting]`), `[screen.title.<app>]` размечает сервер `categorize`, слияние по `(app, $category)`),
   `_query_literal`, POST `/api/0/query/` с таймаутом, читает из ответа только `app` и `$category`;
-  `read_screen(reader, config, first, last) -> list[dict]` — строки для `upsert_counter` по дню 04:00→04:00 и
+  `read_screen(reader, config, first, last) -> tuple[list[dict], list[str]]` — строки для `upsert_counter` и
+  замечания (неразмеченное > 15 %) по дню 04:00→04:00 и
   вечеру 19:00→04:00, `source='screen'`, `raw_json` None; `by_category` (work/hobby/browser/unmarked; app из
   `[meeting]` без другой разметки → work).
 - Тесты: `tests/test_workload_screen.py`, `tests/test_cli_screen.py`; `FakeAw` в `tests/workload_fakes.py`.
@@ -166,6 +167,7 @@
   отдаёт события с `title`, чтобы тесты ловили утечку.
 - Секция `[screen]` зеркалит `screen_rules.toml`: `work/hobby/browser/meeting = [app]`, `[screen.title.<app>]`
   с `work`/`hobby` списками regex; порядок классов `("work", "hobby")` — hobby побеждает (решение 18).
+  Имена `meeting` и ключи `title` уходят в запрос как в toml (регистр важен); `classify` — через `lower()`.
 - `coach screen` не пишет `sync_log` (не синк; `first_run_today` и `last_sync` не трогает).
 - `_has_data` в недельном обзоре считает день с `screen_work_hours` днём с данными.
 - Замечание sync «неразмеченное N %» — только если > 15 % (критерий спайка); названий в итоге нет.
@@ -173,6 +175,18 @@
   `workload.screen:*`, `workload.config:load_config`, `workload.config:_screen` (новая), `load.overload:hours`,
   `workload.service:_rows`, `store.workload:upsert_counter`, `sync.workload_sync:sync_workload`,
   `cli.main:screen` (новая).
+
+## Уточнения по партии 2 (папа-кабан, 2026-10-27, вопросы кабана)
+
+1. `AwReader(config: ScreenConfig)`, а не `url`: запросу нужны правила — принято.
+2. `read_screen` замечание «неразмеченное N %» (> 15 %) — возвращать `(rows, notes)`, как `stored_events` и
+   `read_calendar` в `sync/workload_sync.py`; изменяемый параметр `notes=None` — не в стиле модуля.
+3. `screen_evening_hours` = всё экранное 19:00→04:00, с браузером и неразмеченным — принято (Р5 = (1)).
+4. `coach screen --days N` печатает только день самочувствия, остальные дни пишет молча — принято.
+5. Чужие ключи прямо в `[screen]` не отклоняются — принято: так же ведут себя `[calendar]` и `[paths]`
+   (`config.py` читает только известные ключи); в `[screen.title.*]` чужой ключ — ошибка, как в спайке.
+6. `[meeting]`: в запрос (`filter_keyvals`, точное совпадение на сервере) — имена как в toml, регистр важен
+   (как ключи `[title.<app>]` в спайке); `classify` — через `lower()`, как остальные секции — принято.
 
 ## Открытые вопросы
 
@@ -205,6 +219,13 @@
 Партия 1 (ревью мамы-кабана, исправил кабан): имена `[meeting].apps` в `filter_keyvals` — как в toml (`meeting_names`),
 `classify` — без регистра; `title_seconds` через `query_head(rules)`; `rules` обязателен. `aw_compare --days 14` после
 правок — те же цифры. Для партии 2: тест `[meeting]` с именем в смешанном регистре. Р4 — решение 8.
+
+Партия 2 (вопросы кабана — папа, 2026-10-27): ответы на 6 вопросов — раздел «Уточнения по партии 2» и «Умолчания»;
+1, 3–6 приняты, 2 переделан: `read_screen` возвращает `(rows, notes)` вместо out-параметра (исправил кабан); Р5 —
+evening = экран 19:00–04:00. Доеба багов в коде не нашла.
+Ревью мамы партии 2: `screen_query` — `json.dumps(..., ensure_ascii=False)` (не-ASCII имена приложений), `coach screen
+--days` — `min=1` (исправил кабан, тесты — доеба); дубль сверки числа ответов в `AwReader.fetch` оставлен — на неё
+опираются тесты (замечание «можно убрать», не блокирует). Аудит свекрови — чисто.
 
 ## Смета (кабан-тесть, режим 1)
 

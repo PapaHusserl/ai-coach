@@ -15,6 +15,10 @@ COUNTER_KINDS = (
     "work_hours",
     "hobby_hours",
     "rest_hours",
+    "screen_work_hours",
+    "screen_hobby_hours",
+    "screen_browser_hours",
+    "screen_evening_hours",
 )
 
 

@@ -195,6 +195,68 @@ def test_missing_counter_is_none(conn: sqlite3.Connection) -> None:
     assert workload_day(conn, WED)["todo_open"] is None
 
 
+def counter(conn: sqlite3.Connection, kind: str, value: float, source: str = "screen") -> None:
+    upsert_counter(
+        conn,
+        {
+            "date": WED,
+            "kind": kind,
+            "value": value,
+            "source": source,
+            "raw_json": None,
+            "synced_at": "2026-10-08T10:00:00",
+        },
+    )
+
+
+def test_screen_hours_keep_fraction(conn: sqlite3.Connection) -> None:
+    counter(conn, "screen_work_hours", 2.25)
+    day = workload_series(conn, WED, WED)[0]
+    assert day["screen_work_hours"] == 2.25
+    assert isinstance(day["screen_work_hours"], float)
+
+
+def test_all_four_screen_counters_are_in_the_row(conn: sqlite3.Connection) -> None:
+    for kind, value in (
+        ("screen_work_hours", 3.5),
+        ("screen_hobby_hours", 1.25),
+        ("screen_browser_hours", 0.75),
+        ("screen_evening_hours", 2.5),
+    ):
+        counter(conn, kind, value)
+    day = workload_series(conn, WED, WED)[0]
+    assert [day[k] for k in sorted(day) if k.startswith("screen_")] == [0.75, 2.5, 1.25, 3.5]
+
+
+def test_screen_zero_stays_zero_not_none(conn: sqlite3.Connection) -> None:
+    counter(conn, "screen_work_hours", 0)
+    assert workload_series(conn, WED, WED)[0]["screen_work_hours"] == 0
+
+
+def test_todo_counter_stays_int_next_to_screen_hours(conn: sqlite3.Connection) -> None:
+    counter(conn, "todo_open", 4, "todo")
+    counter(conn, "screen_work_hours", 2.25)
+    day = workload_series(conn, WED, WED)[0]
+    assert day["todo_open"] == 4
+    assert isinstance(day["todo_open"], int)
+
+
+def test_series_without_screen_counters_has_none_fields(conn: sqlite3.Connection) -> None:
+    day = workload_series(conn, WED, WED)[0]
+    for kind in (
+        "screen_work_hours",
+        "screen_hobby_hours",
+        "screen_browser_hours",
+        "screen_evening_hours",
+    ):
+        assert day[kind] is None
+
+
+def test_screen_counter_of_another_day_is_not_taken(conn: sqlite3.Connection) -> None:
+    counter(conn, "screen_work_hours", 2.0)
+    assert workload_series(conn, THU, THU)[0]["screen_work_hours"] is None
+
+
 def test_series_has_row_per_day_in_order(conn: sqlite3.Connection) -> None:
     put(conn, slot(f"{THU} 10:00", f"{THU} 11:00"))
     series = workload_series(conn, WED, SAT)

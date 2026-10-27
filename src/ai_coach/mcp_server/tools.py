@@ -90,7 +90,16 @@ WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
-AHEAD_SKIP = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
+AHEAD_SKIP = (
+    "todo_open",
+    "todo_closed",
+    "grooming_done",
+    "grooming_pending",
+    "screen_work_hours",
+    "screen_hobby_hours",
+    "screen_browser_hours",
+    "screen_evening_hours",
+)
 WEEKEND_ONLY_SPORT = "bike"
 SATURDAY = 5
 NOT_LISTS = (

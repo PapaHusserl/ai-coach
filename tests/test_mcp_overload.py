@@ -92,6 +92,76 @@ def test_overload_days_show_manual_hours(conn: sqlite3.Connection) -> None:
     assert days[-2]["manual_work_hours"] is None
 
 
+def screen(conn: sqlite3.Connection, day: str, kind: str, value: float) -> None:
+    upsert_counter(
+        conn,
+        {
+            "date": day,
+            "kind": kind,
+            "value": value,
+            "source": "screen",
+            "raw_json": None,
+            "synced_at": "2026-10-08T10:00:00",
+        },
+    )
+
+
+def test_overload_days_show_screen_hours(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_work_hours", 3.25)
+    screen(conn, DAY, "screen_hobby_hours", 0)
+    days = call(conn, "get_overload", date=DAY)["days"]
+    assert days[-1]["screen_work_hours"] == 3.25
+    assert days[-1]["screen_hobby_hours"] == 0
+    assert days[-2]["screen_work_hours"] is None
+    assert days[-2]["screen_hobby_hours"] is None
+
+
+def test_overload_days_do_not_show_browser_and_evening_screen(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_browser_hours", 2.0)
+    screen(conn, DAY, "screen_evening_hours", 2.0)
+    day = call(conn, "get_overload", date=DAY)["days"][-1]
+    assert "screen_browser_hours" not in day
+    assert "screen_evening_hours" not in day
+
+
+def test_screen_hours_count_in_overload_total(conn: sqlite3.Connection) -> None:
+    before = call(conn, "get_overload", date=DAY)["total"]
+    screen(conn, DAY, "screen_work_hours", 8.0)
+    assert call(conn, "get_overload", date=DAY)["total"] > before
+
+
+def test_screen_overrides_calendar_in_overload_total(conn: sqlite3.Connection) -> None:
+    heavy_day(conn, DAY)
+    heavy = call(conn, "get_overload", date=DAY)["total"]
+    screen(conn, DAY, "screen_work_hours", 0)
+    assert call(conn, "get_overload", date=DAY)["total"] < heavy
+
+
+def test_manual_overrides_screen_in_overload_total(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_work_hours", 8.0)
+    manual(conn, DAY, "work_hours", 0.0)
+    assert call(conn, "get_overload", date=DAY)["total"] == 0
+
+
+def test_screen_hours_make_a_run_of_heavy_days(conn: sqlite3.Connection) -> None:
+    for number in range(14):
+        screen(conn, shift(DAY, -number), "screen_work_hours", 12.0)
+    assert "total_streak" in kinds(conn)
+
+
+def test_screen_zero_stops_calendar_run_of_heavy_days(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    for number in range(14):
+        screen(conn, shift(DAY, -number), "screen_work_hours", 0)
+    assert "total_streak" not in kinds(conn)
+
+
+def test_screen_work_on_weekend_is_weekend_work_signal(conn: sqlite3.Connection) -> None:
+    saturday = "2026-10-10"
+    screen(conn, saturday, "screen_work_hours", 4.0)
+    assert "weekend_work" in kinds(conn, saturday)
+
+
 def test_overload_without_data_is_empty(conn: sqlite3.Connection) -> None:
     assert kinds(conn) == []
 
@@ -175,6 +245,43 @@ def test_snapshot_ahead_marks_heavy_day(conn: sqlite3.Connection) -> None:
 def test_snapshot_ahead_still_has_no_counters(conn: sqlite3.Connection) -> None:
     ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
     assert all("todo_open" not in r for r in ahead)
+
+
+def test_snapshot_ahead_marks_day_heavy_by_screen_hours(conn: sqlite3.Connection) -> None:
+    screen(conn, shift(DAY, 2), "screen_work_hours", 14.0)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    flags = {r["date"]: r["overloaded"] for r in ahead}
+    assert flags[shift(DAY, 2)] is True
+    assert flags[shift(DAY, 3)] is False
+
+
+def test_snapshot_ahead_zero_screen_beats_heavy_calendar(conn: sqlite3.Connection) -> None:
+    heavy_day(conn, shift(DAY, 2))
+    screen(conn, shift(DAY, 2), "screen_work_hours", 0)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert {r["date"]: r["overloaded"] for r in ahead}[shift(DAY, 2)] is False
+
+
+def test_snapshot_ahead_has_no_screen_fields(conn: sqlite3.Connection) -> None:
+    screen(conn, shift(DAY, 2), "screen_work_hours", 14.0)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert all(not [k for k in r if k.startswith("screen_")] for r in ahead)
+
+
+def test_snapshot_with_seven_screen_days_fits_the_limit(conn: sqlite3.Connection) -> None:
+    for number in range(30):
+        for kind in (
+            "screen_work_hours",
+            "screen_hobby_hours",
+            "screen_browser_hours",
+            "screen_evening_hours",
+        ):
+            screen(conn, shift(DAY, -number), kind, 7.77)
+        feel(conn, shift(DAY, -number), "20:00:00", mood=2, stress=5, text="т" * 200)
+    heavy_days(conn, shift(DAY, -13), 21)
+    answer = call_text(conn, "get_morning_snapshot", date=DAY)
+    assert len(answer) <= MAX_CHARS
+    assert "screen_work_hours" in answer
 
 
 def test_snapshot_with_overload_fits_the_limit(conn: sqlite3.Connection) -> None:

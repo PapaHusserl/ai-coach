@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from ai_coach.load import overload
-from ai_coach.load.overload import find_overload, total_load
+from ai_coach.load.overload import find_overload, hours, total_load
 
 LAST = "2026-10-07"
 
@@ -92,6 +92,58 @@ def test_manual_hobby_overrides_calendar_hobby_only() -> None:
 def test_manual_hours_without_calendar_count() -> None:
     row = day(manual_work_hours=5.0)
     assert total_load(row) == pytest.approx(total_load(day(work_hours=5.0)))
+
+
+def test_screen_hours_override_calendar_hours() -> None:
+    row = day(work_hours=7.0, screen_work_hours=3.0, manual_work_hours=None)
+    assert hours(row, "work_hours") == 3.0
+    assert total_load(row) == pytest.approx(total_load(day(work_hours=3.0)))
+
+
+def test_manual_hours_override_screen_hours() -> None:
+    row = day(work_hours=7.0, screen_work_hours=3.0, manual_work_hours=2.0)
+    assert hours(row, "work_hours") == 2.0
+
+
+def test_manual_zero_overrides_screen() -> None:
+    assert hours(day(screen_work_hours=3.0, manual_work_hours=0.0), "work_hours") == 0
+
+
+def test_screen_zero_is_a_value_not_missing_data() -> None:
+    row = day(work_hours=7.0, screen_work_hours=0.0)
+    assert hours(row, "work_hours") == 0
+    assert total_load(row) == 0
+
+
+def test_screen_none_keeps_calendar_value() -> None:
+    row = day(work_hours=7.0, screen_work_hours=None)
+    assert hours(row, "work_hours") == 7.0
+
+
+def test_screen_hobby_overrides_calendar_hobby_only() -> None:
+    row = day(work_hours=7.0, hobby_hours=1.0, screen_hobby_hours=4.0)
+    assert hours(row, "hobby_hours") == 4.0
+    assert hours(row, "work_hours") == 7.0
+    assert total_load(row) == pytest.approx(total_load(day(work_hours=7.0, hobby_hours=4.0)))
+
+
+def test_manual_hobby_overrides_screen_hobby() -> None:
+    row = day(hobby_hours=1.0, screen_hobby_hours=4.0, manual_hobby_hours=0.5)
+    assert hours(row, "hobby_hours") == 0.5
+
+
+def test_screen_zero_hobby_overrides_calendar_hobby() -> None:
+    row = day(hobby_hours=2.0, screen_hobby_hours=0.0)
+    assert hours(row, "hobby_hours") == 0
+
+
+def test_screen_hours_without_calendar_count() -> None:
+    assert total_load({"screen_work_hours": 5}) == pytest.approx(total_load({"work_hours": 5}))
+    assert total_load({"screen_work_hours": 5}) > 0
+
+
+def test_screen_browser_and_evening_hours_add_no_load() -> None:
+    assert total_load(day(screen_browser_hours=6.0, screen_evening_hours=4.0)) == 0
 
 
 def quiet(count: int = 7) -> list[dict[str, Any]]:
@@ -189,6 +241,21 @@ def test_work_on_weekend_is_overload() -> None:
 
 def test_free_weekend_is_fine() -> None:
     days = with_tail(quiet(), 1, weekend=True, work_hours=0.0)
+    assert "weekend_work" not in kinds(days)
+
+
+def test_screen_work_on_weekend_is_overload() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=0.0, screen_work_hours=4.0)
+    assert "weekend_work" in kinds(days)
+
+
+def test_screen_zero_on_weekend_beats_calendar_work() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=4.0, screen_work_hours=0.0)
+    assert "weekend_work" not in kinds(days)
+
+
+def test_manual_zero_on_weekend_beats_screen_work() -> None:
+    days = with_tail(quiet(), 1, weekend=True, screen_work_hours=4.0, manual_work_hours=0.0)
     assert "weekend_work" not in kinds(days)
 
 

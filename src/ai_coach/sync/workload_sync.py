@@ -1,4 +1,4 @@
-"""Синхронизация нагрузки -> база: события календаря и счётчики туду и груминга.
+"""Синхронизация нагрузки -> база: события календаря, счётчики туду, груминга и часы экрана.
 
 Сначала всё читается, потом всё пишется одной транзакцией. Упавший источник — замечание в
 итоге и строка error в sync_log, остальные источники пишутся. todo.json и hb-watch только
@@ -14,16 +14,20 @@ from ai_coach.store.journal import add_sync_log
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
 from ai_coach.workload import (
     AHEAD_DAYS,
+    AwReader,
     CalendarError,
     CalendarReader,
     EventReader,
     GroomingError,
+    ScreenError,
+    ScreenReader,
     TodoError,
     WorkloadConfig,
     WorkloadConfigError,
     default_config,
     load_config,
     read_grooming,
+    read_screen,
     read_todo,
 )
 
@@ -123,10 +127,12 @@ def sync_workload(
     today: date | None = None,
     reader: EventReader | None = None,
     config: WorkloadConfig | None = None,
+    screen: ScreenReader | None = None,
 ) -> str:
-    """Читает календарь (окно today-days .. today+AHEAD_DAYS), туду и груминг, пишет в базу,
-    возвращает итог. Нет разметки календарей — календарь пропущен, туду и груминг читаются
-    по пути из конфига или по умолчанию."""
+    """Читает календарь (окно today-days .. today+AHEAD_DAYS), туду, груминг и экран (дни
+    today-days .. today), пишет в базу, возвращает итог. Нет разметки календарей — календарь
+    пропущен, туду и груминг читаются по пути из конфига или по умолчанию; нет [screen] —
+    экран пропущен (замечание в итоге)."""
     started = datetime.now().isoformat(timespec="seconds")
     today = today or date.today()
     first = today - timedelta(days=days)
@@ -157,6 +163,17 @@ def sync_workload(
         counters += read_grooming(config.hb_watch_path, first, today, today)
     except GroomingError as e:
         errors.append(f"груминг: {e}")
+    if config.screen is None:
+        notes.append("экран не настроен")
+    else:
+        try:
+            found, screen_notes = read_screen(
+                screen or AwReader(config.screen), config.screen, first, today
+            )
+            counters += found
+            notes += screen_notes
+        except ScreenError as e:
+            errors.append(f"экран: {e}")
     summary = f"событий {len(events) if events is not None else 0}, счётчиков {len(counters)}"
     message = "; ".join([summary, *notes, *errors])
     with conn:

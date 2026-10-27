@@ -1,8 +1,8 @@
-"""Команды `coach`: sync (Garmin и нагрузка), import, approve, push, link, status, weight, food,
-feel, profile, goal, pantry, shop, meal, recipe, practice, habit, protocol, supplement,
-med, event, log, edit, delete."""
+"""Команды `coach`: sync (Garmin и нагрузка), screen (экран), import, approve, push, link, status,
+weight, food, feel, profile, goal, pantry, shop, meal, recipe, practice, habit, protocol,
+supplement, med, event, log, edit, delete."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from getpass import getpass
 from pathlib import Path
 from typing import Annotated, Any
@@ -45,6 +45,7 @@ from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
 from ai_coach.sync import sync_workload as run_workload
+from ai_coach.workload import AwReader, ScreenError, WorkloadConfigError, load_config, read_screen
 from ai_coach.workouts import describe_workout, workout_link_url
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
@@ -301,6 +302,54 @@ def feel(
     finally:
         conn.close()
     typer.echo(f"Самочувствие {score} записано.")
+
+
+SCREEN_LABELS = (
+    ("screen_work_hours", "работа"),
+    ("screen_hobby_hours", "хобби"),
+    ("screen_browser_hours", "браузер"),
+    ("screen_evening_hours", "вечер"),
+)
+
+
+@app.command()
+def screen(
+    days: Annotated[int, typer.Option(min=1, help="За сколько последних дней")] = 1,
+) -> None:
+    """Прочитать экранное время из ActivityWatch в базу (только экран, не sync) и напечатать
+    часы по категориям за день самочувствия (до 04:00 — вчера). Нет [screen] в конфиге или
+    ActivityWatch не отвечает — одна строка и код 1."""
+    try:
+        config = load_config()
+    except WorkloadConfigError as e:
+        fail(str(e))
+        return
+    if config.screen is None:
+        fail("Экран не настроен: нет секции [screen] в конфиге нагрузки.")
+        return
+    moment = now()
+    day = wellbeing_day(datetime.fromisoformat(moment))
+    first = date.fromisoformat(day) - timedelta(days=days - 1)
+    try:
+        rows, _ = read_screen(
+            AwReader(config.screen), config.screen, first, date.fromisoformat(day)
+        )
+    except ScreenError as e:
+        fail(f"Экран: {e}")
+        return
+    conn = open_db()
+    try:
+        with conn:
+            for row in rows:
+                upsert_counter(conn, {**row, "synced_at": moment})
+    finally:
+        conn.close()
+    hours = {r["kind"]: r["value"] for r in rows if r["date"] == day}
+    if not hours:
+        typer.echo(f"Экран {day}: событий окон нет.")
+        return
+    parts = [f"{label} {hours[kind]} ч" for kind, label in SCREEN_LABELS]
+    typer.echo(f"Экран {day}: {', '.join(parts)}.")
 
 
 @profile_app.command("show")

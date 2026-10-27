@@ -57,6 +57,54 @@ def test_workload_row_has_hours_and_counters(conn: sqlite3.Connection) -> None:
     assert row["todo_closed"] == 2
 
 
+SCREEN_KINDS = (
+    "screen_work_hours",
+    "screen_hobby_hours",
+    "screen_browser_hours",
+    "screen_evening_hours",
+)
+
+
+def screen(conn: sqlite3.Connection, day: str, kind: str, value: float) -> None:
+    upsert_counter(
+        conn,
+        {
+            "date": day,
+            "kind": kind,
+            "value": value,
+            "source": "screen",
+            "raw_json": None,
+            "synced_at": "2026-10-08T10:00:00",
+        },
+    )
+
+
+def test_workload_row_has_screen_hours(conn: sqlite3.Connection) -> None:
+    for number, kind in enumerate(SCREEN_KINDS):
+        screen(conn, DAY, kind, 1.25 + number)
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert [row[k] for k in SCREEN_KINDS] == [1.25, 2.25, 3.25, 4.25]
+
+
+def test_workload_screen_fields_are_none_without_data(conn: sqlite3.Connection) -> None:
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert all(row[k] is None for k in SCREEN_KINDS)
+
+
+def test_workload_screen_zero_stays_zero(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_work_hours", 0)
+    assert rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]["screen_work_hours"] == 0
+
+
+def test_workload_with_events_true_still_has_screen_hours_and_no_app_names(
+    conn: sqlite3.Connection,
+) -> None:
+    screen(conn, DAY, "screen_work_hours", 2.5)
+    text = call_text(conn, "get_workload", date_from=DAY, date_to=DAY, events=True)
+    assert "2.5" in text
+    assert "raw_json" not in text
+
+
 def test_workload_range_of_92_days_is_allowed(conn: sqlite3.Connection) -> None:
     call(conn, "get_workload", date_from="2026-07-08", date_to="2026-10-07")
 

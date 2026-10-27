@@ -177,6 +177,60 @@ def test_weekend_work_hours_sum_of_week(filled: sqlite3.Connection) -> None:
     assert rows["2026-10-05"]["weekend_work_hours"] == pytest.approx(4.0)
 
 
+def screen(conn: sqlite3.Connection, day: str, kind: str, value: float) -> None:
+    values = {"date": day, "kind": kind, "value": value, "source": "screen"}
+    upsert_counter(conn, {**values, "raw_json": None, "synced_at": "2026-10-08T10:00:00"})
+
+
+def test_screen_hours_replace_calendar_in_work_hours(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-13", "09:00", "17:00")  # календарь 8 ч
+    screen(conn, "2026-10-13", "screen_work_hours", 3.5)
+    assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == pytest.approx(3.5)
+
+
+def test_screen_zero_replaces_calendar_in_work_hours(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-13", "09:00", "17:00")
+    screen(conn, "2026-10-13", "screen_work_hours", 0)
+    assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == 0
+
+
+def test_manual_hours_beat_screen_hours_in_work_hours(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_hours", 3.5)
+    counter(conn, "2026-10-13", "work_hours", 2.0)  # ручные часы: kind work_hours, source manual
+    assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == pytest.approx(2.0)
+
+
+def test_screen_and_calendar_days_are_summed_per_day(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-12", "09:00", "11:00")  # календарь 2 ч, экрана нет
+    screen(conn, "2026-10-13", "screen_work_hours", 3.5)
+    assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == pytest.approx(5.5)
+
+
+def test_screen_hours_on_weekend_go_to_weekend_work_hours(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-10", "screen_work_hours", 4.0)  # суббота недели B
+    screen(conn, "2026-10-09", "screen_work_hours", 6.0)  # пятница
+    row = by_start(weekly_review(conn, WED))["2026-10-05"]
+    assert row["weekend_work_hours"] == pytest.approx(4.0)
+    assert row["work_hours"] == pytest.approx(10.0)
+
+
+def test_day_with_only_screen_counter_is_a_day_with_data(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_hours", 3.5)
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 1
+
+
+def test_day_with_only_zero_screen_counter_is_a_day_with_data(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_hours", 0)
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 1
+
+
+def test_screen_days_are_counted_once_with_other_data(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-13", "09:00", "10:00")
+    screen(conn, "2026-10-13", "screen_work_hours", 3.5)
+    screen(conn, "2026-10-12", "screen_work_hours", 1.0)
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 2
+
+
 def test_todo_closed_sum_and_todo_open(filled: sqlite3.Connection) -> None:
     rows = by_start(weekly_review(filled, WED))
     assert rows["2026-09-28"]["todo_closed"] == 5

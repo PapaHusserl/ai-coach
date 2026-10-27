@@ -69,10 +69,14 @@ def _mean(values: list[float]) -> float | None:
 
 
 def _has_data(day: dict[str, Any]) -> bool:
-    """В дне есть хоть что-то: тренировка, календарь, ручные часы, счётчики туду."""
+    """В дне есть хоть что-то: тренировка, календарь, ручные часы, счётчики туду, часы экрана."""
     manual = [day[f"manual_{kind}"] is not None for kind in MANUAL_HOURS]
     calendar = [day[f"{kind}_hours"] for kind in HOURS]
-    counters = [day["todo_closed"] is not None, day["todo_open"] is not None]
+    counters = [
+        day["todo_closed"] is not None,
+        day["todo_open"] is not None,
+        day["screen_work_hours"] is not None,
+    ]
     return bool(day["tss"] or any(manual) or any(calendar) or any(counters))
 
 

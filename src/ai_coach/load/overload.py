@@ -5,7 +5,8 @@
 
 total_load = W_TSS * tss + W_WORK * work + W_HOBBY * hobby + W_EVENING * work_evening
              + W_WEEKEND * work (в сб/вс) + W_TODO * todo_closed + W_GROOMING * grooming_done.
-Ручные часы дня (manual_work_hours, manual_hobby_hours) главнее часов календаря.
+Ручные часы дня (manual_work_hours, manual_hobby_hours) главнее часов экрана
+(screen_work_hours, screen_hobby_hours), экран - часов календаря.
 """
 
 import sqlite3
@@ -45,18 +46,22 @@ TODO_GROWTH_MIN = 5
 OVERLOAD_DAYS = 7
 METRICS_DAYS = RECOVERY_RECENT_DAYS + RECOVERY_BASELINE_DAYS
 MANUAL_HOURS = ("work_hours", "hobby_hours", "rest_hours")
+SCREEN_HOURS = ("screen_work_hours", "screen_hobby_hours")
 
 
 def hours(day: dict[str, Any], key: str) -> float:
-    """Часы дня: ручные (manual_<key>) главнее календарных (<key>); нет данных - 0."""
+    """Часы дня: ручные (manual_<key>) главнее экрана (screen_<key>), экран - календарных (<key>);
+    нет данных - 0. Ноль ручных или экрана - значение, а не отсутствие."""
     manual = day.get(f"manual_{key}")
-    return manual if manual is not None else (day.get(key) or 0)
+    screen = day.get(f"screen_{key}")
+    return manual if manual is not None else (screen if screen is not None else (day.get(key) or 0))
 
 
 def total_load(day: dict[str, Any]) -> float:
     """Общая нагрузка дня одним числом. Ключи дня (нет или None - 0): tss, work_hours,
     hobby_hours, work_evening_hours, weekend, todo_closed, grooming_done и ручные
-    manual_work_hours, manual_hobby_hours (заданные заменяют календарные, 0 тоже)."""
+    manual_work_hours, manual_hobby_hours (заданные заменяют экранные и календарные, 0 тоже) и
+    screen_work_hours, screen_hobby_hours (заданные заменяют календарные, 0 тоже)."""
     work = hours(day, "work_hours")
     total = (
         W_TSS * (day.get("tss") or 0)
@@ -163,7 +168,8 @@ def day_entries(
 def overload_report(conn: sqlite3.Connection, day: str, tss: dict[str, float]) -> dict[str, Any]:
     """Нагрузка за OVERLOAD_DAYS дней до day включительно и сигналы перегруза. tss - TSS
     тренировок по дням (нет дня - 0). Ответ: date, total (нагрузка day), days (date, total и
-    ручные часы manual_work/hobby/rest_hours, None - не вводились), signals (find_overload)."""
+    ручные часы manual_work/hobby/rest_hours, None - не вводились, и часы экрана
+    screen_work/hobby_hours, None - нет данных), signals (find_overload)."""
     last = date.fromisoformat(day)
     first = (last - timedelta(days=OVERLOAD_DAYS - 1)).isoformat()
     days = day_entries(conn, first, day, tss)
@@ -175,6 +181,6 @@ def overload_report(conn: sqlite3.Connection, day: str, tss: dict[str, float]) -
                 moods.setdefault(mark["date"], {"date": mark["date"]})[key] = mark[key]
     metrics = list_daily_metrics(conn, start, day) + list(moods.values())
     signals = find_overload(days, metrics)
-    keys = tuple(f"manual_{kind}" for kind in MANUAL_HOURS)
+    keys = (*(f"manual_{kind}" for kind in MANUAL_HOURS), *SCREEN_HOURS)
     shown = [{"date": d["date"], "total": d["total"], **{k: d[k] for k in keys}} for d in days]
     return {"date": day, "total": days[-1]["total"], "days": shown, "signals": signals}

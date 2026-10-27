@@ -145,6 +145,33 @@ class FakeCalendarWriter:
         self.removed.append((uid, future))
 
 
+class FakeAw:
+    """Подмена ScreenReader: fetch(periods) -> секунды по (приложение, категория) на период.
+
+    days: день 'YYYY-MM-DD' -> (весь день 04:00→04:00, вечер 19:00→04:00); нет дня - события
+    окон не было. Периоды различаются по часу начала (04:00 - день, 19:00 - вечер)."""
+
+    def __init__(
+        self,
+        days: dict[str, tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]]
+        | None = None,
+        error: Exception | None = None,
+    ):
+        self.days = days or {}
+        self.error = error
+        self.calls: list[list[tuple[datetime, datetime]]] = []
+
+    def fetch(self, periods: list[tuple[datetime, datetime]]) -> list[dict[tuple[str, str], float]]:
+        self.calls.append(list(periods))
+        if self.error is not None:
+            raise self.error
+        out: list[dict[tuple[str, str], float]] = []
+        for start, _ in periods:
+            whole, evening = self.days.get(start.date().isoformat(), ({}, {}))
+            out.append(dict(whole if start.hour == 4 else evening))
+        return out
+
+
 class FlakyCommitConn:
     """Обёртка над соединением: первые `fail` вызовов commit() падают OperationalError."""
 

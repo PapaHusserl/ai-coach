@@ -13,7 +13,8 @@ def workload(
     conn: sqlite3.Connection, date_from: str, date_to: str, events: bool = False
 ) -> dict[str, Any]:
     """Нагрузка вне тренировок по дням: часы встреч (work/personal/hobby/rest, всего и после 19:00),
-    all_day_work, weekend, счётчики туду и груминга. events=true — только на один день
+    all_day_work, weekend, счётчики туду и груминга, часы экрана screen_* (только числа, без
+    названий приложений и окон). events=true — только на один день
     (date_from = date_to): ещё и события с названиями."""
     period(date_from, date_to)
     if events:

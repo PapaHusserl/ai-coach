@@ -91,6 +91,19 @@ def test_source_does_not_import_sending_code(path: Path) -> None:
             assert not name.startswith(forbidden + ".")
 
 
+@pytest.mark.parametrize("path", SOURCES, ids=lambda p: p.name)
+def test_source_does_not_mention_activitywatch_reader(path: Path) -> None:
+    text = path.read_text()
+    for word in ("AwReader", "read_screen", "ai_coach.workload.screen"):
+        assert word not in text
+
+
+@pytest.mark.parametrize("path", SOURCES, ids=lambda p: p.name)
+def test_source_does_not_import_screen_reader_module(path: Path) -> None:
+    for name in imported_modules(path):
+        assert name != "ai_coach.workload.screen"
+
+
 def test_garmin_client_is_not_loaded_with_server() -> None:
     code = (
         "import sys; import ai_coach.mcp_server.server;"

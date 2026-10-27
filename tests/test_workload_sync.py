@@ -1,9 +1,12 @@
+import json
 import sqlite3
+import urllib.request
 from datetime import date
 from pathlib import Path
 
 import pytest
 from workload_fakes import (
+    FakeAw,
     FakeCalendar,
     raw_event,
     stored_event,
@@ -18,7 +21,8 @@ from ai_coach.store.journal import add_sync_log, sync_runs_on
 from ai_coach.store.workload import list_calendar_events, list_counters, replace_calendar_window
 from ai_coach.sync.workload_sync import sync_workload
 from ai_coach.workload.calendar_eventkit import CalendarError
-from ai_coach.workload.config import load_config
+from ai_coach.workload.config import WorkloadConfig, load_config
+from ai_coach.workload.screen import AwReader, ScreenError
 
 TODAY = date(2026, 10, 8)
 DAYS = 7
@@ -201,6 +205,190 @@ def test_no_calendar_config_skips_calendar_but_reads_todo(
     assert reader.calls == []
     assert list_calendar_events(conn, *ALL) == []
     assert kinds(conn)["todo_open"] == 1
+
+
+HOUR = 3600
+SCREEN_TITLE = "СЕКРЕТНЫЙ_ЗАГОЛОВОК_ОКНА"
+
+
+def with_screen(env: Env, tmp_path: Path) -> WorkloadConfig:
+    text = (
+        f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        '[screen]\nwork = ["Alpha Editor"]\nhobby = ["BetaGame"]\n'
+    )
+    return load_config(write_config(tmp_path / "screen.toml", text))
+
+
+def screen_day() -> dict[str, tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]]:
+    whole = {("alpha editor", ""): 3 * HOUR, ("betagame", ""): HOUR}
+    return {"2026-10-08": (whole, {("alpha editor", ""): HOUR}), "2026-10-07": (whole, {})}
+
+
+def screen_counters(conn: sqlite3.Connection) -> list[tuple[str, str, float, str]]:
+    found = list_counters(conn, *ALL)
+    return [
+        (c["date"], c["kind"], c["value"], c["source"])
+        for c in found
+        if c["kind"].startswith("screen_")
+    ]
+
+
+def run_screen(conn: sqlite3.Connection, config: WorkloadConfig, aw: FakeAw | None) -> str:
+    return sync_workload(
+        conn, reader=FakeCalendar(), config=config, days=DAYS, today=TODAY, screen=aw
+    )
+
+
+def test_sync_writes_screen_counters_with_source_screen(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    run_screen(conn, with_screen(env, tmp_path), FakeAw(screen_day()))
+    found = screen_counters(conn)
+    assert ("2026-10-08", "screen_work_hours", 3.0, "screen") in found
+    assert ("2026-10-08", "screen_hobby_hours", 1.0, "screen") in found
+    assert ("2026-10-08", "screen_evening_hours", 1.0, "screen") in found
+    assert ("2026-10-07", "screen_work_hours", 3.0, "screen") in found
+    assert len(found) == 8
+
+
+def test_sync_asks_screen_for_days_first_to_today(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    aw = FakeAw()
+    run_screen(conn, with_screen(env, tmp_path), aw)
+    assert len(aw.calls) == 1
+    periods = aw.calls[0]
+    assert len(periods) == 2 * (DAYS + 1)
+    assert periods[0][0].date() == date(2026, 10, 1)
+    assert periods[-1][1].date() == date(2026, 10, 9)
+
+
+def test_sync_screen_counters_are_counted_in_summary(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    config = with_screen(env, tmp_path)
+    plain = run_screen(conn, config, FakeAw())
+    with_aw = run_screen(conn, config, FakeAw(screen_day()))
+    assert plain.split(";")[0] != with_aw.split(";")[0]
+
+
+def test_sync_screen_error_is_noted_other_sources_are_written(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    aw = FakeAw(error=ScreenError("aw-server не отвечает"))
+    reader = FakeCalendar([raw_event(uid="a")])
+    message = sync_workload(
+        conn, reader=reader, config=with_screen(env, tmp_path), days=DAYS, today=TODAY, screen=aw
+    )
+    assert "экран: aw-server не отвечает" in message
+    assert log_rows(conn) == [("workload", "error")]
+    assert [e["uid"] for e in list_calendar_events(conn, *ALL)] == ["a"]
+    assert kinds(conn)["todo_open"] == 1
+    assert kinds(conn)["grooming_pending"] == 1
+    assert screen_counters(conn) == []
+
+
+def test_sync_screen_error_keeps_previous_screen_counters(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    config = with_screen(env, tmp_path)
+    run_screen(conn, config, FakeAw(screen_day()))
+    before = screen_counters(conn)
+    run_screen(conn, config, FakeAw(error=ScreenError("нет")))
+    assert screen_counters(conn) == before
+
+
+def test_calendar_error_does_not_stop_screen(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    reader = FakeCalendar(error=CalendarError("нет доступа"))
+    sync_workload(
+        conn,
+        reader=reader,
+        config=with_screen(env, tmp_path),
+        days=DAYS,
+        today=TODAY,
+        screen=FakeAw(screen_day()),
+    )
+    assert len(screen_counters(conn)) == 8
+
+
+def test_no_screen_section_says_screen_is_not_configured(
+    conn: sqlite3.Connection, env: Env
+) -> None:
+    aw = FakeAw(screen_day())
+    message = run_screen(conn, env.config, aw)
+    assert "экран не настроен" in message
+    assert aw.calls == []
+    assert screen_counters(conn) == []
+    assert log_rows(conn) == [("workload", "ok")]
+
+
+def test_screen_unmarked_note_goes_to_message(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    day = {"2026-10-08": ({("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 8 * HOUR}, {})}
+    message = run_screen(conn, with_screen(env, tmp_path), FakeAw(day))
+    assert "неразмеченное" in message
+    assert "zeta" not in message
+    assert log_rows(conn) == [("workload", "ok")]
+
+
+def test_repeated_sync_replaces_screen_values(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    config = with_screen(env, tmp_path)
+    run_screen(conn, config, FakeAw(screen_day()))
+    smaller = {"2026-10-08": ({("alpha editor", ""): HOUR}, {})}
+    run_screen(conn, config, FakeAw(smaller))
+    found = {(d, k): v for d, k, v, _ in screen_counters(conn)}
+    assert found[("2026-10-08", "screen_work_hours")] == 1.0
+    assert len([1 for d, _ in found if d == "2026-10-08"]) == 4
+
+
+def test_screen_sync_writes_one_workload_log_row(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    run_screen(conn, with_screen(env, tmp_path), FakeAw(screen_day()))
+    assert log_rows(conn) == [("workload", "ok")]
+
+
+def test_sync_with_screen_does_not_touch_todo_and_hb_watch(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    before = tree_state(env.todo, env.hb)
+    config = with_screen(env, tmp_path)
+    run_screen(conn, config, FakeAw(screen_day()))
+    run_screen(conn, config, FakeAw(screen_day()))
+    assert tree_state(env.todo, env.hb) == before
+
+
+def test_sync_through_aw_reader_stores_no_window_titles(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Response:
+        def read(self) -> bytes:
+            events = [
+                {
+                    "duration": 3600,
+                    "data": {"app": "Alpha Editor", "title": SCREEN_TITLE, "$category": ["work"]},
+                }
+            ]
+            return json.dumps([events] * 2 * (DAYS + 1)).encode("utf-8")
+
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Response())
+    config = with_screen(env, tmp_path)
+    assert config.screen is not None
+    message = run_screen(conn, config, AwReader(config.screen))
+    assert screen_counters(conn)
+    assert SCREEN_TITLE not in "\n".join(conn.iterdump())
+    assert SCREEN_TITLE not in message
 
 
 def test_workload_log_does_not_change_first_run_today(conn: sqlite3.Connection, env: Env) -> None:

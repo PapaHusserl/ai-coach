@@ -14,7 +14,14 @@ from ai_coach.store.workload import list_calendar_events, list_counters
 EVENING_FROM = time(19, 0)
 AHEAD_DAYS = 14
 HOURS = ("work", "personal", "hobby", "rest")
-COUNTERS = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
+INT_COUNTERS = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
+SCREEN_COUNTERS = (
+    "screen_work_hours",
+    "screen_hobby_hours",
+    "screen_browser_hours",
+    "screen_evening_hours",
+)
+COUNTERS = INT_COUNTERS + SCREEN_COUNTERS
 EVENT_FIELDS = (
     "title",
     "start_at",
@@ -64,7 +71,9 @@ def _covers_day(event: dict[str, Any], day: date) -> bool:
     return date.fromisoformat(event["date"]) <= day <= last.date()
 
 
-def _day_row(day: date, events: list[dict[str, Any]], counters: dict[str, int]) -> dict[str, Any]:
+def _day_row(
+    day: date, events: list[dict[str, Any]], counters: dict[str, int | float]
+) -> dict[str, Any]:
     midnight = datetime.combine(day, time.min)
     evening = datetime.combine(day, EVENING_FROM)
     next_midnight = midnight + timedelta(days=1)
@@ -90,7 +99,9 @@ def _rows(conn: sqlite3.Connection, start: date, end: date) -> list[dict[str, An
     # событие, начатое накануне, может заходить за полночь в первый день
     found = list_calendar_events(conn, (start - timedelta(days=1)).isoformat(), end.isoformat())
     counters = {
-        f"{c['date']}|{c['kind']}": int(c["value"])
+        f"{c['date']}|{c['kind']}": float(c["value"])
+        if c["kind"] in SCREEN_COUNTERS
+        else int(c["value"])
         for c in list_counters(conn, start.isoformat(), end.isoformat())
     }
     rows: list[dict[str, Any]] = []
@@ -104,7 +115,9 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
     """Метрики по дням start..end включительно (YYYY-MM-DD), по возрастанию даты, без названий.
     Ключи дня: date, weekend (сб/вс),
     {work,personal,hobby,rest}_hours и _evening_hours (после 19:00),
-    all_day_work, todo_open, todo_closed, grooming_done, grooming_pending (None - не считались)."""
+    all_day_work, todo_open, todo_closed, grooming_done, grooming_pending (None - не считались),
+    screen_work/hobby/browser/evening_hours (часы экрана 04:00→04:00, вечер 19:00→04:00;
+    None - нет данных экрана за день)."""
     return _rows(conn, date.fromisoformat(start), date.fromisoformat(end))
 
 

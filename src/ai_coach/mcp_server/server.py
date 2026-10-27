@@ -23,9 +23,10 @@ INSTRUCTIONS = (
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
-    "Нагрузка вне тренировок (get_workload): календарь, туду и груминг берутся из базы, "
-    "их кладёт coach sync; к календарю MCP не ходит; названия событий — только "
-    "get_workload(events=true) на один день. "
+    "Нагрузка вне тренировок (get_workload): календарь, туду, груминг и экранное время "
+    "(часы по категориям) берутся из базы, их кладёт coach sync или coach screen; к календарю "
+    "и ActivityWatch MCP не ходит; названия событий — только "
+    "get_workload(events=true) на один день, названий приложений и окон нет. "
     "Недельный обзор (get_weekly_review): цифры по неделям Пн-Вс и дельты, без выводов; "
     "в сводке week_review_due - пора проводить обзор, после обзора тренер "
     "отмечает его командой coach review done (CLI, не MCP). "
@@ -70,14 +71,18 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(часы встреч календаря) и _evening_hours "
         "(после 19:00); all_day_work (рабочее событие на весь день); счётчики todo_open "
         "(снимок на дату последнего sync), todo_closed (закрыто за день), grooming_done, "
-        "grooming_pending (null - не считались). events=true - только на один день "
-        "(date_from = date_to): ещё и events с названиями. Пишет coach sync.",
+        "grooming_pending (null - не считались); screen_work/hobby/browser/evening_hours - "
+        "часы экрана (день 04:00-04:00, вечер 19:00-04:00; null - нет данных экрана; "
+        "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана). "
+        "events=true - только на один день "
+        "(date_from = date_to): ещё и events с названиями. Пишет coach sync (и coach screen).",
     ),
     "get_overload": (
         overload_tool.overload,
         "Общая нагрузка и сигналы перегруза (date - YYYY-MM-DD): total - нагрузка дня одним "
         "числом (тренировки + работа + хобби + вечер/выходные + туду и груминг), days - 7 дней "
-        "до date (date, total, ручные часы manual_work/hobby/rest_hours, null - не вводились), "
+        "до date (date, total, ручные часы manual_work/hobby/rest_hours, null - не вводились, "
+        "часы экрана screen_work/hobby_hours, null - нет данных), "
         "signals - total_streak, evening_streak, weekend_work, recovery_drop, todo_growth "
         "(kind, value, limit; у recovery_drop value и limit - объекты по readiness/mood/stress); "
         "пустой список - перегруза нет. Нет нагрузки тренировок - "

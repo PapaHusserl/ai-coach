@@ -152,6 +152,21 @@ def test_upsert_counter_known_kinds_are_allowed(conn: sqlite3.Connection, kind: 
     upsert_counter(conn, counter("2026-10-07", kind, 1, "manual"))
 
 
+@pytest.mark.parametrize(
+    "kind",
+    ["screen_work_hours", "screen_hobby_hours", "screen_browser_hours", "screen_evening_hours"],
+)
+def test_upsert_counter_screen_kinds_are_allowed(conn: sqlite3.Connection, kind: str) -> None:
+    upsert_counter(conn, {**counter("2026-10-07", kind, 2.25, "screen"), "raw_json": None})
+    found = list_counters(conn, "2026-10-07", "2026-10-07", kind)
+    assert [(c["value"], c["source"]) for c in found] == [(2.25, "screen")]
+
+
+def test_upsert_counter_unknown_screen_kind_is_refused(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError):
+        upsert_counter(conn, counter("2026-10-07", "screen_foo", 1, "screen"))
+
+
 def test_list_counters_period_and_kind_filter(conn: sqlite3.Connection) -> None:
     for day in ("2026-10-06", "2026-10-07", "2026-10-08"):
         upsert_counter(conn, counter(day, "todo_closed", 1))
