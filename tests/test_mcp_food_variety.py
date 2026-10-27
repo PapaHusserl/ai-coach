@@ -1,17 +1,28 @@
 """MCP шага 24: save_food_nutrition(groups), get_food_variety, get_nutrient_norms."""
 
+import asyncio
 import sqlite3
 
 import pytest
 from fake_clock import freeze
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, rows, tool_names
+from mcp_fakes import call, db_file, rows, tool_names
 
+from ai_coach.mcp_server import build_server
 from ai_coach.nutrition.groups import FOOD_GROUPS
 from ai_coach.nutrition.norms import norms_table
-from ai_coach.store.journal import add_food, add_food_groups, edit_food, list_food
+from ai_coach.store.journal import (
+    add_food,
+    add_food_groups,
+    delete_food,
+    edit_food,
+    list_food,
+    update_food,
+)
 
 SAVE = "save_food_nutrition"
+SAVE_GROUPS = "save_food_groups"
+WITHOUT = "get_food_without_groups"
 DAY = "2026-10-07"
 MACROS = {"kcal": 520.0, "protein_g": 31.5, "fat_g": 14.0, "carbs_g": 62.0}
 WED = "2026-10-14 12:00:00"  # неделя Пн 2026-10-12
@@ -29,7 +40,8 @@ def stored(conn: sqlite3.Connection, food_id: int) -> list[str]:
 
 
 def kcal(conn: sqlite3.Connection, food_id: int) -> float | None:
-    return next(r["kcal"] for r in list_food(conn, "2000-01-01", "2100-01-01") if r["id"] == food_id)
+    rows = list_food(conn, "2000-01-01", "2100-01-01")
+    return next(r["kcal"] for r in rows if r["id"] == food_id)
 
 
 def test_tools_exist(conn: sqlite3.Connection) -> None:
@@ -46,10 +58,17 @@ def test_save_with_groups_writes_macros_and_groups(conn: sqlite3.Connection) -> 
     assert stored(conn, food_id) == ["fish", "greens"]
 
 
-def test_save_without_groups_works_as_before(conn: sqlite3.Connection) -> None:
+def test_save_schema_requires_groups(conn: sqlite3.Connection) -> None:
+    server = build_server(db_file(conn))
+    tool = next(t for t in asyncio.run(server.list_tools()) if t.name == SAVE)
+    assert "groups" in tool.input_schema["required"]
+
+
+def test_save_without_groups_is_error_and_writes_nothing(conn: sqlite3.Connection) -> None:
     food_id = new_food(conn)
-    call(conn, SAVE, food_id=food_id, **MACROS)
-    assert kcal(conn, food_id) == 520.0
+    with pytest.raises(ToolError):
+        call(conn, SAVE, food_id=food_id, **MACROS)
+    assert kcal(conn, food_id) is None
     assert stored(conn, food_id) == []
 
 
@@ -87,7 +106,7 @@ def test_save_on_already_calculated_entry_is_error(conn: sqlite3.Connection) -> 
 
 def test_entry_with_macros_but_no_groups_is_already_calculated(conn: sqlite3.Connection) -> None:
     food_id = new_food(conn)
-    call(conn, SAVE, food_id=food_id, **MACROS)
+    update_food(conn, food_id, MACROS)
     with pytest.raises(ToolError, match="уже посчитано"):
         call(conn, SAVE, food_id=food_id, groups=["fish"], **MACROS)
     assert stored(conn, food_id) == []
@@ -99,6 +118,106 @@ def test_text_edit_allows_recalculation_with_new_groups(conn: sqlite3.Connection
     edit_food(conn, food_id, text="курица")
     call(conn, SAVE, food_id=food_id, groups=["poultry"], **MACROS)
     assert stored(conn, food_id) == ["poultry"]
+
+
+# --- get_food_without_groups / save_food_groups (партия 5) ---
+
+
+def counted(conn: sqlite3.Connection, day: str = DAY, time: str = "09:00:00") -> int:
+    food_id = add_food(conn, {"logged_at": f"{day} {time}", "text": "рыба с салатом"})
+    update_food(conn, food_id, MACROS)
+    return food_id
+
+
+def test_new_tools_exist(conn: sqlite3.Connection) -> None:
+    assert {WITHOUT, SAVE_GROUPS} <= tool_names(conn)
+
+
+def test_without_groups_rows_have_fields(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    row = rows(conn, WITHOUT, start=DAY, end=DAY)[0]
+    assert (row["id"], row["logged_at"], row["text"], row["kcal"]) == (
+        food_id,
+        f"{DAY} 09:00:00",
+        "рыба с салатом",
+        520.0,
+    )
+
+
+def test_without_groups_hides_marked_entry(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    add_food_groups(conn, food_id, ["fish"])
+    assert rows(conn, WITHOUT, start=DAY, end=DAY) == []
+
+
+def test_without_groups_end_before_start_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, WITHOUT, start="2026-10-08", end="2026-10-07")
+
+
+def test_without_groups_too_long_period_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, WITHOUT, start="2026-01-01", end="2026-12-31")
+
+
+def test_without_groups_caps_at_sixty_oldest_first(conn: sqlite3.Connection) -> None:
+    ids = [counted(conn, DAY, f"{h:02d}:{m:02d}:00") for h in range(7, 9) for m in range(0, 31)]
+    result = call(conn, WITHOUT, start=DAY, end=DAY)
+    assert result["truncated"] is True
+    assert [r["id"] for r in result["rows"]] == ids[:60]
+
+
+def test_save_groups_writes_groups_and_keeps_macros(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    before = kcal(conn, food_id)
+    call(conn, SAVE_GROUPS, food_id=food_id, groups=["fish"])
+    assert stored(conn, food_id) == ["fish"]
+    assert kcal(conn, food_id) == before == 520.0
+
+
+def test_save_groups_twice_is_error_and_keeps_rows(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    call(conn, SAVE_GROUPS, food_id=food_id, groups=["fish"])
+    with pytest.raises(ToolError, match="уже размечена"):
+        call(conn, SAVE_GROUPS, food_id=food_id, groups=["eggs"])
+    assert stored(conn, food_id) == ["fish"]
+
+
+def test_save_groups_without_macros_points_to_save_nutrition(conn: sqlite3.Connection) -> None:
+    food_id = new_food(conn)
+    with pytest.raises(ToolError, match="save_food_nutrition"):
+        call(conn, SAVE_GROUPS, food_id=food_id, groups=["fish"])
+    assert stored(conn, food_id) == []
+
+
+def test_save_groups_empty_list_is_error(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    with pytest.raises(ToolError):
+        call(conn, SAVE_GROUPS, food_id=food_id, groups=[])
+    assert stored(conn, food_id) == []
+
+
+def test_save_groups_unknown_group_lists_allowed_and_writes_nothing(
+    conn: sqlite3.Connection,
+) -> None:
+    food_id = counted(conn)
+    with pytest.raises(ToolError) as error:
+        call(conn, SAVE_GROUPS, food_id=food_id, groups=["fish", "organ_meat"])
+    assert all(key in str(error.value) for key in FOOD_GROUPS)
+    assert stored(conn, food_id) == []
+
+
+def test_save_groups_deleted_entry_is_error(conn: sqlite3.Connection) -> None:
+    food_id = counted(conn)
+    delete_food(conn, food_id, f"{DAY} 12:00:00")
+    with pytest.raises(ToolError, match="удалена"):
+        call(conn, SAVE_GROUPS, food_id=food_id, groups=["fish"])
+    assert stored(conn, food_id) == []
+
+
+def test_save_groups_missing_entry_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError, match="нет"):
+        call(conn, SAVE_GROUPS, food_id=999, groups=["fish"])
 
 
 # --- get_food_variety ---

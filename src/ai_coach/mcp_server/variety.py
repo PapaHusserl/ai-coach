@@ -11,7 +11,8 @@ from ai_coach.mcp_server.review import MAX_WEEKS
 from ai_coach.nutrition.norms import norms_table
 from ai_coach.nutrition.variety import variety_week
 from ai_coach.review import monday
-from ai_coach.store.journal import wellbeing_day
+from ai_coach.store.db import fetch_one
+from ai_coach.store.journal import add_food_groups, list_food_without_groups, wellbeing_day
 
 
 def food_variety(conn: sqlite3.Connection, weeks: int = 4) -> dict[str, Any]:
@@ -22,7 +23,7 @@ def food_variety(conn: sqlite3.Connection, weeks: int = 4) -> dict[str, Any]:
         raise ToolError(f"weeks от 1 до {MAX_WEEKS}, получено: {weeks}")
     today = date.fromisoformat(wellbeing_day(datetime.now()))
     first = monday(today) - timedelta(days=7 * (weeks - 1))
-    rows = []
+    rows: list[dict[str, Any]] = []
     for number in range(weeks):
         start = first + timedelta(days=7 * number)
         end = start + timedelta(days=6)
@@ -35,6 +36,31 @@ def food_variety(conn: sqlite3.Connection, weeks: int = 4) -> dict[str, Any]:
             }
         )
     return tools.cap(rows)
+
+
+def food_without_groups(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Записи еды с КБЖУ, но без групп продуктов, за период; старые первыми."""
+    tools.period(start, end)
+    return tools.cap(list_food_without_groups(conn, start, end))
+
+
+def save_food_groups(conn: sqlite3.Connection, food_id: int, groups: list[str]) -> dict[str, Any]:
+    """Группы продуктов записи, у которой КБЖУ уже есть, а групп нет. КБЖУ не трогает."""
+    tools.check_groups(groups)
+    if not groups:
+        raise ToolError("Нечего записывать - пропусти запись.")
+    row = fetch_one(conn, "SELECT deleted_at, kcal FROM food_log WHERE id = ?", (food_id,))
+    if row is None:
+        raise ToolError(f"Записи еды {food_id} нет.")
+    if row["deleted_at"] is not None:
+        raise ToolError(f"Запись еды {food_id} удалена.")
+    if row["kcal"] is None:
+        raise ToolError(f"У записи {food_id} нет КБЖУ: сначала save_food_nutrition.")
+    with conn:
+        saved = add_food_groups(conn, food_id, groups)
+    if not saved:
+        raise ToolError(f"Запись {food_id} уже размечена.")
+    return {"food_id": food_id, "groups": list(dict.fromkeys(groups))}
 
 
 def nutrient_norms(conn: sqlite3.Connection) -> dict[str, Any]:

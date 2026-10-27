@@ -71,6 +71,20 @@ def list_food(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, 
     return fetch_all(conn, sql, (start, end))
 
 
+def list_food_without_groups(
+    conn: sqlite3.Connection, start: str, end: str
+) -> list[dict[str, Any]]:
+    """Живые записи с КБЖУ и без групп продуктов, с датой logged_at start..end включительно,
+    по времени."""
+    sql = (
+        "SELECT * FROM food_log f WHERE substr(f.logged_at, 1, 10) BETWEEN ? AND ? "
+        "AND f.deleted_at IS NULL AND f.kcal IS NOT NULL "
+        "AND NOT EXISTS (SELECT 1 FROM food_group g WHERE g.food_id = f.id) "
+        "ORDER BY f.logged_at, f.id"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def list_food_pending(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Записи без КБЖУ (kcal пуст), по времени."""
     sql = "SELECT * FROM food_log WHERE kcal IS NULL AND deleted_at IS NULL ORDER BY logged_at, id"

@@ -9,9 +9,7 @@ from ai_coach.store.journal import add_food, add_food_groups, delete_food
 MON = "2026-10-12"
 
 
-def meal(
-    conn: sqlite3.Connection, day: str, groups: list[str], time: str = "12:00:00"
-) -> int:
+def meal(conn: sqlite3.Connection, day: str, groups: list[str], time: str = "12:00:00") -> int:
     food_id = add_food(conn, {"logged_at": f"{day} {time}", "text": "еда"})
     if groups:
         add_food_groups(conn, food_id, groups)

@@ -19,7 +19,8 @@ INSTRUCTIONS = (
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
     "create_draft_event, cancel_draft_event — только draft, propose_phase) и КБЖУ записи еды, "
-    "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition). "
+    "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition), и группы "
+    "старым записям без групп (save_food_groups). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
@@ -239,8 +240,20 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "save_food_nutrition": (
         tools.save_food_nutrition,
         "Записать КБЖУ (kcal, protein_g, fat_g, carbs_g — на всю порцию записи) для записи "
-        "еды без КБЖУ по food_id; посчитанные не меняет. groups - необязательно, список ключей "
-        "групп продуктов записи (" + ", ".join(FOOD_GROUPS) + "); неизвестный ключ - отказ.",
+        "еды без КБЖУ по food_id; посчитанные не меняет. groups обязателен: список ключей "
+        "групп продуктов записи (" + ", ".join(FOOD_GROUPS) + "); нет групп - пустой список; "
+        "неизвестный ключ - отказ.",
+    ),
+    "get_food_without_groups": (
+        variety.food_without_groups,
+        "Записи еды с КБЖУ, но без групп продуктов, за период (start, end - YYYY-MM-DD): "
+        "id, logged_at, text, kcal; старые первыми. Для дозаписи групп старым записям.",
+    ),
+    "save_food_groups": (
+        variety.save_food_groups,
+        "Записать группы продуктов (groups - ключи как в save_food_nutrition, не пустой список) "
+        "записи еды, у которой КБЖУ уже есть, а групп нет. КБЖУ не меняет; размеченную запись "
+        "не меняет.",
     ),
     "create_draft_workout": (
         tools.create_draft_workout,

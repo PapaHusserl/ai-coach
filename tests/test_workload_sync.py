@@ -219,8 +219,11 @@ def with_screen(env: Env, tmp_path: Path) -> WorkloadConfig:
     return load_config(write_config(tmp_path / "screen.toml", text))
 
 
-def screen_day() -> dict[str, tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]]:
-    whole = {("alpha editor", ""): 3 * HOUR, ("betagame", ""): HOUR}
+ScreenDays = dict[str, tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]]
+
+
+def screen_day() -> ScreenDays:
+    whole: dict[tuple[str, str], float] = {("alpha editor", ""): 3 * HOUR, ("betagame", ""): HOUR}
     return {"2026-10-08": (whole, {("alpha editor", ""): HOUR}), "2026-10-07": (whole, {})}
 
 
@@ -233,7 +236,9 @@ def screen_counters(conn: sqlite3.Connection) -> list[tuple[str, str, float, str
     ]
 
 
-def run_screen(conn: sqlite3.Connection, config: WorkloadConfig, aw: FakeAw | None) -> str:
+def run_screen(
+    conn: sqlite3.Connection, config: WorkloadConfig, aw: FakeAw | AwReader | None
+) -> str:
     return sync_workload(
         conn, reader=FakeCalendar(), config=config, days=DAYS, today=TODAY, screen=aw
     )
@@ -327,7 +332,9 @@ def test_no_screen_section_says_screen_is_not_configured(
 def test_screen_unmarked_note_goes_to_message(
     conn: sqlite3.Connection, env: Env, tmp_path: Path
 ) -> None:
-    day = {"2026-10-08": ({("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 8 * HOUR}, {})}
+    day: ScreenDays = {
+        "2026-10-08": ({("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 8 * HOUR}, {})
+    }
     message = run_screen(conn, with_screen(env, tmp_path), FakeAw(day))
     assert "неразмеченное" in message
     assert "zeta" not in message
@@ -339,7 +346,7 @@ def test_repeated_sync_replaces_screen_values(
 ) -> None:
     config = with_screen(env, tmp_path)
     run_screen(conn, config, FakeAw(screen_day()))
-    smaller = {"2026-10-08": ({("alpha editor", ""): HOUR}, {})}
+    smaller: ScreenDays = {"2026-10-08": ({("alpha editor", ""): HOUR}, {})}
     run_screen(conn, config, FakeAw(smaller))
     found = {(d, k): v for d, k, v, _ in screen_counters(conn)}
     assert found[("2026-10-08", "screen_work_hours")] == 1.0

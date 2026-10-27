@@ -47,6 +47,8 @@ EXPECTED_TOOLS = {
     "get_wellbeing",
     "get_deviations",
     "save_food_nutrition",
+    "get_food_without_groups",
+    "save_food_groups",
     "create_draft_workout",
     "cancel_draft_workout",
     "propose_phase",

@@ -102,5 +102,5 @@ def test_save_nutrition_to_deleted_entry_is_rejected(conn: sqlite3.Connection) -
     fid = add_food(conn, {"logged_at": f"{DAY} 09:00:00", "text": "суп"})
     delete_food(conn, fid, DELETED)
     with pytest.raises(ToolError, match="удалена"):
-        call(conn, "save_food_nutrition", food_id=fid, **MACROS)
+        call(conn, "save_food_nutrition", food_id=fid, groups=[], **MACROS)
     assert conn.execute("SELECT kcal FROM food_log").fetchone()[0] is None

@@ -521,19 +521,17 @@ def save_food_nutrition(
     protein_g: float,
     fat_g: float,
     carbs_g: float,
-    groups: list[str] | None = None,
+    groups: list[str],
 ) -> dict[str, Any]:
-    """КБЖУ записи еды (оценка тренера) и, если переданы, группы продуктов. Только для записи
-    без КБЖУ: посчитанные не меняет."""
+    """КБЖУ записи еды (оценка тренера) и группы продуктов (обязательны; нет групп - []). Только
+    для записи без КБЖУ: посчитанные не меняет."""
     if not all(0 <= x <= MAX_NUTRITION for x in (kcal, protein_g, fat_g, carbs_g)):
         raise ToolError(f"КБЖУ записи: ккал и граммы от 0 до {MAX_NUTRITION}.")
-    unknown = [g for g in groups or [] if g not in FOOD_GROUPS]
-    if unknown:
-        raise ToolError(f"Неизвестные группы {unknown}. Допустимые: {', '.join(FOOD_GROUPS)}.")
+    check_groups(groups)
     values = {"kcal": kcal, "protein_g": protein_g, "fat_g": fat_g, "carbs_g": carbs_g}
     with conn:
         saved = update_food(conn, food_id, values)
-        if saved and groups:
+        if saved:
             add_food_groups(conn, food_id, groups)
     if not saved:
         row = fetch_one(conn, "SELECT deleted_at FROM food_log WHERE id = ?", (food_id,))
@@ -543,6 +541,13 @@ def save_food_nutrition(
             raise ToolError(f"Запись еды {food_id} удалена.")
         raise ToolError(f"У записи {food_id} КБЖУ уже посчитано.")
     return {"food_id": food_id}
+
+
+def check_groups(groups: list[str]) -> None:
+    """Неизвестный ключ группы продуктов - ToolError со списком допустимых."""
+    unknown = [g for g in groups if g not in FOOD_GROUPS]
+    if unknown:
+        raise ToolError(f"Неизвестные группы {unknown}. Допустимые: {', '.join(FOOD_GROUPS)}.")
 
 
 def cancel_draft_workout(conn: sqlite3.Connection, workout_id: int) -> dict[str, Any]:

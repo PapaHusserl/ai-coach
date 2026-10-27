@@ -12,9 +12,12 @@ from ai_coach.store.journal import (
     delete_food,
     edit_food,
     list_food_groups,
+    list_food_without_groups,
+    update_food,
 )
 
 DAY = "2026-10-07"
+MACROS = {"kcal": 520.0, "protein_g": 31.5, "fat_g": 14.0, "carbs_g": 62.0}
 
 
 def new_food(conn: sqlite3.Connection, text: str = "рыба с салатом") -> int:
@@ -103,6 +106,54 @@ def test_list_food_groups_skips_deleted_entries(conn: sqlite3.Connection) -> Non
     add_food_groups(conn, food_id, ["fish"])
     delete_food(conn, food_id, f"{DAY} 12:00:00")
     assert list_food_groups(conn, DAY, DAY) == []
+
+
+def counted_food(conn: sqlite3.Connection, day: str = DAY, time: str = "08:00:00") -> int:
+    food_id = add_food(conn, {"logged_at": f"{day} {time}", "text": "еда"})
+    update_food(conn, food_id, MACROS)
+    return food_id
+
+
+def test_without_groups_lists_counted_entry_without_groups(conn: sqlite3.Connection) -> None:
+    food_id = counted_food(conn)
+    assert [r["id"] for r in list_food_without_groups(conn, DAY, DAY)] == [food_id]
+
+
+def test_without_groups_skips_entry_with_groups(conn: sqlite3.Connection) -> None:
+    food_id = counted_food(conn)
+    add_food_groups(conn, food_id, ["fish"])
+    assert list_food_without_groups(conn, DAY, DAY) == []
+
+
+def test_without_groups_skips_entry_without_macros(conn: sqlite3.Connection) -> None:
+    new_food(conn)
+    assert list_food_without_groups(conn, DAY, DAY) == []
+
+
+def test_without_groups_skips_deleted_entry(conn: sqlite3.Connection) -> None:
+    food_id = counted_food(conn)
+    delete_food(conn, food_id, f"{DAY} 12:00:00")
+    assert list_food_without_groups(conn, DAY, DAY) == []
+
+
+def test_without_groups_skips_entry_out_of_range(conn: sqlite3.Connection) -> None:
+    counted_food(conn, "2026-10-20")
+    assert list_food_without_groups(conn, DAY, DAY) == []
+
+
+def test_without_groups_includes_both_range_bounds(conn: sqlite3.Connection) -> None:
+    first = counted_food(conn, "2026-10-07", "00:00:00")
+    last = counted_food(conn, "2026-10-09", "23:59:59")
+    assert [r["id"] for r in list_food_without_groups(conn, "2026-10-07", "2026-10-09")] == [
+        first,
+        last,
+    ]
+
+
+def test_without_groups_ordered_by_logged_at(conn: sqlite3.Connection) -> None:
+    late = counted_food(conn, DAY, "20:00:00")
+    early = counted_food(conn, DAY, "07:00:00")
+    assert [r["id"] for r in list_food_without_groups(conn, DAY, DAY)] == [early, late]
 
 
 def test_food_groups_has_eleven_keys() -> None:

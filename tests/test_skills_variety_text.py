@@ -69,3 +69,28 @@ def test_coach_agent_has_new_tools() -> None:
     head = (AGENTS / "coach.md").read_text().split("---")[1]
     for tool in ("get_food_variety", "get_nutrient_norms"):
         assert f"mcp__ai-coach__{tool}" in head
+
+
+def test_coach_agent_has_regroup_tools() -> None:
+    head = (AGENTS / "coach.md").read_text().split("---")[1]
+    for tool in ("get_food_without_groups", "save_food_groups"):
+        assert f"mcp__ai-coach__{tool}" in head
+
+
+def test_food_skill_allows_regroup_tools() -> None:
+    head = (FOOD / "SKILL.md").read_text().split("---")[1]
+    for tool in ("get_food_without_groups", "save_food_groups"):
+        assert f"mcp__ai-coach__{tool}" in head
+
+
+def test_groups_file_describes_regroup_tools_and_empty_list() -> None:
+    text = (FOOD / "groups.md").read_text()
+    assert "get_food_without_groups" in text
+    assert "save_food_groups" in text
+    assert "`[]`" in text
+
+
+def test_save_nutrition_description_says_groups_required() -> None:
+    from ai_coach.mcp_server.server import TOOLS
+
+    assert "обязател" in TOOLS["save_food_nutrition"][1]
