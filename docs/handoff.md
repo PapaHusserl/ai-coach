@@ -4,28 +4,29 @@
 
 ## Где мы
 
-- v2.8 «Экранное время как источник нагрузки» ✅ (BACKLOG 5 → done/005), закрыт 2026-10-27 — [plan-v2-8-screen.md](plan-v2-8-screen.md). Итог тестя: смета ~$7 → факт $23,09.
-- Шаг закрыт до ручной проверки Влада (решение Влада): проверка — долг, шаг 1 ниже.
-- **Шаг 24 «Микронутриенты» ▶**: партии 1–3 в main (e3033d3); партия 4 (живая проверка неделей записей еды) — за Владом.
+- Шаг 24 «Микронутриенты» ✅ (BACKLOG 6 → done/006), закрыт 2026-10-27 — [plan-24-micronutrients.md](plan-24-micronutrients.md). Итог тестя: смета $9–17 → факт $10,22.
+- v2.8 ✅; секция `[screen]` уже в `~/.config/ai-coach/workload.toml`, осталась ручная проверка Влада.
+- Следующий по ROADMAP — шаг 25 «Smells» (BACKLOG 8), документа шага ещё нет.
 
 ## Следующие 3 шага
 
-1. Долг v2.8 — ручная проверка Влада: `[screen]` в `~/.config/ai-coach/workload.toml`, `coach sync`, `тренер вечер` с подсказкой экрана.
-2. Шаг 24 партия 4 → закрытие 24 (BACKLOG 6 → done).
+1. Шаг 25 «Smells: `make check` в зелёный» (BACKLOG 8) — папа-кабан пишет `docs/plan-25-smells.md`.
+2. Долг v2.8 — ручная проверка Влада: `coach sync`, `тренер вечер` с подсказкой экрана.
 3. v2.9 «Калибровка весов и порогов перегруза» (BACKLOG 3).
 
 ## Открытые вопросы
 
 - Можно потом (ревью шага 23): `seconds: null/0` проходит проверку ключа в `build_strength`.
-- Посторонние: pyright — 2 ошибки в `mcp_server/variety.py`; ruff E501 в `tests/test_mcp_food_variety.py:32`.
 
 ## Что важно помнить
 
-- Разметка календарей — `~/.config/ai-coach/workload.toml` (вне репо).
-- Тесты: `uv run pytest -q` и `node --test "tests/player/*.test.mjs"`.
+- Разметка календарей и экрана — `~/.config/ai-coach/workload.toml` (вне репо).
+- Тесты: `uv run pytest -q` и `node --test "tests/player/*.test.mjs"`; `make smells` красный и на HEAD — шаг 25.
+- После правок MCP-схемы — перезапустить MCP-сервер, иначе живёт старая схема.
 - Репо публичное: личные данные — только в базе и `spikes/out/` (в .gitignore); названия приложений и окон в репо не пишутся.
 
 ## Ссылки
 
-- Документ шага: [plan-v2-8-screen.md](plan-v2-8-screen.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: 36e815b (закрытие v2.8). Правила: AGENTS.md, docs/RULES.md.
+- Документ шага: [plan-24-micronutrients.md](plan-24-micronutrients.md); журнал — [pipeline.md](pipeline.md).
+- Последний коммит: 6f08f99 (закрытие шага 24). Правила: AGENTS.md, docs/RULES.md.
+- Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-10-27-24.md`.
