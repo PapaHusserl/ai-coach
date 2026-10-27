@@ -101,7 +101,7 @@ def main() -> None:
 
     if args.titles:
         print(f"--- заголовки окон {args.titles} (только терминал, не копировать в репо) ---")
-        for sec, title in title_seconds((day_start, day_end), args.titles):
+        for sec, title in title_seconds((day_start, day_end), args.titles, rules):
             print(f"{sec / 60:6.0f}м  {title[:100]}")
 
 

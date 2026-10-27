@@ -46,6 +46,10 @@ def aw_post(path: str, body: Any) -> Any:
         sys.exit(1)
 
 
+# work/hobby/browser/meeting -> set[app в нижнем регистре]; "meeting_names" -> [app как в toml];
+# "title" -> {app: {cat: [regex]}}
+Rules = dict[str, Any]
+
 # окна ∩ not-afk. Бакеты ищет сам сервер по префиксу (hostname в код не попадает);
 # если хостов несколько, find_bucket берёт первый подходящий бакет.
 QUERY_HEAD = [
@@ -54,12 +58,27 @@ QUERY_HEAD = [
     'afk = filter_keyvals(afk, "status", ["not-afk"]);',
     "events = filter_period_intersect(window, afk);",
 ]
+
+
+def query_head(rules: Rules) -> list[str]:
+    """QUERY_HEAD; с [meeting].apps окна этих приложений считаются и во время afk:
+    окна ∩ (not-afk ∪ окна созвонов). Без [meeting] — прежний запрос. Имена — как в toml:
+    filter_keyvals на сервере сравнивает регистр точно."""
+    meeting = rules.get("meeting_names", [])
+    if not meeting:
+        return QUERY_HEAD
+    return [
+        *QUERY_HEAD[:3],
+        f'meet = filter_keyvals(window, "app", {json.dumps(meeting, ensure_ascii=False)});',
+        "active = period_union(afk, meet);",
+        "events = filter_period_intersect(window, active);",
+    ]
+
+
 # Порядок классов в categorize. Решение 18: заголовок, подходящий под оба (например ~/projects/msa),
 # считается hobby. Наблюдение на живом AW (v0.14.1, 2026-10-19): при равных классах побеждает
 # ПОСЛЕДНИЙ в списке, поэтому hobby стоит последним; порядок менять нельзя.
 TITLE_CATS = ("work", "hobby")
-# work/hobby/browser -> set[app в нижнем регистре]; "title" -> {app: {cat: [regex]}}
-Rules = dict[str, Any]
 
 
 def title_regex(patterns: list[str]) -> str:
@@ -78,11 +97,12 @@ def screen_query(rules: Rules) -> list[str]:
     """Без [title.*] — слияние по app. Приложения из [title.<app>] размечает сам сервер
     (categorize по title) и сливает по (app, $category)."""
     title = rules.get("title", {})
+    head = query_head(rules)
     if not title:
-        return [*QUERY_HEAD, 'events = merge_events_by_keys(events, ["app"]);',
+        return [*head, 'events = merge_events_by_keys(events, ["app"]);',
                 "RETURN = sort_by_duration(events);"]
     lines = [
-        *QUERY_HEAD,
+        *head,
         f"rest = exclude_keyvals(events, \"app\", {json.dumps(list(title))});",
         'rest = merge_events_by_keys(rest, ["app"]);',
         "res = rest;",
@@ -138,11 +158,12 @@ def screen_seconds(
 
 
 def title_seconds(
-    period: tuple[datetime, datetime], app: str, limit: int = 40
+    period: tuple[datetime, datetime], app: str, rules: Rules, limit: int = 40
 ) -> list[tuple[float, str]]:
-    """Заголовки окон app за период: (секунды, title), по убыванию. Только для tty."""
+    """Заголовки окон app за период: (секунды, title), по убыванию. Только для tty.
+    Окна отбираются как в screen_query (с учётом [meeting])."""
     query = [
-        *QUERY_HEAD,
+        *query_head(rules),
         f"events = filter_keyvals(events, \"app\", {json.dumps([app])});",
         'events = merge_events_by_keys(events, ["title"]);',
         "events = sort_by_duration(events);",
@@ -154,7 +175,8 @@ def title_seconds(
 
 
 def load_rules(path: Path | None = None) -> Rules:
-    """work/hobby/browser -> app в нижнем регистре; title -> {app: {work|hobby: [regex]}}.
+    """work/hobby/browser/meeting -> app в нижнем регистре (meeting — приложения созвонов,
+    считаются и во время afk); title -> {app: {work|hobby: [regex]}}.
     Ошибка в regex — одна строка и exit до запроса."""
     path = path or OUT / "screen_rules.toml"
     if not path.exists():
@@ -164,6 +186,7 @@ def load_rules(path: Path | None = None) -> Rules:
     rules: Rules = {
         cat: {a.lower() for a in v.get("apps", [])} for cat, v in data.items() if cat != "title"
     }
+    rules["meeting_names"] = list(data.get("meeting", {}).get("apps", []))
     rules["title"] = {}
     for app, cats in data.get("title", {}).items():
         for key in cats:
@@ -190,6 +213,8 @@ def classify(app: str, rules: Rules) -> str:
     for cat in ("work", "hobby", "browser"):
         if app.lower() in rules.get(cat, set()):
             return cat
+    if app.lower() in rules.get("meeting", set()):
+        return "work"
     return "unmarked"
 
 
