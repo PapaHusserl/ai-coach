@@ -178,12 +178,19 @@ def _current_entries(conn: sqlite3.Connection, day: str) -> dict[str, dict[str, 
     return result
 
 
-def _weight_kg(conn: sqlite3.Connection, day: str, values: dict[str, Any]) -> float | None:
-    """Вес: последний weight_log, иначе из Garmin (ключ weight)."""
+def _weight_kg(conn: sqlite3.Connection, day: str, values: dict[str, Any]) -> dict[str, Any] | None:
+    """Вес {value, source, logged_at}: свежее из последнего weight_log (manual) и Garmin
+    (ключ weight); при равных временах — ручной."""
     weights = list_weights(conn, "0000-01-01", day)
-    if weights:
-        return weights[-1]["weight_kg"]
-    return values["weight"]["value"] if "weight" in values else None
+    garmin = values.get("weight")
+    if not weights:
+        return garmin
+    last = weights[-1]
+    manual = {"value": last["weight_kg"], "source": "manual", "logged_at": last["measured_at"]}
+    if garmin is None:
+        return manual
+    newer = last["measured_at"].replace("T", " ") >= garmin["logged_at"].replace("T", " ")
+    return manual if newer else garmin
 
 
 def current_profile(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
@@ -194,9 +201,11 @@ def current_profile(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
     age = None
     if "birth_date" in values:
         age = _age(date.fromisoformat(values["birth_date"]["value"]), date.fromisoformat(day))
-    weight_kg = _weight_kg(conn, day, values)
-    have_weight = weight_kg is not None
-    missing = [key for key in REQUIRED if not (have_weight if key == "weight" else key in values)]
+    weight = _weight_kg(conn, day, values)
+    if weight is not None:
+        values["weight"] = weight
+    weight_kg = weight["value"] if weight is not None else None
+    missing = [key for key in REQUIRED if key not in values]
     if not list_goals(conn, "active"):
         missing.append("goals")
     return {"values": values, "age": age, "weight_kg": weight_kg, "missing": missing}

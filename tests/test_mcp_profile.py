@@ -92,6 +92,25 @@ def test_snapshot_has_current_profile_values(conn: sqlite3.Connection) -> None:
     assert float(profile["values"]["height_cm"]) == 180
 
 
+def fresh_manual_and_old_garmin_weight(conn: sqlite3.Connection) -> None:
+    add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
+    set_value(conn, "weight", "80.599", "garmin", "2026-10-11 09:54:42")
+
+
+def test_snapshot_weight_is_fresh_manual_not_garmin(conn: sqlite3.Connection) -> None:
+    fresh_manual_and_old_garmin_weight(conn)
+    profile = call(conn, "get_morning_snapshot", date="2026-10-28")["profile"]
+    assert profile["values"]["weight"] == 78.7
+
+
+def test_get_profile_values_weight_equals_weight_kg(conn: sqlite3.Connection) -> None:
+    fresh_manual_and_old_garmin_weight(conn)
+    profile = call(conn, "get_profile", date="2026-10-28")
+    assert profile["weight_kg"] == 78.7
+    assert profile["values"]["weight"]["value"] == profile["weight_kg"]
+    assert profile["values"]["weight"]["source"] == "manual"
+
+
 def test_snapshot_profile_has_missing_nutrition_and_goals(conn: sqlite3.Connection) -> None:
     fill(conn)
     create_goal(conn, "Полумарафон", now="2026-10-01T10:00:00")
