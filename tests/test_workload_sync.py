@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import urllib.request
 from datetime import date
@@ -19,9 +20,9 @@ from workload_fakes import (
 
 from ai_coach.store.journal import add_sync_log, sync_runs_on
 from ai_coach.store.workload import list_calendar_events, list_counters, replace_calendar_window
-from ai_coach.sync.workload_sync import sync_workload
+from ai_coach.sync.workload_sync import read_counters, resolve_config, sync_workload
 from ai_coach.workload.calendar_eventkit import CalendarError
-from ai_coach.workload.config import WorkloadConfig, load_config
+from ai_coach.workload.config import WorkloadConfig, default_config, load_config
 from ai_coach.workload.screen import AwReader, ScreenError
 
 TODAY = date(2026, 10, 8)
@@ -419,3 +420,118 @@ def test_sync_does_not_touch_todo_and_hb_watch(conn: sqlite3.Connection, env: En
     run(conn, env, FakeCalendar([raw_event(uid="a")]))
     run(conn, env, FakeCalendar([raw_event(uid="a")]))
     assert tree_state(env.todo, env.hb) == before
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="под root chmod(0) не запрещает чтение")
+def test_all_sources_failing_keep_notes_then_errors_in_order(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    todo = tmp_path / "todo.json"
+    todo.write_text("{broken", encoding="utf-8")
+    hb = write_hb(tmp_path / "hb", {"a.md": "2026-10-06 10:00"}, {})
+    text = f'[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n[screen]\nwork = ["Alpha Editor"]\n'
+    config = load_config(write_config(tmp_path / "w.toml", text))
+    (hb / "done").chmod(0)
+    try:
+        message = sync_workload(
+            conn,
+            reader=FakeCalendar(),
+            config=config,
+            days=DAYS,
+            today=TODAY,
+            screen=FakeAw(error=ScreenError("aw-server не отвечает")),
+        )
+    finally:
+        (hb / "done").chmod(0o755)
+    assert message == (
+        "событий 0, счётчиков 0; календарь не настроен; "
+        "туду: todo не читается: не JSON; "
+        "груминг: hb-watch не читается: PermissionError; "
+        "экран: aw-server не отвечает"
+    )
+    assert log_rows(conn) == [("workload", "error")]
+
+
+def test_broken_config_file_is_last_error_calendar_skipped_default_paths_read(
+    conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)
+    write_todo(home / ".claude" / "todo.json", [todo_item(1, "todo", "2026-10-01")])
+    write_hb(home / "bin" / "hb-watch", {}, {"p.md": "2026-10-02 10:00"})
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv(
+        "AI_COACH_WORKLOAD_CONFIG", str(write_config(tmp_path / "bad.toml", "[calendar\nwork = "))
+    )
+    reader = FakeCalendar([raw_event(uid="a")])
+    message = sync_workload(conn, days=DAYS, today=TODAY, reader=reader)
+    parts = message.split("; ")
+    assert parts[1:3] == ["календарь не настроен", "экран не настроен"]
+    assert parts[3].startswith("Конфиг нагрузки не читается (bad.toml)")
+    assert len(parts) == 4
+    assert reader.calls == []
+    assert kinds(conn)["todo_open"] == 1
+    assert kinds(conn)["grooming_pending"] == 1
+    assert log_rows(conn) == [("workload", "error")]
+
+
+def test_resolve_config_returns_given_config_as_is(env: Env) -> None:
+    errors: list[str] = []
+    assert resolve_config(env.config, errors) is env.config
+    assert errors == []
+
+
+def test_resolve_config_none_loads_file_from_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = write_config(tmp_path / "ok.toml", '[calendar]\nwork = ["Work"]\n')
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(path))
+    errors: list[str] = []
+    assert resolve_config(None, errors).category("Work") == "work"
+    assert errors == []
+
+
+def test_resolve_config_broken_file_gives_default_and_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = write_config(tmp_path / "bad.toml", "[calendar\nwork = ")
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(path))
+    errors: list[str] = []
+    config = resolve_config(None, errors)
+    assert config == default_config()
+    assert len(errors) == 1
+    assert errors[0].startswith("Конфиг нагрузки не читается (bad.toml)")
+
+
+def test_read_counters_no_screen_section_notes_it_and_reads_other_sources(env: Env) -> None:
+    notes: list[str] = []
+    errors: list[str] = []
+    found = read_counters(env.config, None, date(2026, 10, 1), TODAY, notes, errors)
+    assert notes == ["экран не настроен"]
+    assert errors == []
+    assert {c["kind"] for c in found} == {
+        "todo_closed",
+        "todo_open",
+        "grooming_done",
+        "grooming_pending",
+    }
+
+
+def test_read_counters_screen_error_goes_to_errors_other_counters_stay(
+    env: Env, tmp_path: Path
+) -> None:
+    notes: list[str] = []
+    errors: list[str] = []
+    aw = FakeAw(error=ScreenError("нет связи"))
+    found = read_counters(with_screen(env, tmp_path), aw, date(2026, 10, 1), TODAY, notes, errors)
+    assert errors == ["экран: нет связи"]
+    assert notes == []
+    assert "todo_open" in {c["kind"] for c in found}
+
+
+def test_read_counters_appends_to_existing_lists(env: Env) -> None:
+    notes = ["раньше"]
+    errors = ["календарь: x"]
+    read_counters(env.config, None, date(2026, 10, 1), TODAY, notes, errors)
+    assert notes == ["раньше", "экран не настроен"]
+    assert errors == ["календарь: x"]

@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 from workload_fakes import write_config
 
-from ai_coach.workload.config import ScreenConfig, WorkloadConfigError, load_config
+from ai_coach.workload.config import (
+    ScreenConfig,
+    WorkloadConfigError,
+    load_config,
+    title_patterns,
+)
 
 FULL = """
 [calendar]
@@ -230,3 +235,26 @@ def test_default_location_is_in_home_config_dir(tmp_path: Path) -> None:
     folder.mkdir(parents=True)
     write_config(folder / "workload.toml", FULL)
     assert load_config().category("Работа") == "work"
+
+
+def test_title_patterns_returns_the_list() -> None:
+    assert title_patterns({"work": ["a", "b"]}, "alpha", "work") == ["a", "b"]
+
+
+def test_title_patterns_without_class_is_empty() -> None:
+    assert title_patterns({}, "alpha", "work") == []
+
+
+def test_title_patterns_quote_is_config_error() -> None:
+    with pytest.raises(WorkloadConfigError, match="кавычка"):
+        title_patterns({"work": ['a"b']}, "alpha", "work")
+
+
+def test_title_patterns_bad_regex_is_config_error() -> None:
+    with pytest.raises(WorkloadConfigError, match="плохая regex"):
+        title_patterns({"work": ["("]}, "alpha", "work")
+
+
+def test_title_patterns_not_a_list_is_config_error() -> None:
+    with pytest.raises(WorkloadConfigError, match="списком строк"):
+        title_patterns({"hobby": "x"}, "alpha", "hobby")

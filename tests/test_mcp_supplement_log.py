@@ -4,7 +4,8 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, rows, tool_names
 
-from ai_coach.mcp_server.tools import MAX_CHARS, SNAPSHOT_CHARS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS
+from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.store.intake import delete_intake, log_intake
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.sport_nutrition import add_supplement, delete_supplement

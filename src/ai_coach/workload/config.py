@@ -134,6 +134,23 @@ def _strings(section: dict[str, Any], key: str, where: str) -> list[str]:
     return cast(list[str], value)
 
 
+def title_patterns(cats: dict[str, Any], app: str, cat: str) -> list[str]:
+    """Regex на заголовок окна приложения app для класса cat; кавычка и плохая regex - ошибка."""
+    patterns = _strings(cats, cat, f"screen.title.{app}.")
+    if any('"' in p for p in patterns):
+        raise WorkloadConfigError(
+            f"Конфиг нагрузки: кавычка в regex screen.title.{app}.{cat} не поддерживается."
+        )
+    try:
+        if patterns:
+            re.compile(title_regex(patterns))
+    except re.error as e:
+        raise WorkloadConfigError(
+            f"Конфиг нагрузки: плохая regex в screen.title.{app}.{cat}: {e}"
+        ) from None
+    return patterns
+
+
 def _title_rules(section: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
     """[screen.title.<app>]: work/hobby - списки regex на заголовок окна. Чужой ключ, кавычка и
     плохая regex - ошибка (склеенная строка проверяется так, как уйдёт на сервер)."""
@@ -150,21 +167,7 @@ def _title_rules(section: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
                     f"Конфиг нагрузки: в [screen.title.{app}] ключ {key!r} "
                     f"не из {list(TITLE_CATS)}."
                 )
-        rules[app] = {}
-        for cat in TITLE_CATS:
-            patterns = _strings(cats, cat, f"screen.title.{app}.")
-            if any('"' in p for p in patterns):
-                raise WorkloadConfigError(
-                    f"Конфиг нагрузки: кавычка в regex screen.title.{app}.{cat} не поддерживается."
-                )
-            try:
-                if patterns:
-                    re.compile(title_regex(patterns))
-            except re.error as e:
-                raise WorkloadConfigError(
-                    f"Конфиг нагрузки: плохая regex в screen.title.{app}.{cat}: {e}"
-                ) from None
-            rules[app][cat] = patterns
+        rules[app] = {cat: title_patterns(cats, app, cat) for cat in TITLE_CATS}
     return rules
 
 

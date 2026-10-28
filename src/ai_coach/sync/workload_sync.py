@@ -121,39 +121,28 @@ def read_calendar(
     return events + mine, gone, notes + coach_notes
 
 
-def sync_workload(
-    conn: sqlite3.Connection,
-    days: int,
-    today: date | None = None,
-    reader: EventReader | None = None,
-    config: WorkloadConfig | None = None,
-    screen: ScreenReader | None = None,
-) -> str:
-    """Читает календарь (окно today-days .. today+AHEAD_DAYS), туду, груминг и экран (дни
-    today-days .. today), пишет в базу, возвращает итог. Нет разметки календарей — календарь
-    пропущен, туду и груминг читаются по пути из конфига или по умолчанию; нет [screen] —
-    экран пропущен (замечание в итоге)."""
-    started = datetime.now().isoformat(timespec="seconds")
-    today = today or date.today()
-    first = today - timedelta(days=days)
-    last = today + timedelta(days=AHEAD_DAYS)
-    errors: list[str] = []
-    notes: list[str] = []
-    if config is None:
-        try:
-            config = load_config()
-        except WorkloadConfigError as e:
-            errors.append(str(e))
-            config = default_config()
-    events, gone = None, []
-    if config.has_calendar:
-        try:
-            events, gone, found = read_calendar(reader, config, conn, started, (first, last))
-            notes += found
-        except CalendarError as e:
-            errors.append(f"календарь: {e}")
-    else:
-        notes.append("календарь не настроен")
+def resolve_config(config: WorkloadConfig | None, errors: list[str]) -> WorkloadConfig:
+    """Готовый конфиг как есть; None - из файла, битый файл - замечание в errors и конфиг по
+    умолчанию."""
+    if config is not None:
+        return config
+    try:
+        return load_config()
+    except WorkloadConfigError as e:
+        errors.append(str(e))
+        return default_config()
+
+
+def read_counters(
+    config: WorkloadConfig,
+    screen: ScreenReader | None,
+    first: date,
+    today: date,
+    notes: list[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    """Счётчики туду, груминга и экрана за дни first..today; замечания и сбои источников
+    дописывает в notes и errors в порядке чтения."""
     counters: list[dict[str, Any]] = []
     try:
         counters += read_todo(config.todo_path, first, today, today)
@@ -174,6 +163,38 @@ def sync_workload(
             notes += screen_notes
         except ScreenError as e:
             errors.append(f"экран: {e}")
+    return counters
+
+
+def sync_workload(
+    conn: sqlite3.Connection,
+    days: int,
+    today: date | None = None,
+    reader: EventReader | None = None,
+    config: WorkloadConfig | None = None,
+    screen: ScreenReader | None = None,
+) -> str:
+    """Читает календарь (окно today-days .. today+AHEAD_DAYS), туду, груминг и экран (дни
+    today-days .. today), пишет в базу, возвращает итог. Нет разметки календарей — календарь
+    пропущен, туду и груминг читаются по пути из конфига или по умолчанию; нет [screen] —
+    экран пропущен (замечание в итоге)."""
+    started = datetime.now().isoformat(timespec="seconds")
+    today = today or date.today()
+    first = today - timedelta(days=days)
+    last = today + timedelta(days=AHEAD_DAYS)
+    errors: list[str] = []
+    notes: list[str] = []
+    config = resolve_config(config, errors)
+    events, gone = None, []
+    if config.has_calendar:
+        try:
+            events, gone, found = read_calendar(reader, config, conn, started, (first, last))
+            notes += found
+        except CalendarError as e:
+            errors.append(f"календарь: {e}")
+    else:
+        notes.append("календарь не настроен")
+    counters = read_counters(config, screen, first, today, notes, errors)
     summary = f"событий {len(events) if events is not None else 0}, счётчиков {len(counters)}"
     message = "; ".join([summary, *notes, *errors])
     with conn:

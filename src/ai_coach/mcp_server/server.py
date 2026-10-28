@@ -7,7 +7,16 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.mcp_server import agenda, habits, links, review, tools, variety, workload
+from ai_coach.mcp_server import (
+    agenda,
+    habits,
+    links,
+    review,
+    snapshot,
+    tools,
+    variety,
+    workload,
+)
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.nutrition.groups import FOOD_GROUPS, GROUP_MAX_DAYS, GROUP_MIN_DAYS
@@ -38,7 +47,7 @@ INSTRUCTIONS = (
 # имя инструмента -> (функция из tools.py, описание для Claude)
 TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_morning_snapshot": (
-        tools.morning_snapshot,
+        snapshot.morning_snapshot,
         "Утренний разбор одним вызовом: метрики, активности, нагрузка, цели, фазы, план, "
         "план/факт, вес, еда за день, продукты дома (до 30 строк), "
         "recipes (имена и КБЖУ на 100 г, до 30), "

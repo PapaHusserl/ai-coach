@@ -4,7 +4,8 @@ from datetime import date, timedelta
 
 from mcp_fakes import call, call_text
 
-from ai_coach.mcp_server.tools import MAX_CHARS, SNAPSHOT_CHARS, SNAPSHOT_ROWS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS, SNAPSHOT_ROWS
+from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
 from ai_coach.store.goals import add_goal, add_phase
 from ai_coach.store.journal import add_food, add_sync_log, add_weight

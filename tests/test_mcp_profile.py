@@ -3,7 +3,8 @@ import sqlite3
 from mcp_fakes import call, call_text
 
 from ai_coach.goals import create_goal
-from ai_coach.mcp_server.tools import MAX_CHARS, SNAPSHOT_ROWS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_ROWS
+from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.profile.service import set_value
 from ai_coach.store.goals import add_goal, add_phase
 from ai_coach.store.journal import add_food, add_weight
