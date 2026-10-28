@@ -1,32 +1,33 @@
 # Handoff — где остановились
 
-**Обновлено:** 2026-10-27.
+**Обновлено:** 2026-10-28.
 
 ## Где мы
 
-- Шаг 24 «Микронутриенты» ✅ (BACKLOG 6 → done/006), закрыт 2026-10-27 — [plan-24-micronutrients.md](plan-24-micronutrients.md). Итог тестя: смета $9–17 → факт $10,22.
-- v2.8 ✅; секция `[screen]` уже в `~/.config/ai-coach/workload.toml`, осталась ручная проверка Влада.
-- Следующий по ROADMAP — шаг 25 «Smells» (BACKLOG 8), документа шага ещё нет.
+- Шаг 25 «Smells» ✅ (BACKLOG 8 → done/008), закрыт 2026-10-28 — [plan-25-smells.md](plan-25-smells.md). `make check` зелёный, smells 0. Итог тестя: смета $10–16 → факт $12,49.
+- v2.8 ✅; ручная проверка Влада ещё не сделана.
+- Следующий по ROADMAP — v2.9 (BACKLOG 3). Начинать после 2–3 недель данных экрана.
 
 ## Следующие 3 шага
 
-1. Шаг 25 «Smells: `make check` в зелёный» (BACKLOG 8) — папа-кабан пишет `docs/plan-25-smells.md`.
-2. Долг v2.8 — ручная проверка Влада: `coach sync`, `тренер вечер` с подсказкой экрана.
-3. v2.9 «Калибровка весов и порогов перегруза» (BACKLOG 3).
+1. Долг: ручная проверка Влада по v2.8 и шагу 25 — `coach sync`, `тренер вечер` с подсказкой экрана, `coach profile show`, `coach goal list`, утренняя сводка.
+2. Копить данные экрана 2–3 недели.
+3. v2.9 «Калибровка весов и порогов перегруза» (BACKLOG 3) — папа-кабан пишет документ шага.
 
 ## Открытые вопросы
 
 - Можно потом (ревью шага 23): `seconds: null/0` проходит проверку ключа в `build_strength`.
+- Без ответа Влада: пункт BACKLOG про неразмеченное экранное время; `uv tool install -e` для `coach`.
 
 ## Что важно помнить
 
 - Разметка календарей и экрана — `~/.config/ai-coach/workload.toml` (вне репо).
-- Тесты: `uv run pytest -q` и `node --test "tests/player/*.test.mjs"`; `make smells` красный и на HEAD — шаг 25.
+- Тесты: `make check` (≈ 2,5 мин), `node --test "tests/player/*.test.mjs"`.
 - После правок MCP-схемы — перезапустить MCP-сервер, иначе живёт старая схема.
 - Репо публичное: личные данные — только в базе и `spikes/out/` (в .gitignore); названия приложений и окон в репо не пишутся.
 
 ## Ссылки
 
-- Документ шага: [plan-24-micronutrients.md](plan-24-micronutrients.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: 6f08f99 (закрытие шага 24). Правила: AGENTS.md, docs/RULES.md.
-- Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-10-27-24.md`.
+- Документ шага: [plan-25-smells.md](plan-25-smells.md); журнал — [pipeline.md](pipeline.md).
+- Последний коммит: 4a477bb (закрытие шага 25). Правила: AGENTS.md, docs/RULES.md.
+- Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-10-28-25.md`.
