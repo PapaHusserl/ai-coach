@@ -45,6 +45,7 @@ EXPECTED_TOOLS = {
     "get_food",
     "get_food_pending",
     "get_wellbeing",
+    "get_focus_log",
     "get_deviations",
     "save_food_nutrition",
     "get_food_without_groups",

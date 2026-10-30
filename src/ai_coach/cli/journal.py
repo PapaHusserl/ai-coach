@@ -1,5 +1,7 @@
-"""Команды `coach weight|food|edit|delete|log`: записи веса и еды, правка, удаление, просмотр."""
+"""Команды `coach weight|food|focus|edit|delete|log`: записи веса, еды и дневных оценок, правка,
+удаление, просмотр."""
 
+from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Annotated
 
@@ -7,26 +9,41 @@ import typer
 
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import (
+    add_focus,
     add_food,
     add_weight,
     delete_food,
     delete_weight,
     edit_food,
     edit_weight,
+    list_focus,
     list_food,
     list_weights,
+    wellbeing_day,
 )
 
 edit_app = typer.Typer(help="Правка записей веса и еды", no_args_is_help=True)
 delete_app = typer.Typer(help="Удаление записей веса и еды", no_args_is_help=True)
-log_app = typer.Typer(help="Записи веса и еды за день (id для правки)", no_args_is_help=True)
+log_app = typer.Typer(
+    help="Записи веса, еды и дневных оценок за день (id веса и еды — для edit/delete)",
+    no_args_is_help=True,
+)
 MIN_WEIGHT_KG = 20
 MAX_WEIGHT_KG = 300
+MIN_SCORE = 1
+MAX_SCORE = 5
 
 
 def fail(message: str) -> None:
     typer.echo(message, err=True)
     raise typer.Exit(1)
+
+
+def check_scores(pairs: Iterable[tuple[str, int | None]]) -> None:
+    """Оценки (название, значение) от 1 до 5; None - не задана; вне диапазона - ошибка."""
+    for name, value in pairs:
+        if value is not None and not MIN_SCORE <= value <= MAX_SCORE:
+            fail(f"{name}: от {MIN_SCORE} до {MAX_SCORE}.")
 
 
 def now() -> str:
@@ -113,6 +130,33 @@ def food(
     finally:
         conn.close()
     typer.echo("Еда записана. КБЖУ посчитает /coach-food.")
+
+
+def focus(
+    focus_score: Annotated[int, typer.Argument(help="Фокус от 1 до 5")],
+    fatigue: Annotated[int, typer.Argument(help="Умственная усталость от 1 до 5")],
+    effort: Annotated[int, typer.Argument(help="Трудно заставить себя работать, от 1 до 5")],
+    text: Annotated[str | None, typer.Argument(help="Пояснение, как есть")] = None,
+) -> None:
+    """Дневная оценка (время — сейчас): фокус, умственная усталость, «трудно заставить себя».
+    Записи только добавляются. До 04:00 запись идёт на вчера."""
+    check_scores((("Фокус", focus_score), ("Усталость", fatigue), ("Усилие", effort)))
+    moment = now()
+    values = {
+        "date": wellbeing_day(datetime.fromisoformat(moment)),
+        "logged_at": moment,
+        "focus": focus_score,
+        "fatigue": fatigue,
+        "effort": effort,
+        "text": text,
+    }
+    conn = open_db()
+    try:
+        with conn:
+            add_focus(conn, values)
+    finally:
+        conn.close()
+    typer.echo("Оценка записана.")
 
 
 @edit_app.command("weight")
@@ -215,6 +259,26 @@ def log_weight(
         typer.echo("Записей нет.")
     for row in rows:
         typer.echo(f"{row['id']}  {row['measured_at']}  {row['weight_kg']} кг")
+
+
+@log_app.command("focus")
+def log_focus(
+    day: Annotated[
+        str | None, typer.Option("--date", help="День, YYYY-MM-DD (по умолчанию сегодня)")
+    ] = None,
+) -> None:
+    """Дневные оценки за день: id, время, фокус/усталость/усилие, текст."""
+    day = log_day(day)
+    conn = open_db()
+    try:
+        rows = list_focus(conn, day, day)
+    finally:
+        conn.close()
+    if not rows:
+        typer.echo("Записей нет.")
+    for row in rows:
+        scores = f"{row['focus']}/{row['fatigue']}/{row['effort']}"
+        typer.echo(f"{row['id']}  {row['logged_at']}  {scores}  {row['text'] or ''}".rstrip())
 
 
 @log_app.command("food")

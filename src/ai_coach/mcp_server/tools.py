@@ -41,6 +41,7 @@ from ai_coach.store.garmin_data import (
 from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
     add_food_groups,
+    list_focus,
     list_food,
     list_food_pending,
     list_weights,
@@ -170,6 +171,12 @@ def wellbeing(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """Самочувствие по времени; основная оценка дня — последняя запись этой даты."""
     period(start, end)
     return cap(list_wellbeing(conn, start, end), newest=True)
+
+
+def focus_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Дневные оценки (фокус, усталость, усилие 1-5) по времени."""
+    period(start, end)
+    return cap(list_focus(conn, start, end), newest=True)
 
 
 def day_deviations(

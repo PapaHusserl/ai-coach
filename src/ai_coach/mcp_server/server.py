@@ -127,6 +127,11 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "спрашивали) по времени; основная оценка дня - последняя запись. "
         "Пишет пользователь командой coach feel.",
     ),
+    "get_focus_log": (
+        tools.focus_log,
+        "Дневные оценки по времени: focus (фокус), fatigue (умственная усталость), effort (трудно "
+        "заставить себя), все 1-5, и текст. Пишет пользователь командой coach focus.",
+    ),
     "get_deviations": (
         tools.deviations,
         "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "

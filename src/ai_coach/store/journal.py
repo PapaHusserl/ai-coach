@@ -166,6 +166,18 @@ def list_wellbeing(conn: sqlite3.Connection, start: str, end: str) -> list[dict[
     return fetch_all(conn, sql, (start, end))
 
 
+def add_focus(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
+    """values: date, logged_at, focus, fatigue, effort (1-5), text (может быть пуст).
+    Только добавление."""
+    return insert(conn, "focus_log", values)
+
+
+def list_focus(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Дневные оценки с датой date start..end включительно, по времени."""
+    sql = "SELECT * FROM focus_log WHERE date BETWEEN ? AND ? ORDER BY logged_at, id"
+    return fetch_all(conn, sql, (start, end))
+
+
 def evening_done(conn: sqlite3.Connection, day: str) -> bool:
     """Вечерний чек-ин за день сделан: есть запись самочувствия с настроением или стрессом."""
     sql = (

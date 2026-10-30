@@ -11,7 +11,7 @@ import typer
 
 from ai_coach.cli.agenda import event_app
 from ai_coach.cli.habits import habit_app
-from ai_coach.cli.journal import check_date, delete_app, edit_app, food, log_app, weight
+from ai_coach.cli.journal import check_date, delete_app, edit_app, focus, food, log_app, weight
 from ai_coach.cli.meds import med_app
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.cli.practices import practice_app
@@ -55,6 +55,7 @@ app.add_typer(delete_app, name="delete")
 app.add_typer(log_app, name="log")
 app.command()(weight)
 app.command()(food)
+app.command()(focus)
 app.add_typer(pantry_app, name="pantry")
 app.add_typer(meal_app, name="meal")
 app.add_typer(recipe_app, name="recipe")
