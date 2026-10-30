@@ -1,25 +1,29 @@
 # Handoff — где остановились
 
-**Обновлено:** 2026-10-28.
+**Обновлено:** 2026-10-31.
 
 ## Где мы
 
-- BACKLOG 1 «Велбинг-коуч» закрыт без шага (done/001) — [plan-1-wellbeing.md](plan-1-wellbeing.md):
-  сверка показала, что его сделали v2.0–v2.8. Остаток — BACKLOG 10 «Баланс работы и отдыха». Итог тестя: $2,82.
-- Шаг 26 ✅. Следующий по ROADMAP — v2.9 (BACKLOG 3), после 2–3 недель данных экрана (с 2026-10-28).
+- Ресёрч модели «напряжение–отдых»: [research-cycles.md](research-cycles.md) (+ «Peak Performance»),
+  [research-brain.md](research-brain.md) (22 теории), [research-switching.md](research-switching.md).
+  Решения Влада — NOTES.md (2026-10-30). Новые пункты BACKLOG 11–23.
+- Перебор ROADMAP r1 — [plan-roadmap-r1.md](plan-roadmap-r1.md): блок «Сейчас» Н1→Н2→Н3→Н4→Н5→v2.9.
+- Волт Obsidian с картой и обзором — `~/obsidian/ai-coach-research/` (вне репо).
 
 ## Следующие 3 шага
 
-1. Копить данные экрана 2–3 недели (с 2026-10-28).
-2. v2.9 «Калибровка весов и порогов перегруза» (BACKLOG 3) — папа-кабан пишет документ шага;
-   проверить `recovery_drop` по readiness (Р3 plan-1-wellbeing.md).
-3. BACKLOG 10 — после v2.9 (пороги отдыха по тем же данным); иначе по выбору Влада — 2 или 4.
+1. Н1 — самооценка днём (напоминания в календаре), отстранение и помехи в вечернем чек-ине
+   (BACKLOG 16, 23, вопросы 20) — папа-кабан пишет docs/plan-n1.md.
+2. Н2 — утренний тест реакции PVT (BACKLOG 17), сразу после Н1.
+3. Н3 — разметка работы «вызов/помеха» (BACKLOG 20).
+v2.9 (BACKLOG 3) — окно старта 2026-11-10…17.
 
 ## Открытые вопросы
 
 - Можно потом (ревью шага 23): `seconds: null/0` проходит проверку ключа в `build_strength`.
 - Без ответа Влада: пункт BACKLOG про неразмеченное экранное время; `uv tool install -e` для `coach`.
 - Ручного отдыха (`coach feel --rest`) в базе 2 записи — для BACKLOG 10 нужно вводить.
+- Коммиты сессии 2026-10-30/31 не запушены — ждут «да» Влада.
 
 ## Что важно помнить
 
@@ -30,6 +34,5 @@
 
 ## Ссылки
 
-- Документ: [plan-1-wellbeing.md](plan-1-wellbeing.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: a0f229f (закрытие BACKLOG 1). Правила: AGENTS.md, docs/RULES.md.
-- Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-10-28-1.md`.
+- Документ: [plan-roadmap-r1.md](plan-roadmap-r1.md); журнал — [pipeline.md](pipeline.md).
+- Последний коммит: a810df3 (перебор ROADMAP r1). Правила: AGENTS.md, docs/RULES.md.
