@@ -208,6 +208,19 @@ def test_list_shows_events_with_ids_and_statuses(isolated: Path) -> None:
     assert str(second) in result.output
 
 
+def test_list_shows_two_earlier_repeating_checkins(isolated: Path) -> None:
+    for clock in ("15:00", "11:00"):
+        seed(
+            isolated, kind="checkin", category=None, repeat="daily", title=f"Напомни {clock}",
+            date="2026-10-01", start_at=f"2026-10-01T{clock}:00", end_at=f"2026-10-01T{clock}:15",
+        )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-12")
+    assert result.exit_code == 0, result.output
+    assert "Напомни 11:00" in result.output
+    assert "Напомни 15:00" in result.output
+    assert result.output.index("Напомни 11:00") < result.output.index("Напомни 15:00")
+
+
 def test_list_works_without_coach_section_and_does_not_touch_calendar(
     isolated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

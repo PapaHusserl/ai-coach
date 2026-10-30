@@ -42,6 +42,18 @@ def test_agenda_file_mentions_tools_and_commands() -> None:
     assert "uv run coach event remove" in text
 
 
+def test_agenda_file_mentions_focus() -> None:
+    text = AGENDA.read_text()
+    assert "coach focus" in text
+    assert "Фокус 1–5?" in text
+
+
+def test_event_texts_do_not_say_one_for_all() -> None:
+    src = ROOT.parent / "src" / "ai_coach" / "mcp_server"
+    for name in ("server.py", "agenda.py"):
+        assert "один на всех" not in (src / name).read_text()
+
+
 def test_agenda_file_requires_user_confirmation() -> None:
     assert "да" in AGENDA.read_text()
 

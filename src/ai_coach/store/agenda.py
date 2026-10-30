@@ -50,7 +50,10 @@ def find_by_uid(conn: sqlite3.Connection, calendar_uid: str) -> dict[str, Any] |
     return fetch_one(conn, sql, (calendar_uid,))
 
 
-def active_repeat(conn: sqlite3.Connection) -> dict[str, Any] | None:
-    """Повторяющееся событие в статусе draft или written (одно на всю базу)."""
-    sql = "SELECT * FROM coach_events WHERE repeat IS NOT NULL AND status IN ('draft', 'written')"
-    return fetch_one(conn, sql, ())
+def active_repeats(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Повторяющиеся события в статусе draft или written, по времени начала."""
+    sql = (
+        "SELECT * FROM coach_events WHERE repeat IS NOT NULL AND status IN ('draft', 'written') "
+        "ORDER BY start_at, id"
+    )
+    return fetch_all(conn, sql, ())

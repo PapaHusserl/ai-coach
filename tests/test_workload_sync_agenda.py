@@ -185,6 +185,33 @@ def test_repeating_checkin_with_shared_uid_stays_written(
     assert list_calendar_events(conn, *ALL) == []
 
 
+def test_two_repeating_checkins_only_vanished_one_is_removed(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    kept = own(conn, "r1", kind="checkin", category=None, repeat="daily")
+    gone = own(conn, "r2", kind="checkin", category=None, repeat="daily")
+    days = ["2026-10-08", "2026-10-09", "2026-10-10"]
+    occurrences = [coach_raw("r1", start_at=f"{d}T21:00:00", end_at=f"{d}T21:15:00") for d in days]
+    run(conn, config, FakeCalendar(occurrences))
+    assert status_of(conn, kept) == "written"
+    row = get_event(conn, gone)
+    assert row is not None
+    assert (row["status"], row["removed_by"]) == ("removed", "calendar")
+
+
+def test_two_repeating_checkins_present_in_calendar_stay_written(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    first = own(conn, "r1", kind="checkin", category=None, repeat="daily")
+    second = own(conn, "r2", kind="checkin", category=None, repeat="daily")
+    occurrences = [
+        coach_raw("r1", start_at=f"{DAY}T11:00:00", end_at=f"{DAY}T11:15:00"),
+        coach_raw("r2", start_at=f"{DAY}T15:00:00", end_at=f"{DAY}T15:15:00"),
+    ]
+    run(conn, config, FakeCalendar(occurrences))
+    assert (status_of(conn, first), status_of(conn, second)) == ("written", "written")
+
+
 def test_repeated_sync_changes_nothing(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
     own(conn, "c1", category="work")
     own(conn, "c2", category="hobby", start_at="2026-10-10T14:00:00", end_at="2026-10-10T15:00:00")

@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 from ai_coach.store.agenda import (
     ACTIVE,
-    active_repeat,
+    active_repeats,
     add_event,
     get_event,
     list_events,
@@ -86,8 +86,9 @@ def validate_draft(
     """Проверенные значения черновика для add_event (без status, created_at). values: kind, title,
     start_at, end_at (местное время ISO); не обязательно all_day, note, category, alarm_min,
     repeat, workout_id, practice_id. Начало раньше конца, событие не длиннее MAX_HOURS, день
-    начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat только daily у checkin и один
-    активный; тренировка и практика живы; категория по умолчанию только у rest и sleep (rest)."""
+    начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat только daily у checkin и не два
+    активных на одно время суток; тренировка и практика живы; категория по умолчанию только у
+    rest и sleep (rest)."""
     today = today or date.today()
     kind = values["kind"]
     if kind not in KINDS:
@@ -110,8 +111,11 @@ def validate_draft(
     if repeat is not None:
         if repeat not in REPEATS or kind != "checkin":
             raise AgendaError(f"repeat только {list(REPEATS)} и только у checkin.")
-        if active_repeat(conn) is not None:
-            raise AgendaError("Повторяющийся чек-ин уже есть (черновик или в календаре).")
+        clock = start.isoformat(timespec="seconds")[11:16]
+        if any(row["start_at"][11:16] == clock for row in active_repeats(conn)):
+            raise AgendaError(
+                f"Повторяющийся чек-ин на {clock} уже есть (черновик или в календаре)."
+            )
     _links(conn, values.get("workout_id"), values.get("practice_id"))
     note = (values.get("note") or "").strip() or None
     return {
@@ -200,9 +204,8 @@ def remove_event(conn: sqlite3.Connection, event_id: int, writer: EventWriter) -
 
 def agenda_rows(conn: sqlite3.Connection, date_from: str, date_to: str) -> list[dict[str, Any]]:
     """Живые события (draft, written) с датой начала date_from..date_to и, если начато раньше,
-    активное повторяющееся. Без служебных полей (uid календаря, времена записи и снятия)."""
+    активные повторяющиеся. Без служебных полей (uid календаря, времена записи и снятия)."""
     rows = list_events(conn, date_from, date_to, ACTIVE)
-    repeating = active_repeat(conn)
-    if repeating is not None and repeating["date"] < date_from:
-        rows.insert(0, repeating)
+    earlier = [row for row in active_repeats(conn) if row["date"] < date_from]
+    rows[:0] = earlier
     return [{k: v for k, v in row.items() if k not in HIDDEN} for row in rows]

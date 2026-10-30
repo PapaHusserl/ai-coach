@@ -95,6 +95,37 @@ def test_checkin_daily_draft(conn: sqlite3.Connection) -> None:
     assert row["repeat"] == "daily"
 
 
+def checkin(conn: sqlite3.Connection, clock: str) -> Any:
+    return create(
+        conn, kind="checkin", title="Чек-ин", category=None, repeat="daily",
+        start_at=f"{TOMORROW}T{clock}:00", end_at=f"{TOMORROW}T{clock}:15",
+    )  # fmt: skip
+
+
+def test_second_checkin_daily_at_other_time_gets_draft_id(conn: sqlite3.Connection) -> None:
+    first = checkin(conn, "11:00")
+    second = checkin(conn, "15:00")
+    assert second["draft_id"] != first["draft_id"]
+    assert count(conn, "draft") == 2
+
+
+def test_second_checkin_daily_at_same_time_is_rejected(conn: sqlite3.Connection) -> None:
+    checkin(conn, "11:00")
+    with pytest.raises(ToolError):
+        checkin(conn, "11:00")
+    assert count(conn, "draft") == 1
+
+
+def test_get_agenda_returns_all_earlier_repeating_checkins(conn: sqlite3.Connection) -> None:
+    for clock in ("15:00", "11:00"):
+        add_event(conn, coach_event(
+            kind="checkin", category=None, repeat="daily", title=f"Чек-ин {clock}",
+            date="2026-10-01", start_at=f"2026-10-01T{clock}:00", end_at=f"2026-10-01T{clock}:15",
+        ))  # fmt: skip
+    data = call(conn, "get_agenda", date_from="2026-10-10", date_to="2026-10-10")
+    assert [r["title"] for r in data["rows"]] == ["Чек-ин 11:00", "Чек-ин 15:00"]
+
+
 def test_cancel_draft_event(conn: sqlite3.Connection) -> None:
     draft_id = create(conn)["draft_id"]
     result = call(conn, "cancel_draft_event", event_id=draft_id)

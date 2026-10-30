@@ -237,6 +237,11 @@ def test_skill_tools_mentioned_in_files_are_in_allowed_tools(
     assert mentioned - allowed == set()
 
 
+def test_every_mcp_tool_is_in_coach_md_tools(conn: sqlite3.Connection) -> None:
+    allowed = set(re.findall(r"mcp__ai-coach__(\w+)", agent_tools()))
+    assert tool_names(conn) - allowed == set()
+
+
 def test_morning_has_get_supplement_log_in_allowed_tools() -> None:
     head = (SKILLS / "coach-morning" / "SKILL.md").read_text().split("---")[1]
     assert "mcp__ai-coach__get_supplement_log" in head

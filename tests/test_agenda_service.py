@@ -10,6 +10,7 @@ from ai_coach.agenda.service import (
     MAX_HOURS,
     PAST_DAYS,
     AgendaError,
+    agenda_rows,
     cancel_event,
     remove_event,
     validate_draft,
@@ -150,17 +151,44 @@ def test_repeat_on_task_is_error(conn: sqlite3.Connection) -> None:
         check(conn, repeat="daily")
 
 
+CHECKIN = {"kind": "checkin", "category": None, "repeat": "daily"}
+
+
 @pytest.mark.parametrize("status", ["draft", "written"])
-def test_second_active_repeating_checkin_is_error(conn: sqlite3.Connection, status: str) -> None:
-    stored(conn, kind="checkin", category=None, repeat="daily", status=status)
+def test_repeating_checkin_at_same_time_is_error(conn: sqlite3.Connection, status: str) -> None:
+    stored(conn, **CHECKIN, status=status, **at("2026-10-10", "11:00:00", "11:15:00"))
     with pytest.raises(AgendaError):
-        check(conn, kind="checkin", category=None, repeat="daily")
+        check(conn, **CHECKIN, **at("2026-10-12", "11:00:00", "11:15:00"))
+
+
+@pytest.mark.parametrize("status", ["draft", "written"])
+def test_repeating_checkin_at_other_time_is_ok(conn: sqlite3.Connection, status: str) -> None:
+    stored(conn, **CHECKIN, status=status, **at("2026-10-10", "11:00:00", "11:15:00"))
+    result = check(conn, **CHECKIN, **at("2026-10-12", "15:00:00", "15:15:00"))
+    assert result["repeat"] == "daily"
+
+
+def test_repeating_checkin_one_minute_apart_is_ok(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, **at("2026-10-10", "11:00:00", "11:15:00"))
+    check(conn, **CHECKIN, **at("2026-10-12", "11:01:00", "11:15:00"))
+
+
+def test_third_repeating_checkin_at_taken_time_is_error(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, **at("2026-10-10", "11:00:00", "11:15:00"))
+    stored(conn, **CHECKIN, **at("2026-10-10", "15:00:00", "15:15:00"))
+    with pytest.raises(AgendaError, match="15:00"):
+        check(conn, **CHECKIN, **at("2026-10-12", "15:00:00", "15:15:00"))
 
 
 @pytest.mark.parametrize("status", ["cancelled", "removed"])
 def test_repeating_checkin_after_inactive_one_is_ok(conn: sqlite3.Connection, status: str) -> None:
-    stored(conn, kind="checkin", category=None, repeat="daily", status=status)
-    check(conn, kind="checkin", category=None, repeat="daily")
+    stored(conn, **CHECKIN, status=status, **at("2026-10-10", "11:00:00", "11:15:00"))
+    check(conn, **CHECKIN, **at("2026-10-12", "11:00:00", "11:15:00"))
+
+
+def test_non_repeating_checkin_at_same_time_is_ok(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, **at("2026-10-10", "11:00:00", "11:15:00"))
+    check(conn, kind="checkin", category=None, **at("2026-10-12", "11:00:00", "11:15:00"))
 
 
 def test_workout_id_must_exist(conn: sqlite3.Connection) -> None:
@@ -330,6 +358,27 @@ def test_cancel_only_from_draft(conn: sqlite3.Connection, status: str) -> None:
 def test_cancel_missing_event_is_error(conn: sqlite3.Connection) -> None:
     with pytest.raises(AgendaError):
         cancel_event(conn, 999)
+
+
+def test_agenda_rows_put_all_earlier_repeats_first_by_start(conn: sqlite3.Connection) -> None:
+    for clock, title in (("15:00:00", "поздний"), ("11:00:00", "ранний")):
+        stored(
+            conn, **CHECKIN, title=title, date="2026-10-01", **at("2026-10-01", clock, "16:00:00")
+        )
+    stored(conn, title="задача", **at("2026-10-12"), date="2026-10-12")
+    rows = agenda_rows(conn, "2026-10-10", "2026-10-14")
+    assert [r["title"] for r in rows] == ["ранний", "поздний", "задача"]
+
+
+def test_agenda_rows_do_not_duplicate_repeats_inside_range(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, title="внутри", date="2026-10-12", **at("2026-10-12", "11:00:00"))
+    rows = agenda_rows(conn, "2026-10-10", "2026-10-14")
+    assert [r["title"] for r in rows] == ["внутри"]
+
+
+def test_agenda_rows_skip_inactive_repeats(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, status="cancelled", date="2026-10-01", **at("2026-10-01"))
+    assert agenda_rows(conn, "2026-10-10", "2026-10-14") == []
 
 
 def test_commit_error_after_write_reports_uid(conn: sqlite3.Connection) -> None:

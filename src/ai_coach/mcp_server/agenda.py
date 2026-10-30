@@ -30,7 +30,8 @@ def create_draft_event(
     checkin / task; start_at, end_at - местное время YYYY-MM-DDTHH:MM; день начала от 30 дней
     назад до 14 вперёд; не длиннее 24 часов. category (work / personal / hobby / rest) - для
     нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у остальных не задаётся.
-    alarm_min - за сколько минут напомнить. repeat=daily - только у checkin и один на всех."""
+    alarm_min - за сколько минут напомнить. repeat=daily - только у checkin, не два на одно
+    время суток."""
     values = {
         "kind": kind,
         "title": title,
