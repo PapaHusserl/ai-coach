@@ -95,6 +95,14 @@ def by_start(rows: list[dict]) -> dict[str, dict]:
     return {r["week_start"]: r for r in rows}
 
 
+def test_detachment_fields_do_not_change_weekly_review(filled: sqlite3.Connection) -> None:
+    before = weekly_review(filled, WED)
+    filled.execute(
+        "UPDATE wellbeing_log SET work_thoughts = 5, hindrance = 5, valuable = 1, flow = 0"
+    )
+    assert weekly_review(filled, WED) == before
+
+
 # --- границы недель ---
 
 

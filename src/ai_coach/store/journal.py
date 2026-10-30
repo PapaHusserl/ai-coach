@@ -156,7 +156,8 @@ def wellbeing_day(moment: datetime) -> str:
 
 def add_wellbeing(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     """values: date, logged_at, score (1-5), text (может быть пуст); необязательно mood и stress
-    (1-5, вечерний чек-ин). Только добавление."""
+    (1-5, вечерний чек-ин), work_thoughts, hindrance, valuable (1-5) и flow (0/1) оттуда же.
+    Только добавление."""
     return insert(conn, "wellbeing_log", values)
 
 

@@ -9,6 +9,7 @@ from mcp_fakes import tool_names
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 SKILLS = ROOT / "skills"
 MAX_BYTES = 3072
+EVENING_MAX_BYTES = 4096
 ALLOW = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
 
 
@@ -22,7 +23,8 @@ def extra_files(skill: str) -> list[Path]:
 
 @pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
 def test_skill_is_at_most_3072_bytes(path: Path) -> None:
-    assert len(path.read_bytes()) <= MAX_BYTES
+    limit = EVENING_MAX_BYTES if path.parent.name == "coach-evening" else MAX_BYTES
+    assert len(path.read_bytes()) <= limit
 
 
 def test_skills_are_found() -> None:

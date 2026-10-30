@@ -217,6 +217,9 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Конфиг `[screen]` в `workload.toml`: `url` (по умолчанию `http://127.0.0.1:5600`), `work/hobby/browser/meeting = [приложения]`, `[screen.title.<app>] work/hobby = [regex]`; плохая regex, кавычка, чужой ключ в `[screen.title.*]`, не список — `WorkloadConfigError`. Правила — вне репо.
 - Агент: `coach-evening` шагом 0 запускает `coach screen` и предлагает «экран: работа N ч, хобби M ч, браузер K ч — записать так?» (`coach feel --work N --hobby M` после «да»); `coach-wellbeing.md` — поля `screen_*` и строки итога sync про экран. `coach screen` — в allow.
 
+## Н1: вечер (партия 3)
+- Миграция 0022: `wellbeing_log.work_thoughts`, `hindrance`, `valuable` (1–5), `flow` (0/1), все NULL-able, старые строки живы. `coach feel` — опции `--thoughts`, `--flow/--no-flow`, `--hindrance`, `--valuable`; проверка оценок — `check_scores` (`cli/journal.py`, константы там же). `get_wellbeing` отдаёт новые поля. `evening_done`, отклонения, перегруз, обзор не меняются (режим наблюдения). Скилл `coach-evening`: вопросы одним окном, ритуал закрытия дня без записи в базу и туду; лимит размера 4096 Б.
+
 ## Н1: дневные оценки (партия 1)
 - Таблица `focus_log` (миграция 0021): `date`, `logged_at`, `focus`, `fatigue`, `effort` (1–5, NOT NULL), `text`; отдельно от `wellbeing_log`, чтобы дневные записи не сдвигали «основную запись дня» (`main_wellbeing`) и отклонения. Дата — `wellbeing_day` (до 04:00 — вчера), записи только добавляются.
 - CLI: `coach focus <фокус> <усталость> <усилие> ["текст"]` (`cli/journal.py`, проверка оценок — `check_scores`), `coach log focus [--date D]`; MCP `get_focus_log(date_from, date_to)` (до 92 дней). В snapshot, отклонения, перегруз и обзор не входит (режим наблюдения).

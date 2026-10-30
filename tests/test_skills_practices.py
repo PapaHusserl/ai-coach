@@ -38,10 +38,6 @@ def test_every_agent_file_has_a_limit() -> None:
     assert {p.name for p in AGENTS.glob("*.md")} <= set(LIMITS)
 
 
-def test_evening_skill_within_limit() -> None:
-    assert len(EVENING.read_bytes()) <= 3072
-
-
 def test_evening_skill_asks_about_habits() -> None:
     text = EVENING.read_text()
     assert "habits_today" in text

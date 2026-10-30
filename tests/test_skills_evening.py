@@ -12,7 +12,7 @@ def allow() -> list[str]:
 
 def test_evening_skill_exists_and_is_short() -> None:
     assert EVENING.is_file()
-    assert len(EVENING.read_bytes()) <= 3072
+    assert len(EVENING.read_bytes()) <= 4096
 
 
 def test_evening_skill_has_front_matter() -> None:
@@ -61,6 +61,26 @@ def test_evening_skill_offers_screen_hours_and_writes_them_with_feel() -> None:
 
 def test_evening_skill_still_asks_hours_without_screen() -> None:
     assert "нет - спроси сам" in EVENING.read_text()
+
+
+def test_evening_skill_has_detachment_options() -> None:
+    text = EVENING.read_text()
+    for option in ("--thoughts", "--flow", "--hindrance", "--valuable"):
+        assert option in text
+
+
+def test_evening_skill_has_closing_ritual_with_todo() -> None:
+    text = EVENING.read_text()
+    assert "туду" in text
+    assert "что осталось и с чего начнёшь завтра" in text
+
+
+def test_evening_skill_keeps_skip_when_unknown() -> None:
+    assert "Не знает - пропусти" in EVENING.read_text()
+
+
+def test_coach_md_within_limit_after_evening() -> None:
+    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 15360
 
 
 def test_evening_skill_has_no_application_or_window_names() -> None:

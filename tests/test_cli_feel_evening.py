@@ -150,6 +150,55 @@ def test_bad_mood_stress_is_rejected_and_nothing_saved(
     assert counters(isolated) == {}
 
 
+def new_fields(db: Path) -> tuple[Any, ...]:
+    row = wellbeing(db)[0]
+    return (row["work_thoughts"], row["flow"], row["hindrance"], row["valuable"])
+
+
+def test_detachment_options_are_saved(isolated: Path) -> None:
+    args = ["feel", "3", "--thoughts", "4", "--flow", "--hindrance", "2", "--valuable", "4"]
+    assert runner.invoke(main.app, args).exit_code == 0
+    assert new_fields(isolated) == (4, 1, 2, 4)
+
+
+def test_no_flow_is_saved_as_zero(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "3", "--no-flow"])
+    assert new_fields(isolated) == (None, 0, None, None)
+
+
+def test_detachment_options_absent_are_null(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "3", "--mood", "3"])
+    assert new_fields(isolated) == (None, None, None, None)
+
+
+def test_only_one_detachment_option_leaves_others_null(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "3", "--hindrance", "5"])
+    assert new_fields(isolated) == (None, None, 5, None)
+
+
+@pytest.mark.parametrize("option", ["--thoughts", "--hindrance", "--valuable"])
+@pytest.mark.parametrize("value", ["1", "5"])
+def test_detachment_limits_are_inclusive(isolated: Path, option: str, value: str) -> None:
+    assert runner.invoke(main.app, ["feel", "3", option, value]).exit_code == 0
+
+
+@pytest.mark.parametrize("option", ["--thoughts", "--hindrance", "--valuable"])
+@pytest.mark.parametrize("value", ["0", "6", "-1", "3.5", "abc"])
+def test_bad_detachment_value_is_rejected_and_nothing_saved(
+    isolated: Path, option: str, value: str
+) -> None:
+    result = runner.invoke(main.app, ["feel", "3", option, value, "--work", "5"])
+    assert result.exit_code != 0
+    assert wellbeing(isolated) == []
+    assert counters(isolated) == {}
+
+
+def test_detachment_without_mood_stress_keeps_hours_and_score(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "4", "--thoughts", "2", "--work", "6"])
+    assert counters(isolated) == {"work_hours": 6.0}
+    assert wellbeing(isolated)[0]["score"] == 4
+
+
 def test_bad_score_with_options_is_still_rejected(isolated: Path) -> None:
     result = runner.invoke(main.app, ["feel", "6", "--mood", "3"])
     assert result.exit_code != 0

@@ -340,6 +340,73 @@ def test_snapshot_wellbeing_has_mood_and_stress(conn: sqlite3.Connection) -> Non
     assert (found[0]["mood"], found[0]["stress"]) == (2, 4)
 
 
+NEW_KEYS = {"work_thoughts", "hindrance", "valuable", "flow"}
+
+
+def test_get_wellbeing_returns_detachment_fields(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "21:00:00", mood=3, work_thoughts=4, hindrance=2, valuable=5, flow=1)
+    found = rows(conn, "get_wellbeing", start=DAY, end=DAY)[0]
+    assert (found["work_thoughts"], found["hindrance"], found["valuable"], found["flow"]) == (
+        4,
+        2,
+        5,
+        1,
+    )
+
+
+def test_get_wellbeing_detachment_fields_are_null_when_not_asked(
+    conn: sqlite3.Connection,
+) -> None:
+    feel(conn, DAY, "21:00:00", mood=3)
+    found = rows(conn, "get_wellbeing", start=DAY, end=DAY)[0]
+    assert set(found) >= NEW_KEYS
+    assert [found[k] for k in sorted(NEW_KEYS)] == [None] * 4
+
+
+def test_snapshot_wellbeing_has_detachment_fields(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "21:00:00", mood=3, work_thoughts=4, hindrance=2, valuable=5, flow=0)
+    found = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"][0]
+    assert (found["work_thoughts"], found["hindrance"], found["valuable"], found["flow"]) == (
+        4,
+        2,
+        5,
+        0,
+    )
+
+
+def test_snapshot_with_detachment_fields_fits_total_limit(conn: sqlite3.Connection) -> None:
+    for number in range(20):
+        feel(
+            conn, shift(DAY, -number), "20:00:00", mood=2, stress=5, text="т" * 200,
+            work_thoughts=5, hindrance=5, valuable=1, flow=1,
+        )  # fmt: skip
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+
+
+def test_detachment_fields_alone_do_not_make_evening_done(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "21:00:00", work_thoughts=4, hindrance=2, valuable=3, flow=1)
+    assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is False
+
+
+def test_detachment_fields_do_not_change_deviations(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "21:00:00", score=4, mood=2, stress=4)
+    before = rows(conn, "get_deviations", date=DAY)
+    conn.execute(
+        "UPDATE wellbeing_log SET work_thoughts = 5, hindrance = 5, valuable = 1, flow = 0"
+    )
+    assert rows(conn, "get_deviations", date=DAY) == before
+
+
+def test_detachment_fields_do_not_change_overload(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -3), 4)
+    feel(conn, DAY, "21:00:00", mood=3, stress=3)
+    before = call(conn, "get_overload", date=DAY)
+    conn.execute(
+        "UPDATE wellbeing_log SET work_thoughts = 5, hindrance = 5, valuable = 1, flow = 0"
+    )
+    assert call(conn, "get_overload", date=DAY) == before
+
+
 def deviation_kinds(conn: sqlite3.Connection) -> list[str]:
     return [r["kind"] for r in rows(conn, "get_deviations", date=DAY)]
 

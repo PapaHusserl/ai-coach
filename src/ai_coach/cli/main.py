@@ -11,7 +11,16 @@ import typer
 
 from ai_coach.cli.agenda import event_app
 from ai_coach.cli.habits import habit_app
-from ai_coach.cli.journal import check_date, delete_app, edit_app, focus, food, log_app, weight
+from ai_coach.cli.journal import (
+    check_date,
+    check_scores,
+    delete_app,
+    edit_app,
+    focus,
+    food,
+    log_app,
+    weight,
+)
 from ai_coach.cli.meds import med_app
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
 from ai_coach.cli.practices import practice_app
@@ -72,8 +81,6 @@ app.add_typer(med_app, name="med")
 app.command()(shop)
 
 ZIP_WITH_ID = "--id не нужен для zip-экспорта: id активностей берутся из архива."
-MIN_SCORE = 1
-MAX_SCORE = 5
 MAX_HOURS = 24
 
 
@@ -271,13 +278,25 @@ def feel(
     work: Annotated[str | None, typer.Option(help="Часы работы за день")] = None,
     hobby: Annotated[str | None, typer.Option(help="Часы хобби за день")] = None,
     rest: Annotated[str | None, typer.Option(help="Часы отдыха за день")] = None,
+    thoughts: Annotated[int | None, typer.Option(help="Мысли о работе вечером, 1-5")] = None,
+    flow: Annotated[bool | None, typer.Option(help="Был отрезок полного погружения")] = None,
+    hindrance: Annotated[int | None, typer.Option(help="Сколько дня ушло на помехи, 1-5")] = None,
+    valuable: Annotated[
+        int | None, typer.Option(help="Сколько сделанного было ценным, 1-5")
+    ] = None,
 ) -> None:
-    """Записать самочувствие (время — сейчас), вечером ещё настроение, стресс и часы за день.
-    Записи самочувствия только добавляются; часы за день перезаписываются.
-    До 04:00 запись и часы идут на вчера."""
-    for name, value in (("Оценка", score), ("Настроение", mood), ("Стресс", stress)):
-        if value is not None and not MIN_SCORE <= value <= MAX_SCORE:
-            fail(f"{name}: от {MIN_SCORE} до {MAX_SCORE}.")
+    """Записать самочувствие (время — сейчас), вечером ещё настроение, стресс, часы за день,
+    мысли о работе, погружение, помехи и ценность дня. Записи самочувствия только добавляются;
+    часы за день перезаписываются. До 04:00 запись и часы идут на вчера."""
+    scores = (
+        ("Оценка", score),
+        ("Настроение", mood),
+        ("Стресс", stress),
+        ("Мысли о работе", thoughts),
+        ("Помехи", hindrance),
+        ("Ценность", valuable),
+    )
+    check_scores(scores)
     hours = {"work_hours": work, "hobby_hours": hobby, "rest_hours": rest}
     given = {kind: parse_hours(kind, value) for kind, value in hours.items() if value is not None}
     moment = now()
@@ -289,6 +308,10 @@ def feel(
         "text": text,
         "mood": mood,
         "stress": stress,
+        "work_thoughts": thoughts,
+        "hindrance": hindrance,
+        "valuable": valuable,
+        "flow": None if flow is None else int(flow),
     }
     conn = open_db()
     try:

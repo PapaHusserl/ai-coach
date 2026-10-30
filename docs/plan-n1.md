@@ -309,6 +309,22 @@ docs/plan-roadmap-r1.md «Решения» 1–2 (один шаг; напоми�
 - 2026-10-31, партия 2 (мама, необязательное): `tests/test_skills_agenda.py::test_agenda_file_mentions_focus` —
   `"focus" in text` заменён проверками `"coach focus"` и `"Фокус 1–5?"` (Р1, Р4); правил доеба. Решение мамы,
   не Влада; пунктов BACKLOG нет.
+- 2026-10-31, партия 3 (мама ⚠️: вечерние поля в утреннем snapshot `wellbeing.rows`, тест
+  `tests/test_mcp_overload.py::test_snapshot_wellbeing_has_detachment_fields`). Папа: правки нет, по плану. Р7(1) в
+  редакции, принятой Владом 2026-10-31 («Решения»), дословно: «вечерние — в `get_wellbeing` и snapshot `wellbeing`;
+  в итоге чек-ина не упоминаются»; то же в «Тестах» партии 3 («`get_wellbeing` и snapshot `wellbeing` отдают новые
+  ключи») и в «Рисках» (рост snapshot). «Не реагирует» — про поведение (нет порогов в `find_deviations`, нет строки в
+  итоге чек-ина и сводке, `coach.md` новые поля не называет), а не про видимость данных — та же логика, что у
+  `get_focus_log` (запись аудита партии 1 выше). Прецедент: `mood`/`stress` (0016) попали в snapshot тем же путём
+  (`list_wellbeing` — `SELECT *`, `snapshot.py:163-164`), architecture.md:188 «`wellbeing` с `mood`/`stress`».
+  Исключать поля — значит добавить в `snapshot.py` фильтр ключей наподобие `AGENDA_FIELDS` (:50): это изменение
+  видимого тренеру, то есть пересмотр Р7 Владом, а не техническое умолчание; повода нет. Цифра к риску: 4 пустых
+  ключа — 74 Б на строку (`wc -c`), при cap 60 строк — до 4,4 КБ (расчёт, не прогон); лимит 20000 держит цикл
+  `snapshot.py:204` и `test_snapshot_with_detachment_fields_fits_total_limit`. Наблюдать к К1: если тренер начнёт
+  сам комментировать эти поля в утренней сводке — это вопрос промпта `coach.md`, не кода, и пункт в BACKLOG.
+- 2026-10-31, партия 3 (make check): упал старый `tests/test_skills_practices.py::test_evening_skill_within_limit`
+  (лимит 3072 при умолчании 11 — 4096). Доеба удалил тест: лимит 4096 coach-evening уже проверяют
+  `test_skills_evening.py` и `test_skills_text.py`. Решение доебы; пунктов BACKLOG нет.
 
 ## Открытые вопросы
 
