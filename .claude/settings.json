@@ -50,6 +50,7 @@
       "Bash(cat .claude/agents/coach-wellbeing.md)",
       "Bash(cat .claude/agents/coach-week.md)",
       "Bash(cat .claude/agents/coach-agenda.md)",
+      "Bash(cat .claude/agents/coach-day.md)",
       "Bash(cat .claude/agents/coach-help.md)",
       "Bash(cat .claude/agents/coach-help/start.md)",
       "Bash(cat .claude/agents/coach-help/training.md)",
