@@ -72,7 +72,10 @@ def own_events(
         seen.add(event["uid"])
         if found["category"] is not None:
             row: dict[str, Any] = {"raw_json": {}, **event, "date": event["start_at"][:10]}
-            rows.append({**row, "category": found["category"], "synced_at": stamp})
+            demand = config.demand(found["category"], event.get("title"))
+            rows.append(
+                {**row, "category": found["category"], "demand": demand, "synced_at": stamp}
+            )
     return rows, foreign, seen
 
 

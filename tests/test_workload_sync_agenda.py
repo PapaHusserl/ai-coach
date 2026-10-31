@@ -94,6 +94,27 @@ def test_own_hobby_event_counts_as_hobby(conn: sqlite3.Connection, config: Workl
     assert (day["hobby_hours"], day["work_hours"]) == (2.0, 0.0)
 
 
+def test_own_events_get_demand(
+    conn: sqlite3.Connection, config: WorkloadConfig, tmp_path: Path
+) -> None:
+    own(conn, "c1", category="work")
+    own(conn, "c2", category="work")
+    own(conn, "c3", category="hobby")
+    raws = [
+        coach_raw("c1", title="Созвон"),
+        coach_raw("c2", title="Design review"),
+        coach_raw("c3", title="Гитара"),
+    ]
+    text = (
+        '[calendar]\nwork = ["Work"]\n[calendar.demand]\nchallenge = ["design"]\n'
+        '[coach]\ncalendar = "Coach"\n'
+    )
+    ruled = load_config(write_config(tmp_path / "d.toml", text))
+    run(conn, ruled, FakeCalendar(raws))
+    found = {e["uid"]: e["demand"] for e in list_calendar_events(conn, *ALL)}
+    assert found == {"c1": "hindrance", "c2": "challenge", "c3": None}
+
+
 def test_own_event_without_category_is_not_stored(
     conn: sqlite3.Connection, config: WorkloadConfig
 ) -> None:
