@@ -89,6 +89,19 @@ def test_sync_skips_ignored_calendar(conn: sqlite3.Connection, env: Env) -> None
     assert list_calendar_events(conn, *ALL) == []
 
 
+def test_sync_ignored_calendar_does_not_stop_later_events(
+    conn: sqlite3.Connection, env: Env
+) -> None:
+    reader = FakeCalendar([raw_event(uid="s", calendar="Skip"), raw_event(uid="w")])
+    run(conn, env, reader)
+    assert [e["uid"] for e in list_calendar_events(conn, *ALL)] == ["w"]
+
+
+def test_sync_event_date_is_start_day(conn: sqlite3.Connection, env: Env) -> None:
+    run(conn, env, FakeCalendar([raw_event(uid="w")]))
+    assert [e["date"] for e in list_calendar_events(conn, *ALL)] == ["2026-10-07"]
+
+
 def test_sync_stores_unmarked_calendar_as_unknown_and_reports_it(
     conn: sqlite3.Connection, env: Env
 ) -> None:
@@ -206,6 +219,69 @@ def test_no_calendar_config_skips_calendar_but_reads_todo(
     assert reader.calls == []
     assert list_calendar_events(conn, *ALL) == []
     assert kinds(conn)["todo_open"] == 1
+
+
+def demand_config(env: Env, tmp_path: Path, patterns: str) -> WorkloadConfig:
+    text = (
+        f'[calendar]\nwork = ["Work"]\npersonal = ["Home"]\n'
+        f'[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        f"[calendar.demand]\nchallenge = {patterns}\n"
+    )
+    return load_config(write_config(tmp_path / "demand.toml", text))
+
+
+def demands(conn: sqlite3.Connection) -> dict[str, str | None]:
+    return {e["uid"]: e["demand"] for e in list_calendar_events(conn, *ALL)}
+
+
+def test_sync_sets_demand_for_work_events_only(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    reader = FakeCalendar(
+        [
+            raw_event(uid="w1", title="Design review"),
+            raw_event(uid="w2", title="Синк"),
+            raw_event(uid="p1", calendar="Home", title="Design дома"),
+        ]
+    )
+    sync_workload(
+        conn,
+        reader=reader,
+        config=demand_config(env, tmp_path, '["design"]'),
+        days=DAYS,
+        today=TODAY,
+    )
+    assert demands(conn) == {"w1": "challenge", "w2": "hindrance", "p1": None}
+
+
+def test_sync_without_demand_rules_work_is_hindrance(conn: sqlite3.Connection, env: Env) -> None:
+    run(conn, env, FakeCalendar([raw_event(uid="w"), raw_event(uid="p", calendar="Home")]))
+    assert demands(conn) == {"w": "hindrance", "p": None}
+
+
+def test_sync_event_without_title_gets_default_demand(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    sync_workload(
+        conn,
+        reader=FakeCalendar([raw_event(uid="w", title=None)]),
+        config=demand_config(env, tmp_path, '["design"]'),
+        days=DAYS,
+        today=TODAY,
+    )
+    assert demands(conn) == {"w": "hindrance"}
+
+
+def test_sync_with_changed_demand_config_overwrites_demand(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    events = [raw_event(uid="w", title="Design review")]
+    before = demand_config(env, tmp_path, '["design"]')
+    after = demand_config(env, tmp_path, '["nothing"]')
+    sync_workload(conn, reader=FakeCalendar(events), config=before, days=DAYS, today=TODAY)
+    assert demands(conn) == {"w": "challenge"}
+    sync_workload(conn, reader=FakeCalendar(events), config=after, days=DAYS, today=TODAY)
+    assert demands(conn) == {"w": "hindrance"}
 
 
 HOUR = 3600

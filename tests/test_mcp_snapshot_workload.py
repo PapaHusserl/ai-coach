@@ -89,6 +89,21 @@ def test_snapshot_workload_rows_have_demand_hours(conn: sqlite3.Connection) -> N
     assert row["screen_hindrance_hours"] is None
 
 
+def test_snapshot_workload_has_calendar_demand_hours_but_ahead_has_not(
+    conn: sqlite3.Connection,
+) -> None:
+    replace_calendar_window(
+        conn, "2026-09-01", "2026-10-31", [event("2026-10-05", demand="challenge")]
+    )
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    row = {r["date"]: r for r in snapshot["workload"]["rows"]}["2026-10-05"]
+    assert row["challenge_hours"] == 2.0
+    assert row["hindrance_hours"] == 0
+    for r in snapshot["workload_ahead"]["rows"]:
+        assert "challenge_hours" not in r
+        assert "hindrance_hours" not in r
+
+
 def test_snapshot_workload_ahead_has_no_screen_fields(conn: sqlite3.Connection) -> None:
     put_screen(conn, "2026-10-10", "screen_work_hours", 3.5)
     ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]

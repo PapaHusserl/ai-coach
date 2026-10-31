@@ -5,6 +5,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, rows, tool_names
 from workload_fakes import stored_event
 
+from ai_coach.mcp_server.server import TOOLS
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
 
 DAY = "2026-10-07"
@@ -55,6 +56,25 @@ def test_workload_row_has_hours_and_counters(conn: sqlite3.Connection) -> None:
     row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
     assert row["work_hours"] == pytest.approx(2.0)
     assert row["todo_closed"] == 2
+
+
+def test_workload_rows_have_calendar_demand_hours(conn: sqlite3.Connection) -> None:
+    put(conn, DAY, "10:00", "12:00", demand="challenge")
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["challenge_hours"] == pytest.approx(2.0)
+    assert row["hindrance_hours"] == 0
+
+
+def test_workload_events_have_demand(conn: sqlite3.Connection) -> None:
+    put(conn, DAY, "10:00", "12:00", demand="hindrance")
+    answer = call(conn, "get_workload", date_from=DAY, date_to=DAY, events=True)
+    assert [e["demand"] for e in answer["rows"][0]["events"]] == ["hindrance"]
+
+
+def test_workload_description_mentions_calendar_demand() -> None:
+    text = TOOLS["get_workload"][1]
+    assert "challenge/hindrance_hours - вызов и помехи внутри work_hours" in text
+    assert "рабочая встреча без правила - помеха" in text
 
 
 SCREEN_KINDS = (

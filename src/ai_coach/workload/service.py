@@ -10,6 +10,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from ai_coach.store.workload import list_calendar_events, list_counters
+from ai_coach.workload.config import DEMANDS
 
 EVENING_FROM = time(19, 0)
 AHEAD_DAYS = 14
@@ -31,6 +32,7 @@ EVENT_FIELDS = (
     "all_day",
     "calendar",
     "category",
+    "demand",
     "status",
     "my_status",
 )
@@ -89,6 +91,12 @@ def _day_row(
         late = [s for e in mine if (s := _clip(e, evening, next_midnight))]
         row[f"{category}_hours"] = _hours(whole)
         row[f"{category}_evening_hours"] = _hours(late)
+    work = [e for e in timed if e["category"] == "work"]
+    for demand in DEMANDS:
+        spans = [
+            s for e in work if e["demand"] == demand and (s := _clip(e, midnight, next_midnight))
+        ]
+        row[f"{demand}_hours"] = _hours(spans)
     row["all_day_work"] = any(
         e["all_day"] and e["category"] == "work" and _covers_day(e, day) for e in live
     )
@@ -117,6 +125,7 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
     """Метрики по дням start..end включительно (YYYY-MM-DD), по возрастанию даты, без названий.
     Ключи дня: date, weekend (сб/вс),
     {work,personal,hobby,rest}_hours и _evening_hours (после 19:00),
+    challenge_hours и hindrance_hours (части work_hours по [calendar.demand]),
     all_day_work, todo_open, todo_closed, grooming_done, grooming_pending (None - не считались),
     screen_work/hobby/browser/evening_hours (часы экрана 04:00→04:00, вечер 19:00→04:00;
     None - нет данных экрана за день), screen_challenge/hindrance_hours (вызов и помехи внутри

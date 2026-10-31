@@ -48,7 +48,8 @@ def stored_events(
         if category == "unknown":
             unknown.add(event["calendar"].strip())
         row: dict[str, Any] = {"raw_json": {}, **event, "date": event["start_at"][:10]}
-        rows.append({**row, "category": category, "synced_at": stamp})
+        demand = config.demand(category, event.get("title"))
+        rows.append({**row, "category": category, "demand": demand, "synced_at": stamp})
     return rows, sorted(unknown)
 
 

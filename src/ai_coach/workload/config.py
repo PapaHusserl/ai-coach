@@ -60,6 +60,7 @@ class WorkloadConfig:
     hb_watch_path: Path
     coach_calendar: str | None = None
     screen: ScreenConfig | None = None
+    demand_rules: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
 
     @property
     def has_calendar(self) -> bool:
@@ -75,6 +76,16 @@ class WorkloadConfig:
         if name in self.ignore:
             return IGNORE
         return self.categories.get(name, UNKNOWN)
+
+    def demand(self, category: str, title: str | None) -> str | None:
+        """Вызов/помеха рабочего события по заголовку: совпало с [calendar.demand] challenge -
+        challenge, иначе hindrance. Не рабочее событие - None."""
+        if category != "work":
+            return None
+        patterns = self.demand_rules.get("challenge")
+        if patterns and title and re.search(title_regex(patterns), title):
+            return "challenge"
+        return "hindrance"
 
 
 def default_config() -> WorkloadConfig:
@@ -218,6 +229,30 @@ def _screen(section: dict[str, Any]) -> ScreenConfig:
     )
 
 
+def _calendar_demand(section: dict[str, Any]) -> dict[str, list[str]]:
+    """[calendar.demand]: challenge - regex на заголовок рабочей встречи (остальные - помеха).
+    Чужой ключ, кавычка и плохая regex - ошибка."""
+    demand = _table(section, "demand")
+    for key in demand:
+        if key != "challenge":
+            raise WorkloadConfigError(
+                f"Конфиг нагрузки: в [calendar.demand] ключ {key!r} не challenge."
+            )
+    patterns = _strings(demand, "challenge", "calendar.demand.")
+    if any('"' in p for p in patterns):
+        raise WorkloadConfigError(
+            "Конфиг нагрузки: кавычка в regex calendar.demand.challenge не поддерживается."
+        )
+    try:
+        if patterns:
+            re.compile(title_regex(patterns))
+    except re.error as e:
+        raise WorkloadConfigError(
+            f"Конфиг нагрузки: плохая regex в calendar.demand.challenge: {e}"
+        ) from None
+    return {"challenge": patterns} if patterns else {}
+
+
 def load_config(path: str | Path | None = None) -> WorkloadConfig:
     """Читает конфиг. Нет файла - default_config(); битый toml - WorkloadConfigError."""
     target = config_path(path)
@@ -236,4 +271,6 @@ def load_config(path: str | Path | None = None) -> WorkloadConfig:
     todo = Path(_path(paths, "todo", fallback.todo_path)).expanduser()
     hb_watch = Path(_path(paths, "hb_watch", fallback.hb_watch_path)).expanduser()
     screen = _screen(_table(data, "screen")) if "screen" in data else None
-    return WorkloadConfig(categories, ignore, todo, hb_watch, coach, screen)
+    return WorkloadConfig(
+        categories, ignore, todo, hb_watch, coach, screen, _calendar_demand(section)
+    )

@@ -209,6 +209,17 @@ def test_workload_topic() -> None:
         assert needle in text, needle
 
 
+def test_workload_topic_describes_calendar_demand() -> None:
+    text = topic("workload.md")
+    for needle in (
+        "[calendar.demand]",
+        "challenge_hours",
+        "hindrance_hours",
+        "coach sync --days 30",
+    ):
+        assert needle in text, needle
+
+
 def test_workload_topic_names_every_demand_key() -> None:
     text = topic("workload.md")
     for key in DEMANDS:

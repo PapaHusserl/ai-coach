@@ -86,7 +86,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "часы экрана (день 04:00-04:00, вечер 19:00-04:00; null - нет данных экрана; "
         "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана); "
         "screen_challenge/hindrance_hours - вызов и помехи внутри экранной работы "
-        "(null - не размечено). "
+        "(null - не размечено); challenge/hindrance_hours - вызов и помехи внутри work_hours "
+        "календаря (рабочая встреча без правила - помеха). "
         "events=true - только на один день "
         "(date_from = date_to): ещё и events с названиями. Пишет coach sync (и coach screen).",
     ),

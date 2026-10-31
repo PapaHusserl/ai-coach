@@ -28,6 +28,88 @@ def slot(start: str, end: str, category: str = "work", uid: str | None = None, *
     )
 
 
+def test_demand_hours_split_work_hours(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        slot(f"{WED} 10:00", f"{WED} 11:00", demand="challenge"),
+        slot(f"{WED} 11:00", f"{WED} 12:00", demand="hindrance"),
+    )
+    day = workload_day(conn, WED)
+    assert day["challenge_hours"] == pytest.approx(1.0)
+    assert day["hindrance_hours"] == pytest.approx(1.0)
+    assert day["work_hours"] == pytest.approx(2.0)
+
+
+def test_overlapping_challenge_events_are_united(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        slot(f"{WED} 10:00", f"{WED} 12:00", demand="challenge"),
+        slot(f"{WED} 11:00", f"{WED} 13:00", demand="challenge"),
+    )
+    day = workload_day(conn, WED)
+    assert day["challenge_hours"] == pytest.approx(3.0)
+    assert day["hindrance_hours"] == 0
+
+
+def test_overlapping_hindrance_events_are_united(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        slot(f"{WED} 10:00", f"{WED} 11:30", demand="hindrance"),
+        slot(f"{WED} 11:00", f"{WED} 12:00", demand="hindrance"),
+    )
+    assert workload_day(conn, WED)["hindrance_hours"] == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("fields", [{"status": "cancelled"}, {"my_status": "declined"}])
+def test_cancelled_or_declined_event_gives_no_demand_hours(
+    conn: sqlite3.Connection, fields: dict[str, str]
+) -> None:
+    put(conn, slot(f"{WED} 10:00", f"{WED} 11:00", demand="challenge", **fields))
+    day = workload_day(conn, WED)
+    assert day["challenge_hours"] == 0
+    assert day["hindrance_hours"] == 0
+
+
+def test_all_day_event_gives_no_demand_hours(conn: sqlite3.Connection) -> None:
+    put(conn, slot(f"{WED} 00:00", f"{THU} 00:00", all_day=True, demand="challenge"))
+    assert workload_day(conn, WED)["challenge_hours"] == 0
+
+
+def test_event_without_demand_is_in_neither_demand_column(conn: sqlite3.Connection) -> None:
+    put(conn, slot(f"{WED} 10:00", f"{WED} 11:00"))
+    day = workload_day(conn, WED)
+    assert day["work_hours"] == pytest.approx(1.0)
+    assert day["challenge_hours"] == 0
+    assert day["hindrance_hours"] == 0
+
+
+def test_demand_of_non_work_event_is_not_counted(conn: sqlite3.Connection) -> None:
+    put(conn, slot(f"{WED} 10:00", f"{WED} 11:00", "personal", demand="challenge"))
+    assert workload_day(conn, WED)["challenge_hours"] == 0
+
+
+def test_demand_hours_are_clipped_to_the_day(conn: sqlite3.Connection) -> None:
+    put(conn, slot(f"{WED} 23:00", f"{THU} 02:00", demand="challenge"))
+    assert workload_day(conn, WED)["challenge_hours"] == pytest.approx(1.0)
+    assert workload_day(conn, THU)["challenge_hours"] == pytest.approx(2.0)
+
+
+def test_day_without_events_has_zero_demand_hours(conn: sqlite3.Connection) -> None:
+    day = workload_day(conn, WED)
+    assert day["challenge_hours"] == 0.0
+    assert day["hindrance_hours"] == 0.0
+
+
+def test_events_list_carries_demand(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        slot(f"{WED} 10:00", f"{WED} 11:00", demand="challenge"),
+        slot(f"{WED} 12:00", f"{WED} 13:00"),
+    )
+    found = workload_day(conn, WED, True)["events"]
+    assert [e["demand"] for e in found] == ["challenge", None]
+
+
 def test_work_hours_sum_of_events(conn: sqlite3.Connection) -> None:
     put(conn, slot(f"{WED} 10:00", f"{WED} 11:30"), slot(f"{WED} 14:00", f"{WED} 15:00"))
     assert workload_day(conn, WED)["work_hours"] == pytest.approx(2.5)

@@ -260,6 +260,103 @@ def test_title_patterns_not_a_list_is_config_error() -> None:
         title_patterns({"hobby": "x"}, "alpha", "hobby")
 
 
+# --- [calendar.demand] ---
+
+DEMAND_CAL = '[calendar]\nwork = ["Работа"]\npersonal = ["Дом"]\n'
+
+
+def test_calendar_demand_challenge_matches_title_ignoring_case(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["воркшоп", "design"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.demand("work", "Design review") == "challenge"
+    assert config.demand("work", "ВОРКШОП по плану") == "challenge"
+    assert config.demand("work", "Дизайн DESIGN") == "challenge"
+
+
+def test_calendar_demand_pattern_is_case_insensitive_without_flag(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["design"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.demand("work", "DESIGN sync") == "challenge"
+
+
+def test_calendar_demand_work_without_match_is_hindrance(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["design"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.demand("work", "Синк") == "hindrance"
+
+
+def test_calendar_demand_without_section_is_hindrance_for_work(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path / "c.toml", DEMAND_CAL))
+    assert config.demand("work", "Синк") == "hindrance"
+    assert config.demand_rules == {}
+
+
+@pytest.mark.parametrize("category", ["personal", "hobby", "rest", "unknown", "ignore"])
+def test_calendar_demand_not_work_is_none(tmp_path: Path, category: str) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["design"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.demand(category, "Design review") is None
+
+
+def test_calendar_demand_title_none_gives_default(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = [".*"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.demand("work", None) == "hindrance"
+    assert config.demand("work", "") == "hindrance"
+
+
+def test_calendar_demand_empty_challenge_list_has_no_rules(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path / "c.toml", DEMAND_CAL + "[calendar.demand]\n"))
+    assert config.demand_rules == {}
+    assert config.demand("work", "x") == "hindrance"
+
+
+@pytest.mark.parametrize("key", ["hindrance", "other"])
+def test_calendar_demand_foreign_key_is_config_error(tmp_path: Path, key: str) -> None:
+    text = DEMAND_CAL + f'[calendar.demand]\n{key} = ["x"]\n'
+    with pytest.raises(WorkloadConfigError, match=key):
+        load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_quote_is_config_error(tmp_path: Path) -> None:
+    text = DEMAND_CAL + "[calendar.demand]\nchallenge = ['a\"b']\n"
+    with pytest.raises(WorkloadConfigError, match=r"^Конфиг нагрузки: кавычка .*поддерживается\.$"):
+        load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_bad_regex_is_config_error(tmp_path: Path) -> None:
+    text = DEMAND_CAL + "[calendar.demand]\nchallenge = ['(unclosed']\n"
+    with pytest.raises(WorkloadConfigError, match="плохая regex"):
+        load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_inline_case_flag_is_config_error(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["(?i)x"]\n'
+    with pytest.raises(WorkloadConfigError, match="calendar.demand.challenge"):
+        load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_must_be_a_list_of_strings(tmp_path: Path) -> None:
+    for value in ('"x"', "[1]"):
+        text = DEMAND_CAL + f"[calendar.demand]\nchallenge = {value}\n"
+        with pytest.raises(WorkloadConfigError):
+            load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_list_error_names_the_key(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = "x"\n'
+    with pytest.raises(WorkloadConfigError, match=r"calendar\.demand\.challenge должен"):
+        load_config(write_config(tmp_path / "c.toml", text))
+
+
+def test_calendar_demand_does_not_break_categories(tmp_path: Path) -> None:
+    text = DEMAND_CAL + '[calendar.demand]\nchallenge = ["x"]\n'
+    config = load_config(write_config(tmp_path / "c.toml", text))
+    assert config.category("Работа") == "work"
+    assert config.category("Дом") == "personal"
+    assert config.has_calendar
+
+
 # --- [screen] challenge / hindrance ---
 
 

@@ -29,10 +29,12 @@ def raw_event(**fields: Any) -> dict[str, Any]:
 
 
 def stored_event(category: str = "work", /, **fields: Any) -> dict[str, Any]:
-    """Событие в виде, готовом для replace_calendar_window."""
+    """Событие в виде, готовом для replace_calendar_window; demand (challenge/hindrance) - в
+    fields, по умолчанию None."""
     event = raw_event(**fields)
     event.setdefault("date", event["start_at"][:10])
     event["category"] = category
+    event.setdefault("demand", None)
     event.setdefault("raw_json", {})
     event.setdefault("synced_at", "2026-10-08T10:00:00")
     return event

@@ -59,6 +59,8 @@ AHEAD_SKIP = (
     "screen_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
+    "challenge_hours",
+    "hindrance_hours",
 )
 NOT_LISTS = (
     "date",
