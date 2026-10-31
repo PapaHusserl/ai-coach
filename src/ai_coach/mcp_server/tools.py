@@ -44,6 +44,7 @@ from ai_coach.store.journal import (
     list_focus,
     list_food,
     list_food_pending,
+    list_pvt,
     list_weights,
     list_wellbeing,
     update_food,
@@ -177,6 +178,13 @@ def focus_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """Дневные оценки (фокус, усталость, усилие 1-5) по времени."""
     period(start, end)
     return cap(list_focus(conn, start, end), newest=True)
+
+
+def pvt_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Тесты реакции по времени, без сырого списка rts."""
+    period(start, end)
+    rows = [{k: v for k, v in row.items() if k != "rts"} for row in list_pvt(conn, start, end)]
+    return cap(rows, newest=True)
 
 
 def day_deviations(

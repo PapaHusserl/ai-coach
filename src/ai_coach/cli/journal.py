@@ -1,12 +1,13 @@
-"""Команды `coach weight|food|focus|edit|delete|log`: записи веса, еды и дневных оценок, правка,
-удаление, просмотр."""
+"""Команды `coach weight|food|focus|edit|delete|log`: записи веса, еды, дневных оценок и тестов
+реакции, правка, удаление, просмотр."""
 
 from collections.abc import Iterable
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
+from ai_coach.pvt import format_summary
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import (
     add_focus,
@@ -18,6 +19,7 @@ from ai_coach.store.journal import (
     edit_weight,
     list_focus,
     list_food,
+    list_pvt,
     list_weights,
     wellbeing_day,
 )
@@ -25,7 +27,7 @@ from ai_coach.store.journal import (
 edit_app = typer.Typer(help="Правка записей веса и еды", no_args_is_help=True)
 delete_app = typer.Typer(help="Удаление записей веса и еды", no_args_is_help=True)
 log_app = typer.Typer(
-    help="Записи веса, еды и дневных оценок за день (id веса и еды — для edit/delete)",
+    help="Записи веса, еды, оценок и тестов реакции за день (id веса и еды — для edit/delete)",
     no_args_is_help=True,
 )
 MIN_WEIGHT_KG = 20
@@ -34,7 +36,7 @@ MIN_SCORE = 1
 MAX_SCORE = 5
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     typer.echo(message, err=True)
     raise typer.Exit(1)
 
@@ -279,6 +281,25 @@ def log_focus(
     for row in rows:
         scores = f"{row['focus']}/{row['fatigue']}/{row['effort']}"
         typer.echo(f"{row['id']}  {row['logged_at']}  {scores}  {row['text'] or ''}".rstrip())
+
+
+@log_app.command("pvt")
+def log_pvt(
+    day: Annotated[
+        str | None, typer.Option("--date", help="День, YYYY-MM-DD (по умолчанию сегодня)")
+    ] = None,
+) -> None:
+    """Тесты реакции за день: id, время, медиана, среднее, медленные 10 %, скорость, провалы."""
+    day = log_day(day)
+    conn = open_db()
+    try:
+        rows = list_pvt(conn, day, day)
+    finally:
+        conn.close()
+    if not rows:
+        typer.echo("Записей нет.")
+    for row in rows:
+        typer.echo(f"{row['id']}  {row['started_at']}  {format_summary(row)}")
 
 
 @log_app.command("food")

@@ -134,6 +134,13 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Дневные оценки по времени: focus (фокус), fatigue (умственная усталость), effort (трудно "
         "заставить себя), все 1-5, и текст. Пишет пользователь командой coach focus.",
     ),
+    "get_pvt_log": (
+        tools.pvt_log,
+        "Тесты реакции PVT-B (3 минуты) по времени: median_rt_ms, mean_rt_ms, slow10_ms (среднее "
+        "самых медленных 10 % проб) - в мс, speed (среднее 1/RT, 1/с, больше - быстрее), lapses "
+        "(провалы, RT > 355 мс), false_starts, trials; null - не было проб с ответом. Пишет "
+        "пользователь командой coach pvt.",
+    ),
     "get_deviations": (
         tools.deviations,
         "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "

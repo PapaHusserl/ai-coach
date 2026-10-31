@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 from mcp_fakes import tool_names
 
+from ai_coach import pvt
 from ai_coach.cli import main
 from ai_coach.load import deviations, overload, training
 
@@ -129,6 +130,37 @@ def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
         f"ATL минус CTL больше {deviations.ATL_OVER_CTL_MAX}",
         f"сон меньше {deviations.SLEEP_MIN_HOURS} часов",
     ):
+        assert needle in text, needle
+
+
+def test_pvt_topic_has_commands_and_flags() -> None:
+    text = topic("pvt.md")
+    for needle in ("coach pvt", "coach log pvt", "get_pvt_log", "04:00", "Esc"):
+        assert needle in text, needle
+
+
+def test_pvt_topic_thresholds_match_constants() -> None:
+    text = topic("pvt.md")
+    for needle in (
+        f"{pvt.DURATION_S // 60} минуты",
+        f"{pvt.ISI_MIN_MS // 1000}-{pvt.ISI_MAX_MS // 1000} с",
+        f"дольше {pvt.LAPSE_MS} мс",
+        f"быстрее {pvt.FALSE_START_MS} мс",
+        f"нет ответа {pvt.NO_RESPONSE_MS // 1000} с",
+        f"{round(pvt.SLOW_SHARE * 100)} %",
+    ):
+        assert needle in text, needle
+
+
+def test_pvt_topic_has_metric_poles() -> None:
+    text = topic("pvt.md")
+    for pole in ("медленные 10 %", "скорость", "больше - быстрее"):
+        assert pole in text, pole
+
+
+def test_calendar_topic_has_pvt_reminder() -> None:
+    text = topic("calendar.md")
+    for needle in ("Реакция 3 мин", "uv run coach pvt", "09:30"):
         assert needle in text, needle
 
 
