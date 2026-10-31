@@ -23,7 +23,7 @@ from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.practices import get_practice
 from ai_coach.workload.config import CATEGORIES
 
-KINDS = ("training", "practice", "rest", "sleep", "checkin", "task")
+KINDS = ("training", "practice", "rest", "sleep", "checkin", "task", "focus", "meal")
 REST_KINDS = ("rest", "sleep")
 REPEATS = ("daily",)
 PAST_DAYS = 30

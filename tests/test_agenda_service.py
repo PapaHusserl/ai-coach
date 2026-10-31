@@ -122,6 +122,18 @@ def test_uncounted_kinds_have_no_category(conn: sqlite3.Connection, kind: str) -
     assert check(conn, kind=kind, category=None)["category"] is None
 
 
+@pytest.mark.parametrize("kind", ["focus", "meal"])
+def test_plan_kinds_without_category_are_ok(conn: sqlite3.Connection, kind: str) -> None:
+    result = check(conn, kind=kind, category=None)
+    assert (result["kind"], result["category"]) == (kind, None)
+
+
+@pytest.mark.parametrize("kind", ["focus", "meal"])
+def test_plan_kinds_with_category_are_error(conn: sqlite3.Connection, kind: str) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, kind=kind, category="work")
+
+
 @pytest.mark.parametrize("kind", ["rest", "sleep"])
 def test_rest_and_sleep_default_to_rest_category(conn: sqlite3.Connection, kind: str) -> None:
     assert check(conn, kind=kind, category=None)["category"] == "rest"

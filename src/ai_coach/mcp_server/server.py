@@ -27,7 +27,8 @@ INSTRUCTIONS = (
     f"Списки — не больше {MAX_ROWS} строк и {MAX_CHARS} символов: ответ {{rows, truncated}}, "
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
-    "create_draft_event, cancel_draft_event — только draft, propose_phase) и КБЖУ записи еды, "
+    "create_draft_event, create_day_plan, cancel_draft_event — только draft, propose_phase) и "
+    "КБЖУ записи еды, "
     "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition), и группы "
     "старым записям без групп (save_food_groups). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
@@ -308,7 +309,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "create_draft_event": (
         agenda.create_draft_event,
         "Записать событие календаря черновиком (draft). kind: training / practice / rest / sleep / "
-        "checkin / task; title - название; start_at, end_at - местное время YYYY-MM-DDTHH:MM "
+        "checkin / task / focus / meal (focus и meal без категории); title - название; "
+        "start_at, end_at - местное время YYYY-MM-DDTHH:MM "
         "(день начала от 30 дней назад до 14 вперёд, не длиннее 24 часов). category "
         "(work / personal / hobby / rest) - как событие считается в нагрузке: у rest и sleep по "
         "умолчанию rest, у task обязательна, у training / practice / checkin не задаётся. "
@@ -317,6 +319,19 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
         "all_day - на весь день. Ответ: draft_id. В календарь кладёт пользователь командой "
         "coach event write.",
+    ),
+    "create_day_plan": (
+        agenda.create_day_plan,
+        "План дня черновиками (draft) за один вызов. date - день (сегодня: блоки только после "
+        "текущего времени). Занято: события календаря и события тренера дня (кроме checkin). "
+        "Порядок: тренировка, tasks, завтрак, перекус, отдых, ужин, фокус; блоки не пересекаются, "
+        "фокуса в сб/вс и после 19:00 нет. tasks - список {title, minutes, category} "
+        "(category по умолчанию work в будни, personal в сб/вс); training_at HH:MM - время "
+        "тренировки плана дня; day_start, day_end (00:00 - полночь), breakfast_at, snack_at, "
+        "dinner_at - HH:MM, переопределяют рамку дня. Ответ: date, drafts (draft_id, kind, title, "
+        "start_at, end_at, category), skipped (что не поставлено и почему), busy. На день уже "
+        "есть focus/meal - ничего не создаёт, ответ already_planned с id. В календарь кладёт "
+        "пользователь командой coach event write; лишнее - coach event cancel.",
     ),
     "cancel_draft_event": (
         agenda.cancel_draft_event,

@@ -1,6 +1,7 @@
 """Инструменты MCP: события тренера в календаре (отдельно от tools.py из-за размера).
 
-Пишут только черновики; в календарь события кладёт пользователь командой coach event write.
+Пишут только черновики (в том числе create_day_plan - план дня); в календарь события кладёт
+пользователь командой coach event write.
 """
 
 import sqlite3
@@ -9,7 +10,9 @@ from typing import Any
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft
-from ai_coach.mcp_server.tools import cap, period
+from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
+from ai_coach.mcp_server import tools
+from ai_coach.mcp_server.tools import cap, parse_day, period
 
 
 def create_draft_event(
@@ -27,11 +30,11 @@ def create_draft_event(
     all_day: bool = False,
 ) -> dict[str, Any]:
     """Черновик события календаря (status=draft). kind: training / practice / rest / sleep /
-    checkin / task; start_at, end_at - местное время YYYY-MM-DDTHH:MM; день начала от 30 дней
-    назад до 14 вперёд; не длиннее 24 часов. category (work / personal / hobby / rest) - для
-    нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у остальных не задаётся.
-    alarm_min - за сколько минут напомнить. repeat=daily - только у checkin, не два на одно
-    время суток."""
+    checkin / task / focus / meal; start_at, end_at - местное время YYYY-MM-DDTHH:MM; день
+    начала от 30 дней назад до 14 вперёд; не длиннее 24 часов. category (work / personal /
+    hobby / rest) - для нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у
+    остальных не задаётся. alarm_min - за сколько минут напомнить. repeat=daily - только у
+    checkin, не два на одно время суток."""
     values = {
         "kind": kind,
         "title": title,
@@ -48,6 +51,37 @@ def create_draft_event(
     try:
         with conn:
             return {"draft_id": create_draft(conn, values)}
+    except AgendaError as e:
+        raise ToolError(str(e)) from None
+
+
+def create_day_plan(
+    conn: sqlite3.Connection,
+    date: str,
+    tasks: list[dict[str, Any]] | None = None,
+    training_at: str | None = None,
+    day_start: str | None = None,
+    day_end: str | None = None,
+    breakfast_at: str | None = None,
+    snack_at: str | None = None,
+    dinner_at: str | None = None,
+) -> dict[str, Any]:
+    """План дня черновиками (status=draft) за один вызов: свободные окна дня минус занятое
+    (календарь и события тренера) - задачи, тренировка, завтрак, перекус, отдых, ужин, фокус.
+    Если на день уже есть focus/meal - ничего не создаёт, ответ already_planned с id."""
+    try:
+        return build_day_plan(
+            conn,
+            parse_day(date),
+            tasks,
+            training_at=training_at,
+            day_start=day_start,
+            day_end=day_end,
+            breakfast_at=breakfast_at,
+            snack_at=snack_at,
+            dinner_at=dinner_at,
+            now=tools.now(),
+        )
     except AgendaError as e:
         raise ToolError(str(e)) from None
 

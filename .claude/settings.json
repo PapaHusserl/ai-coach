@@ -32,6 +32,7 @@
       "Bash(uv run coach review done:*)",
       "Bash(uv run coach event list:*)",
       "Bash(uv run coach event cancel:*)",
+      "Bash(uv run coach todo list:*)",
       "Bash(uv run coach protocol add:*)",
       "Bash(uv run coach protocol list:*)",
       "Bash(uv run coach protocol show:*)",

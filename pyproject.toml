@@ -66,7 +66,7 @@ skip_covered = true
 paths = ["src", "tests"]
 min_confidence = 60
 ignore_names = ["model_config", "row_factory", "__signature__"]
-ignore_decorators = ["@field_validator", "@model_validator", "@app.command*", "@profile_app.command*", "@goal_app.command*", "@pantry_app.command*", "@meal_app.command*", "@edit_app.command*", "@delete_app.command*", "@log_app.command*", "@recipe_app.command*", "@protocol_app.command*", "@supplement_app.command*", "@med_app.command*", "@practice_app.command*", "@habit_app.command*", "@review_app.command*", "@event_app.command*", "@pytest.fixture*"]
+ignore_decorators = ["@field_validator", "@model_validator", "@app.command*", "@profile_app.command*", "@goal_app.command*", "@pantry_app.command*", "@meal_app.command*", "@edit_app.command*", "@delete_app.command*", "@log_app.command*", "@recipe_app.command*", "@protocol_app.command*", "@supplement_app.command*", "@med_app.command*", "@practice_app.command*", "@habit_app.command*", "@review_app.command*", "@event_app.command*", "@todo_app.command*", "@pytest.fixture*"]
 
 [tool.mutmut]
 source_paths = ["src/"]

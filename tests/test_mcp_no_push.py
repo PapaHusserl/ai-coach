@@ -71,6 +71,7 @@ EXPECTED_TOOLS = {
     "get_weekly_review",
     "create_draft_event",
     "cancel_draft_event",
+    "create_day_plan",
     "get_agenda",
 }
 
