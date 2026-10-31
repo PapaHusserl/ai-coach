@@ -2,8 +2,13 @@
 
 import json
 import re
+import sqlite3
 from pathlib import Path
 
+import typer
+from mcp_fakes import tool_names
+
+from ai_coach.cli import main
 from ai_coach.load import deviations, overload, training
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -201,6 +206,61 @@ def test_workload_topic_signal_thresholds_match_overload() -> None:
     ):
         assert needle in text, needle
     assert overload.WEEKEND_WORK_MIN == 1.0  # «не меньше часа»
+
+
+def cli_commands(app: typer.Typer, prefix: str = "") -> set[str]:
+    """Имена всех команд CLI вида «med add» (обход вложенных групп typer)."""
+    names = set()
+    for cmd in app.registered_commands:
+        assert cmd.callback is not None
+        name = cmd.name or cmd.callback.__name__.replace("_", "-")
+        names.add(f"{prefix}{name}")
+    for group in app.registered_groups:
+        assert group.typer_instance is not None
+        names |= cli_commands(group.typer_instance, f"{prefix}{group.name} ")
+    return names
+
+
+def help_text() -> str:
+    return HELP.read_text() + "".join(p.read_text() for p in topic_files())
+
+
+def test_cli_commands_walk_finds_commands() -> None:
+    names = cli_commands(main.app)
+    assert {"food", "med add", "pantry use"} <= names
+    assert len(names) > 60
+
+
+def test_every_cli_command_is_in_help() -> None:
+    text = help_text()
+    missing = {
+        name
+        for name in cli_commands(main.app)
+        if not re.search(rf"coach {re.escape(name)}(?![\w-])", text)
+    }
+    assert missing == set(), missing
+
+
+def test_every_mcp_tool_is_in_help(conn: sqlite3.Connection) -> None:
+    text = help_text()
+    missing = {name for name in tool_names(conn) if not re.search(rf"\b{name}\b", text)}
+    assert missing == set(), missing
+
+
+def test_every_skill_is_in_help() -> None:
+    text = help_text()
+    names = [p.parent.name for p in (CLAUDE / "skills").glob("*/SKILL.md")]
+    assert names
+    missing = {name for name in names if not re.search(rf"(?<![\w-]){name}(?![\w-])", text)}
+    assert missing == set(), missing
+
+
+def test_agents_md_has_help_rule() -> None:
+    assert "coach-help" in (ROOT / "AGENTS.md").read_text()
+
+
+def test_readme_mentions_help() -> None:
+    assert "coach-help.md" in (ROOT / "README.md").read_text()
 
 
 def test_agenda_note_has_focus_title_and_poles() -> None:

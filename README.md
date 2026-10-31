@@ -44,7 +44,7 @@
 - Мутации: `make mutate [MOD="ai_coach.load.*"]` — фоном, по умолчанию изменённые модули; отчёт в `reports/mutmut.txt`, повторная сводка — `make mutate-report`.
 
 ## Вес и еда
-- `coach weight 82.4` — записать вес; `coach food "борщ 300 г, хлеб 40 г"` — записать еду текстом, у каждого продукта граммы (без них /coach-food спросит). Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
+- `coach weight <кг>` — записать вес; `coach food "борщ 300 г, хлеб 40 г"` — записать еду текстом, у каждого продукта граммы (без них /coach-food спросит). Время — местное «сейчас», LLM в Python нет, пишется только в базу. Видно в `get_morning_snapshot` (weights, food_today).
 - КБЖУ считает скилл `/coach-food` через MCP (`get_food_pending`, `save_food_nutrition`); записи с КБЖУ он не меняет. Группы продуктов (`groups`) обязательны при записи КБЖУ; старым записям их дописывает `save_food_groups`. После обновления кода перезапусти `тренер`: MCP не перечитывает код при `/clear`.
 
 ## Тренировка на телефон (без часов)
@@ -76,6 +76,8 @@
   База — `$AI_COACH_DB` или `~/.local/share/ai-coach/coach.db`.
 - Нагрузка (CTL/ATL): пульс покоя берётся из ответа сна в базе (последний день с данными, не старше 14 дней, иначе ошибка «сделай coach sync»). Пороговый пульс (LTHR) свой для каждого вида (бег/вело/плавание), таблица `thresholds` с историей: `coach sync` забирает беговой порог (endpoint `latestLactateThreshold`, source `garmin_lt`) и пороги видов из пульсовых зон Garmin (`get_heart_rate_zones`, source `garmin_zones`). Чего Garmin не дал, считается на лету (source `derived`): беговой минус смещение (вело −7, плавание −12, константы в `load/thresholds.py`), а без бегового порога — 0.89 × максимальный пульс из активностей. Силовая — 35 TSS/час, растяжка — 0, незнакомый вид — по беговому порогу. `get_load` отдаёт `thresholds` ({вид: {lthr, source, date}}), снапшот — тоже. Нет данных — в снапшоте `load_error`, остальное работает.
 - Скиллы лежат в `.claude/skills/` и подхватываются в этом репозитории: `/coach-morning` (утренний разбор и рекомендации по восстановлению, Sonnet), `/coach-plan` (план недели черновиками, Sonnet; форматы тренировок в `.claude/skills/coach-plan/spec-formats.md`), `/coach-food` (раз в день считает КБЖУ записей еды без него, Sonnet). Поле `model` во frontmatter и имена инструментов `mcp__ai-coach__*` в `allowed-tools` на живом Claude Code не проверены.
+
+Справка по функциям тренера: в сессии `тренер` спросите «что умеешь», «как ...» или «что значит ...» (шкала, число, поле) — тренер отвечает по темам из `.claude/agents/coach-help.md` и `.claude/agents/coach-help/`. Новая функция — правка справки в том же шаге; полноту имён команд, инструментов и скилов держит `tests/test_skills_help.py`.
 
 Подробности ресёрча: [docs/research-market.md](docs/research-market.md)
 Архитектура (утверждена): [docs/architecture.md](docs/architecture.md)

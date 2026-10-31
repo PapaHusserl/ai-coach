@@ -39,3 +39,5 @@
 - Токены Garmin: `~/.config/ai-coach/garmin`.
 - Настройки нагрузки и календаря: `~/.config/ai-coach/workload.toml` (см. `workload.md`).
 - Данные тренера в чате идут через MCP `ai-coach`: он читает базу и пишет только черновики. После обновления кода перезапусти `тренер`: сервер не перечитывает код сам.
+- Что тренер читает при старте: `get_morning_snapshot` (сводка дня), по требованию `get_daily_metrics` (сон, HRV, Body Battery, readiness по дням), `get_activities` и `get_strength_sets` (тренировки и подходы).
+- Скиллы: `/coach-morning` (утренний разбор и восстановление), `/coach-evening` (вечерний чек-ин, запускается фразой `тренер вечер`).
