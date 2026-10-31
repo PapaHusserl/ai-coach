@@ -17,6 +17,8 @@ SCREEN_APPS = ("work", "hobby", "browser", "meeting")
 # Порядок классов по заголовку в categorize: при равных классах побеждает последний (hobby),
 # порядок менять нельзя.
 TITLE_CATS = ("work", "hobby")
+# Вызов/помеха (JD-R) - второй признак поверх work: приложения в [screen] challenge/hindrance.
+DEMANDS = ("challenge", "hindrance")
 
 
 class WorkloadConfigError(Exception):
@@ -32,7 +34,8 @@ def title_regex(patterns: list[str]) -> str:
 class ScreenConfig:
     """Разметка экранного времени (ActivityWatch). work/hobby/browser/meeting - приложения в
     нижнем регистре; meeting_names - приложения созвонов как в конфиге (aw-server сравнивает
-    имена с учётом регистра); title: приложение -> {work|hobby: [regex на заголовок]}."""
+    имена с учётом регистра); title: приложение -> {work|hobby: [regex на заголовок]};
+    challenge/hindrance - приложения (нижний регистр) вызова и помехи внутри работы."""
 
     url: str = SCREEN_URL
     work: frozenset[str] = frozenset()
@@ -40,6 +43,8 @@ class ScreenConfig:
     browser: frozenset[str] = frozenset()
     meeting: frozenset[str] = frozenset()
     meeting_names: tuple[str, ...] = ()
+    challenge: frozenset[str] = frozenset()
+    hindrance: frozenset[str] = frozenset()
     title: dict[str, dict[str, list[str]]] = field(default_factory=dict[str, dict[str, list[str]]])
 
 
@@ -171,13 +176,35 @@ def _title_rules(section: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
     return rules
 
 
+def _demand_apps(
+    section: dict[str, Any], apps: dict[str, list[str]], titled: set[str]
+) -> dict[str, frozenset[str]]:
+    """[screen] challenge/hindrance: приложения в нижнем регистре. Пересечение списков и
+    приложение не из work/meeting/[screen.title] - ошибка."""
+    found = {d: frozenset(a.lower() for a in _strings(section, d, "screen.")) for d in DEMANDS}
+    both = found["challenge"] & found["hindrance"]
+    if both:
+        raise WorkloadConfigError(
+            f"Конфиг нагрузки: приложение в challenge и hindrance сразу: {sorted(both)}."
+        )
+    known = {a.lower() for a in apps["work"] + apps["meeting"]} | {t.lower() for t in titled}
+    unknown = (found["challenge"] | found["hindrance"]) - known
+    if unknown:
+        raise WorkloadConfigError(
+            f"Конфиг нагрузки: {sorted(unknown)} не размечено как work/meeting."
+        )
+    return found
+
+
 def _screen(section: dict[str, Any]) -> ScreenConfig:
     """[screen]: url (по умолчанию SCREEN_URL), work/hobby/browser/meeting - списки приложений,
-    [screen.title.<app>] - разметка по заголовку."""
+    [screen.title.<app>] - разметка по заголовку, challenge/hindrance - вызов и помеха."""
     url = section.get("url", SCREEN_URL)
     if not isinstance(url, str):
         raise WorkloadConfigError("Конфиг нагрузки: screen.url должен быть строкой.")
     apps = {cat: _strings(section, cat, "screen.") for cat in SCREEN_APPS}
+    title = _title_rules(section)
+    demand = _demand_apps(section, apps, set(title))
     return ScreenConfig(
         url=url,
         work=frozenset(a.lower() for a in apps["work"]),
@@ -185,7 +212,9 @@ def _screen(section: dict[str, Any]) -> ScreenConfig:
         browser=frozenset(a.lower() for a in apps["browser"]),
         meeting=frozenset(a.lower() for a in apps["meeting"]),
         meeting_names=tuple(apps["meeting"]),
-        title=_title_rules(section),
+        title=title,
+        challenge=demand["challenge"],
+        hindrance=demand["hindrance"],
     )
 
 

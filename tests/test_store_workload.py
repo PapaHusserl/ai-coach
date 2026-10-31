@@ -154,7 +154,14 @@ def test_upsert_counter_known_kinds_are_allowed(conn: sqlite3.Connection, kind: 
 
 @pytest.mark.parametrize(
     "kind",
-    ["screen_work_hours", "screen_hobby_hours", "screen_browser_hours", "screen_evening_hours"],
+    [
+        "screen_work_hours",
+        "screen_hobby_hours",
+        "screen_browser_hours",
+        "screen_evening_hours",
+        "screen_challenge_hours",
+        "screen_hindrance_hours",
+    ],
 )
 def test_upsert_counter_screen_kinds_are_allowed(conn: sqlite3.Connection, kind: str) -> None:
     upsert_counter(conn, {**counter("2026-10-07", kind, 2.25, "screen"), "raw_json": None})

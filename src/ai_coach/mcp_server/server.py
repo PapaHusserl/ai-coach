@@ -84,7 +84,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(снимок на дату последнего sync), todo_closed (закрыто за день), grooming_done, "
         "grooming_pending (null - не считались); screen_work/hobby/browser/evening_hours - "
         "часы экрана (день 04:00-04:00, вечер 19:00-04:00; null - нет данных экрана; "
-        "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана). "
+        "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана); "
+        "screen_challenge/hindrance_hours - вызов и помехи внутри экранной работы "
+        "(null - не размечено). "
         "events=true - только на один день "
         "(date_from = date_to): ещё и events с названиями. Пишет coach sync (и coach screen).",
     ),

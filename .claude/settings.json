@@ -7,6 +7,7 @@
       "Bash(uv run coach food:*)",
       "Bash(uv run coach feel:*)",
       "Bash(uv run coach focus:*)",
+      "Bash(cat ~/.config/ai-coach/workload.toml)",
       "Bash(uv run coach status:*)",
       "Bash(uv run coach weight:*)",
       "Bash(uv run coach profile:*)",

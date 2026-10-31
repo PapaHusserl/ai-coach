@@ -258,3 +258,87 @@ def test_title_patterns_bad_regex_is_config_error() -> None:
 def test_title_patterns_not_a_list_is_config_error() -> None:
     with pytest.raises(WorkloadConfigError, match="списком строк"):
         title_patterns({"hobby": "x"}, "alpha", "hobby")
+
+
+# --- [screen] challenge / hindrance ---
+
+
+def screen_cfg(tmp_path: Path, text: str) -> ScreenConfig:
+    screen = load_config(write_config(tmp_path / "d.toml", text)).screen
+    assert screen is not None
+    return screen
+
+
+def test_screen_demand_lists_are_lowercased(tmp_path: Path) -> None:
+    screen = screen_cfg(
+        tmp_path,
+        '[screen]\nwork = ["A", "B"]\nmeeting = ["M"]\nchallenge = ["a"]\nhindrance = ["B", "m"]\n',
+    )
+    assert screen.challenge == frozenset({"a"})
+    assert screen.hindrance == frozenset({"b", "m"})
+
+
+def test_screen_demand_without_keys_is_empty(tmp_path: Path) -> None:
+    screen = screen_cfg(tmp_path, '[screen]\nwork = ["a"]\n')
+    assert screen.challenge == frozenset()
+    assert screen.hindrance == frozenset()
+
+
+def test_screen_demand_in_both_lists_is_config_error(tmp_path: Path) -> None:
+    text = '[screen]\nwork = ["Alpha", "Beta"]\nchallenge = ["Alpha"]\nhindrance = ["ALPHA"]\n'
+    with pytest.raises(WorkloadConfigError, match="alpha") as err:
+        load_config(write_config(tmp_path / "d.toml", text))
+    assert "challenge" in str(err.value)
+    assert "hindrance" in str(err.value)
+
+
+@pytest.mark.parametrize("key", ["challenge", "hindrance"])
+def test_screen_demand_unknown_app_is_config_error(tmp_path: Path, key: str) -> None:
+    text = f'[screen]\nwork = ["alpha"]\nhobby = ["game"]\n{key} = ["game"]\n'
+    with pytest.raises(WorkloadConfigError, match="game"):
+        load_config(write_config(tmp_path / "d.toml", text))
+
+
+@pytest.mark.parametrize("key", ["challenge", "hindrance"])
+def test_screen_demand_allows_meeting_and_title_apps(tmp_path: Path, key: str) -> None:
+    text = (
+        f'[screen]\nmeeting = ["Call"]\n{key} = ["call", "Editor"]\n'
+        '[screen.title.editor]\nwork = ["x"]\n'
+    )
+    assert getattr(screen_cfg(tmp_path, text), key) == frozenset({"call", "editor"})
+
+
+@pytest.mark.parametrize("key", ["challenge", "hindrance"])
+def test_screen_demand_must_be_a_list(tmp_path: Path, key: str) -> None:
+    path = write_config(tmp_path / "d.toml", f'[screen]\nwork = ["a"]\n{key} = "a"\n')
+    with pytest.raises(WorkloadConfigError):
+        load_config(path)
+
+
+@pytest.mark.parametrize("key", ["challenge", "hindrance"])
+def test_screen_demand_list_error_names_the_key(tmp_path: Path, key: str) -> None:
+    path = write_config(tmp_path / "d.toml", f'[screen]\nwork = ["a"]\n{key} = "a"\n')
+    with pytest.raises(WorkloadConfigError) as err:
+        load_config(path)
+    assert str(err.value) == f"Конфиг нагрузки: screen.{key} должен быть списком строк."
+
+
+def test_screen_apps_list_error_names_the_key(tmp_path: Path) -> None:
+    path = write_config(tmp_path / "s.toml", '[screen]\nwork = "a"\n')
+    with pytest.raises(WorkloadConfigError) as err:
+        load_config(path)
+    assert str(err.value) == "Конфиг нагрузки: screen.work должен быть списком строк."
+
+
+def test_screen_url_error_text(tmp_path: Path) -> None:
+    path = write_config(tmp_path / "s.toml", "[screen]\nurl = 5600\n")
+    with pytest.raises(WorkloadConfigError) as err:
+        load_config(path)
+    assert str(err.value) == "Конфиг нагрузки: screen.url должен быть строкой."
+
+
+@pytest.mark.parametrize("key", ["challenge", "hindrance"])
+def test_screen_demand_must_be_strings(tmp_path: Path, key: str) -> None:
+    path = write_config(tmp_path / "d.toml", f'[screen]\nwork = ["a"]\n{key} = [1]\n')
+    with pytest.raises(WorkloadConfigError):
+        load_config(path)

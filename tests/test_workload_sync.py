@@ -257,6 +257,26 @@ def test_sync_writes_screen_counters_with_source_screen(
     assert len(found) == 8
 
 
+def test_sync_without_demand_lists_notes_unmarked_demand(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    message = run_screen(conn, with_screen(env, tmp_path), FakeAw(screen_day()))
+    assert message.count("экран: вызов/помеха не размечены") == 1
+
+
+def test_sync_with_demand_lists_has_no_unmarked_note(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    text = (
+        f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        '[screen]\nwork = ["Alpha Editor"]\nhobby = ["BetaGame"]\nchallenge = ["Alpha Editor"]\n'
+    )
+    config = load_config(write_config(tmp_path / "demand.toml", text))
+    message = run_screen(conn, config, FakeAw(screen_day()))
+    assert "не размечены" not in message
+    assert ("2026-10-08", "screen_challenge_hours", 3.0, "screen") in screen_counters(conn)
+
+
 def test_sync_asks_screen_for_days_first_to_today(
     conn: sqlite3.Connection, env: Env, tmp_path: Path
 ) -> None:

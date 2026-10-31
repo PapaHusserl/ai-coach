@@ -71,4 +71,4 @@ ignore_decorators = ["@field_validator", "@model_validator", "@app.command*", "@
 [tool.mutmut]
 source_paths = ["src/"]
 pytest_add_cli_args_test_selection = ["tests/"]
-also_copy = ["pyproject.toml"]
+also_copy = ["pyproject.toml", ".claude/", ".qlty/", "bin/", "docs/", "AGENTS.md", "README.md"]

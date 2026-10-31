@@ -21,8 +21,14 @@ def test_coach_wellbeing_describes_all_screen_fields() -> None:
         "screen_hobby_hours",
         "screen_browser_hours",
         "screen_evening_hours",
+        "screen_challenge_hours",
+        "screen_hindrance_hours",
     ):
         assert field in text
+
+
+def test_coach_wellbeing_explains_unmarked_demand_note() -> None:
+    assert "вызов/помеха не размечены" in WELLBEING.read_text()
 
 
 def test_coach_wellbeing_gives_hours_priority_manual_screen_calendar() -> None:

@@ -87,6 +87,37 @@ def test_screen_prints_hours_by_category(isolated: Path, monkeypatch: pytest.Mon
     assert "браузер 0.25" in result.output
 
 
+def test_screen_without_demand_lists_prints_no_demand_parts(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, "2026-10-11 21:00:00")
+    use_aw(monkeypatch, FakeAw({"2026-10-11": day_of()}))
+    result = runner.invoke(main.app, ["screen"])
+    assert result.exit_code == 0
+    assert "вызов" not in result.output
+    assert "помехи" not in result.output
+
+
+def test_screen_with_demand_lists_prints_challenge_and_hindrance(
+    isolated: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = f'[paths]\ntodo = "{tmp_path / "no-todo.json"}"\nhb_watch = "{tmp_path / "no-hb"}"\n'
+    marked = (
+        SCREEN
+        + 'meeting = ["DeltaCall"]\nchallenge = ["Alpha Editor"]\nhindrance = ["DeltaCall"]\n'
+    )
+    config = write_config(tmp_path / "d.toml", paths + marked)
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
+    freeze(monkeypatch, "2026-10-11 21:00:00")
+    whole = {("alpha editor", ""): 3 * HOUR, ("deltacall", ""): 0.5 * HOUR}
+    use_aw(monkeypatch, FakeAw({"2026-10-11": (whole, {})}))
+    result = runner.invoke(main.app, ["screen"])
+    assert result.exit_code == 0
+    assert "вызов 3.0 ч" in result.output
+    assert "помехи 0.5 ч" in result.output
+    assert counters(isolated)[("2026-10-11", "screen_challenge_hours")] == (3.0, "screen")
+
+
 def test_screen_after_midnight_goes_to_yesterday(
     isolated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -216,16 +216,34 @@ def test_screen_hours_keep_fraction(conn: sqlite3.Connection) -> None:
     assert isinstance(day["screen_work_hours"], float)
 
 
-def test_all_four_screen_counters_are_in_the_row(conn: sqlite3.Connection) -> None:
+def test_demand_counters_are_float_and_none_without_data(conn: sqlite3.Connection) -> None:
+    assert workload_series(conn, WED, WED)[0]["screen_challenge_hours"] is None
+    counter(conn, "screen_challenge_hours", 1.5)
+    day = workload_series(conn, WED, WED)[0]
+    assert day["screen_challenge_hours"] == 1.5
+    assert isinstance(day["screen_challenge_hours"], float)
+    assert day["screen_hindrance_hours"] is None
+
+
+def test_all_six_screen_counters_are_in_the_row(conn: sqlite3.Connection) -> None:
     for kind, value in (
         ("screen_work_hours", 3.5),
         ("screen_hobby_hours", 1.25),
         ("screen_browser_hours", 0.75),
         ("screen_evening_hours", 2.5),
+        ("screen_challenge_hours", 1.5),
+        ("screen_hindrance_hours", 0.5),
     ):
         counter(conn, kind, value)
     day = workload_series(conn, WED, WED)[0]
-    assert [day[k] for k in sorted(day) if k.startswith("screen_")] == [0.75, 2.5, 1.25, 3.5]
+    assert [day[k] for k in sorted(day) if k.startswith("screen_")] == [
+        0.75,
+        1.5,
+        2.5,
+        0.5,
+        1.25,
+        3.5,
+    ]
 
 
 def test_screen_zero_stays_zero_not_none(conn: sqlite3.Connection) -> None:

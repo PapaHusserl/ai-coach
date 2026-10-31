@@ -81,6 +81,14 @@ def test_snapshot_workload_rows_have_screen_hours(conn: sqlite3.Connection) -> N
     assert row["screen_hobby_hours"] is None
 
 
+def test_snapshot_workload_rows_have_demand_hours(conn: sqlite3.Connection) -> None:
+    put_screen(conn, "2026-10-05", "screen_challenge_hours", 2.5)
+    rows = call(conn, "get_morning_snapshot", date=DAY)["workload"]["rows"]
+    row = {r["date"]: r for r in rows}["2026-10-05"]
+    assert row["screen_challenge_hours"] == 2.5
+    assert row["screen_hindrance_hours"] is None
+
+
 def test_snapshot_workload_ahead_has_no_screen_fields(conn: sqlite3.Connection) -> None:
     put_screen(conn, "2026-10-10", "screen_work_hours", 3.5)
     ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]

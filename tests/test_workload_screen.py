@@ -191,6 +191,8 @@ def test_by_category_sums_seconds_per_class() -> None:
         "hobby": 70.0,
         "browser": 20.0,
         "unmarked": 10.0,
+        "challenge": 0.0,
+        "hindrance": 0.0,
     }
 
 
@@ -199,6 +201,47 @@ def test_by_category_server_title_class_beats_app_class() -> None:
 
 
 # --- read_screen: периоды ---
+
+
+DEMAND = ScreenConfig(
+    work=frozenset({"a", "b", "h"}),
+    hobby=frozenset({"betagame"}),
+    meeting=frozenset({"deltacall"}),
+    challenge=frozenset({"a"}),
+    hindrance=frozenset({"b"}),
+)
+
+
+def test_by_category_counts_demand_inside_work() -> None:
+    per_app: dict[tuple[str, str], float] = {("a", ""): 3600, ("b", ""): 1800, ("h", ""): 600}
+    out = by_category(per_app, DEMAND)
+    assert out["work"] == 6000
+    assert out["challenge"] == 3600
+    assert out["hindrance"] == 1800
+
+
+def test_by_category_meeting_app_in_hindrance_counts_in_work_too() -> None:
+    config = ScreenConfig(meeting=frozenset({"deltacall"}), hindrance=frozenset({"deltacall"}))
+    out = by_category({("DeltaCall", ""): 600}, config)
+    assert out["work"] == 600
+    assert out["hindrance"] == 600
+
+
+def test_by_category_hobby_title_class_of_challenge_app_is_not_challenge() -> None:
+    out = by_category({("a", "hobby"): 600}, DEMAND)
+    assert out["hobby"] == 600
+    assert out["work"] == 0
+    assert out["challenge"] == 0
+
+
+def test_by_category_work_title_class_of_challenge_app_is_challenge() -> None:
+    out = by_category({("a", "work"): 600}, DEMAND)
+    assert out["work"] == 600
+    assert out["challenge"] == 600
+
+
+def test_by_category_demand_app_name_ignores_case() -> None:
+    assert by_category({("A", ""): 60}, DEMAND)["challenge"] == 60
 
 
 def test_periods_are_day_and_evening_for_each_day_in_order() -> None:
@@ -312,6 +355,102 @@ def test_zero_category_is_stored_as_zero_not_skipped() -> None:
     assert values["screen_evening_hours"] == 0
 
 
+def test_demand_rows_are_written_with_two_places_and_zeros() -> None:
+    aw = one_day({("a", ""): 1.2345 * HOUR, ("h", ""): HOUR})
+    rows, _ = read_screen(aw, DEMAND, D1, D1)
+    values = rows_of(rows, D1)
+    assert values["screen_challenge_hours"] == 1.23
+    assert values["screen_hindrance_hours"] == 0
+    assert values["screen_work_hours"] == 2.23
+    assert len(rows) == 6
+
+
+def test_demand_rows_for_every_day_with_events() -> None:
+    aw = FakeAw(
+        {
+            D1.isoformat(): ({("a", ""): HOUR}, {}),
+            D2.isoformat(): ({("b", ""): HOUR}, {}),
+        }
+    )
+    rows, _ = read_screen(aw, DEMAND, D1, D2)
+    assert rows_of(rows, D1)["screen_challenge_hours"] == 1.0
+    assert rows_of(rows, D2)["screen_hindrance_hours"] == 1.0
+    assert "screen_hindrance_hours" in rows_of(rows, D1)
+
+
+def test_without_demand_lists_there_are_no_demand_rows_and_one_note() -> None:
+    aw = FakeAw(
+        {
+            D1.isoformat(): ({("alpha editor", ""): HOUR}, {}),
+            D2.isoformat(): ({("alpha editor", ""): HOUR}, {}),
+        }
+    )
+    rows, notes = read_screen(aw, CONFIG, D1, D2)
+    assert not any(r["kind"] in ("screen_challenge_hours", "screen_hindrance_hours") for r in rows)
+    assert notes.count("экран: вызов/помеха не размечены") == 1
+
+
+def test_demand_lists_give_no_unmarked_note() -> None:
+    aw = one_day({("a", ""): HOUR})
+    assert read_screen(aw, DEMAND, D1, D1)[1] == []
+
+
+def test_no_events_and_no_demand_lists_gives_no_note() -> None:
+    assert read_screen(FakeAw(), CONFIG, D1, D1)[1] == []
+
+
+def test_demand_note_goes_after_unmarked_note() -> None:
+    aw = one_day({("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 8 * HOUR})
+    notes = read_screen(aw, CONFIG, D1, D1)[1]
+    assert "неразмеченное" in notes[0]
+    assert notes[1] == "экран: вызов/помеха не размечены"
+
+
+def test_demand_seconds_do_not_change_unmarked_share() -> None:
+    aw = one_day({("a", ""): 9 * HOUR, ("zeta tool", ""): HOUR})
+    assert read_screen(aw, DEMAND, D1, D1)[1] == []
+
+
+def test_by_category_sums_several_apps_of_one_demand() -> None:
+    config = ScreenConfig(work=frozenset({"a", "a2"}), challenge=frozenset({"a", "a2"}))
+    out = by_category({("a", ""): 600, ("a2", ""): 300, ("a", "work"): 100}, config)
+    assert out["challenge"] == 1000
+    assert out["work"] == 1000
+
+
+def test_sum_one_second_over_period_length_is_fine() -> None:
+    aw = one_day({("alpha editor", ""): 24 * HOUR + 1})
+    assert read_screen(aw, CONFIG, D1, D1)[0]
+
+
+def test_unmarked_note_has_exact_percent() -> None:
+    aw = one_day({("zeta tool", ""): 9 * HOUR, ("alpha editor", ""): HOUR})
+    assert read_screen(aw, CONFIG, D1, D1)[1][0] == "экран: неразмеченное 90 %"
+
+
+def test_unmarked_share_exactly_at_limit_gives_no_note() -> None:
+    aw = one_day({("zeta tool", ""): 15, ("a", ""): 85})
+    assert read_screen(aw, DEMAND, D1, D1)[1] == []
+
+
+def test_unmarked_of_all_days_adds_up_for_the_note() -> None:
+    aw = FakeAw(
+        {
+            D1.isoformat(): ({("zeta tool", ""): 4 * HOUR, ("alpha editor", ""): 6 * HOUR}, {}),
+            D2.isoformat(): ({("alpha editor", ""): 10 * HOUR}, {}),
+        }
+    )
+    assert read_screen(aw, CONFIG, D1, D2)[1][0] == "экран: неразмеченное 20 %"
+
+
+def test_browser_and_hobby_are_in_the_total_of_unmarked_share() -> None:
+    for app in ("gamma browser", "betagame"):
+        aw = one_day(
+            {("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 3 * HOUR, (app, ""): 5 * HOUR}
+        )
+        assert read_screen(aw, CONFIG, D1, D1)[1][0] == "экран: неразмеченное 20 %"
+
+
 def test_row_shape_for_upsert_counter() -> None:
     aw = one_day({("alpha editor", ""): HOUR})
     rows, _ = read_screen(aw, CONFIG, D1, D1)
@@ -384,7 +523,7 @@ def test_wrong_number_of_answers_is_screen_error() -> None:
 def test_big_unmarked_share_gives_a_note_without_names() -> None:
     aw = one_day({("zeta tool", ""): 2 * HOUR, ("alpha editor", ""): 8 * HOUR})
     rows, notes = read_screen(aw, CONFIG, D1, D1)
-    assert len(notes) == 1
+    assert len(notes) == 2
     assert "неразмеченное" in notes[0]
     assert "20" in notes[0]
     assert "zeta" not in notes[0]
@@ -393,7 +532,7 @@ def test_big_unmarked_share_gives_a_note_without_names() -> None:
 
 def test_small_unmarked_share_gives_no_note() -> None:
     aw = one_day({("zeta tool", ""): HOUR, ("alpha editor", ""): 9 * HOUR})
-    assert read_screen(aw, CONFIG, D1, D1)[1] == []
+    assert read_screen(aw, CONFIG, D1, D1)[1] == ["экран: вызов/помеха не размечены"]
 
 
 def test_unmarked_share_is_counted_over_all_days() -> None:
@@ -403,7 +542,7 @@ def test_unmarked_share_is_counted_over_all_days() -> None:
             D2.isoformat(): ({("alpha editor", ""): 10 * HOUR}, {}),
         }
     )
-    assert read_screen(aw, CONFIG, D1, D2)[1] == []
+    assert read_screen(aw, CONFIG, D1, D2)[1] == ["экран: вызов/помеха не размечены"]
 
 
 # --- AwReader (HTTP подменён) ---
@@ -490,6 +629,15 @@ def test_title_does_not_reach_rows_or_notes(monkeypatch: pytest.MonkeyPatch) -> 
     assert SECRET_TITLE not in json.dumps(rows, ensure_ascii=False)
     assert SECRET_TITLE not in json.dumps(notes, ensure_ascii=False)
     assert all(r["raw_json"] is None for r in rows)
+
+
+def test_app_names_do_not_reach_demand_rows_or_notes() -> None:
+    aw = one_day({("a", ""): HOUR, ("b", ""): HOUR, ("zeta tool", ""): HOUR})
+    for config in (DEMAND, CONFIG):
+        rows, notes = read_screen(aw, config, D1, D1)
+        text = json.dumps([rows, notes], ensure_ascii=False)
+        assert "zeta" not in text
+        assert all(r["raw_json"] is None for r in rows)
 
 
 def test_aw_reader_connection_refused_is_screen_error(monkeypatch: pytest.MonkeyPatch) -> None:

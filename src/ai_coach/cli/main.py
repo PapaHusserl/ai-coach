@@ -334,6 +334,8 @@ SCREEN_LABELS = (
     ("screen_hobby_hours", "хобби"),
     ("screen_browser_hours", "браузер"),
     ("screen_evening_hours", "вечер"),
+    ("screen_challenge_hours", "вызов"),
+    ("screen_hindrance_hours", "помехи"),
 )
 
 
@@ -373,5 +375,5 @@ def screen(
     if not hours:
         typer.echo(f"Экран {day}: событий окон нет.")
         return
-    parts = [f"{label} {hours[kind]} ч" for kind, label in SCREEN_LABELS]
+    parts = [f"{label} {hours[kind]} ч" for kind, label in SCREEN_LABELS if kind in hours]
     typer.echo(f"Экран {day}: {', '.join(parts)}.")

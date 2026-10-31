@@ -13,7 +13,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol, cast
 
 from ai_coach.store.journal import EVENING_CUTOFF
-from ai_coach.workload.config import TITLE_CATS, ScreenConfig, title_regex
+from ai_coach.workload.config import DEMANDS, TITLE_CATS, ScreenConfig, title_regex
 from ai_coach.workload.service import EVENING_FROM, SECONDS_IN_HOUR
 
 SOURCE = "screen"
@@ -157,12 +157,25 @@ def classify(app: str, config: ScreenConfig) -> str:
     return "work" if name in config.meeting else "unmarked"
 
 
+def demand_of(app: str, config: ScreenConfig) -> str | None:
+    """challenge / hindrance (приложение из [screen] challenge/hindrance) или None."""
+    name = app.lower()
+    if name in config.challenge:
+        return "challenge"
+    return "hindrance" if name in config.hindrance else None
+
+
 def by_category(per_app: PerApp, config: ScreenConfig) -> dict[str, float]:
     """Секунды по work/hobby/browser/unmarked: категория по заголовку от сервера (work/hobby),
-    иначе classify(app)."""
+    иначе classify(app). challenge/hindrance - части work: секунды приложения из списков."""
     out = {"work": 0.0, "hobby": 0.0, "browser": 0.0, "unmarked": 0.0}
+    out.update(dict.fromkeys(DEMANDS, 0.0))
     for (app, cat), seconds in per_app.items():
-        out[cat if cat in TITLE_CATS else classify(app, config)] += seconds
+        cls = cat if cat in TITLE_CATS else classify(app, config)
+        out[cls] += seconds
+        demand = demand_of(app, config)
+        if cls == "work" and demand:
+            out[demand] += seconds
     return out
 
 
@@ -178,7 +191,9 @@ def read_screen(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Счётчики экрана за дни first..last включительно: screen_work_hours, screen_hobby_hours,
     screen_browser_hours и screen_evening_hours (всё за экраном 19:00→04:00) - часы с двумя
-    знаками. Строки для upsert_counter: date, kind, value, source='screen', raw_json None.
+    знаками; при непустых challenge/hindrance в конфиге ещё screen_challenge_hours и
+    screen_hindrance_hours (части работы). Строки для upsert_counter: date, kind, value,
+    source='screen', raw_json None.
     День без событий окон пропускается. Сумма за период больше его длины - ScreenError.
     Вторым значением - замечания для итога sync: неразмеченного больше 15 %."""
     days = [first + timedelta(days=i) for i in range((last - first).days + 1)]
@@ -193,6 +208,7 @@ def read_screen(
         if sum(per_app.values()) > (end - start).total_seconds() + SLACK_SECONDS:
             raise ScreenError("сервер не обрезал события по границам периода")
     rows: list[dict[str, Any]] = []
+    marked = bool(config.challenge or config.hindrance)
     unmarked = total = 0.0
     for n, day in enumerate(days):
         whole, evening = results[2 * n], results[2 * n + 1]
@@ -200,13 +216,16 @@ def read_screen(
             continue
         cats = by_category(whole, config)
         unmarked += cats["unmarked"]
-        total += sum(cats.values())
+        total += cats["work"] + cats["hobby"] + cats["browser"] + cats["unmarked"]
         hours = {
             "screen_work_hours": cats["work"],
             "screen_hobby_hours": cats["hobby"],
             "screen_browser_hours": cats["browser"],
             "screen_evening_hours": sum(evening.values()),
         }
+        if marked:
+            hours["screen_challenge_hours"] = cats["challenge"]
+            hours["screen_hindrance_hours"] = cats["hindrance"]
         for kind, seconds in hours.items():
             value = round(seconds / SECONDS_IN_HOUR, 2)
             rows.append(
@@ -221,4 +240,6 @@ def read_screen(
     notes: list[str] = []
     if total and unmarked / total > UNMARKED_NOTE_FROM:
         notes.append(f"экран: неразмеченное {round(unmarked / total * 100)} %")
+    if rows and not marked:
+        notes.append("экран: вызов/помеха не размечены")
     return rows, notes

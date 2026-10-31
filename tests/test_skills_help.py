@@ -11,6 +11,7 @@ from mcp_fakes import tool_names
 from ai_coach import pvt
 from ai_coach.cli import main
 from ai_coach.load import deviations, overload, training
+from ai_coach.workload.config import DEMANDS
 
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE = ROOT / ".claude"
@@ -198,8 +199,20 @@ def test_workload_topic() -> None:
         "weekend_work",
         "recovery_drop",
         "todo_growth",
+        "challenge",
+        "hindrance",
+        "screen_challenge_hours",
+        "screen_hindrance_hours",
+        "coach screen --days",
+        "предложи разметку",
     ):
         assert needle in text, needle
+
+
+def test_workload_topic_names_every_demand_key() -> None:
+    text = topic("workload.md")
+    for key in DEMANDS:
+        assert key in text, key
 
 
 def num(value: float) -> str:
