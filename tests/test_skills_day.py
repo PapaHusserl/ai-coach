@@ -25,6 +25,10 @@ def test_day_file_exists_and_within_limit() -> None:
     assert 0 < len(DAY.read_bytes()) <= 6144
 
 
+def test_day_file_mentions_illness_risk() -> None:
+    assert "illness_risk" in day_text()
+
+
 def test_coach_md_within_limit() -> None:
     assert len((AGENTS / "coach.md").read_bytes()) <= 16384
 

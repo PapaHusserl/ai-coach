@@ -81,4 +81,4 @@ def test_evening_role_does_not_mention_agenda() -> None:
 
 
 def test_wellbeing_file_within_limit() -> None:
-    assert len((AGENTS / "coach-wellbeing.md").read_bytes()) <= 8192
+    assert len((AGENTS / "coach-wellbeing.md").read_bytes()) <= 9216

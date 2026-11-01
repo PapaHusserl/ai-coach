@@ -2,7 +2,7 @@
 
 import ast
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -13,6 +13,8 @@ from mcp_fakes import call, tool_names
 
 import ai_coach.agenda.day_plan as day_plan_module
 import ai_coach.agenda.slots as slots_module
+from ai_coach.agenda.day_plan import FOCUS_MAX
+from ai_coach.store.garmin_data import upsert_daily_metrics
 
 DAY = "2026-11-02"  # понедельник; «сегодня» в тестах - воскресенье 2026-11-01
 
@@ -122,6 +124,38 @@ def test_bad_input_is_tool_error_and_writes_nothing(
 
 def test_14_days_ahead_is_allowed(conn: sqlite3.Connection) -> None:
     assert plan(conn, date="2026-11-15")["drafts"]
+
+
+def illness_base(conn: sqlite3.Connection, out_days: int) -> None:
+    """28 дней до «сегодня» (2026-11-01) пульс 50, HRV 60; последние out_days - вне коридора."""
+    today = date(2026, 11, 1)
+    for number in range(28, -1, -1):
+        outlier = number == 20
+        out = number < out_days
+        rhr, hrv = (90, 10) if out else (60, 70) if outlier else (50, 60)
+        upsert_daily_metrics(
+            conn,
+            {
+                "date": (today - timedelta(days=number)).isoformat(),
+                "sleep_seconds": 7 * 3600,
+                "hrv_last_night": hrv,
+                "raw_json": {"sleep": {"restingHeartRate": rhr}},
+            },
+        )
+
+
+def test_illness_risk_gives_two_focus_blocks_and_reason(conn: sqlite3.Connection) -> None:
+    illness_base(conn, out_days=2)
+    result = plan(conn)
+    assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if "возможно, заболеваешь" in s]
+
+
+def test_no_illness_signal_keeps_three_focus_blocks(conn: sqlite3.Connection) -> None:
+    illness_base(conn, out_days=1)
+    result = plan(conn)
+    assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "заболеваешь" in s]
 
 
 @pytest.mark.parametrize("module", [day_plan_module, slots_module], ids=lambda m: m.__name__)

@@ -7,7 +7,38 @@ WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
 
 def test_coach_wellbeing_exists_and_is_short() -> None:
     assert WELLBEING.is_file()
-    assert len(WELLBEING.read_bytes()) <= 8192
+    assert len(WELLBEING.read_bytes()) <= 9216
+
+
+def test_coach_wellbeing_describes_illness_reaction() -> None:
+    text = WELLBEING.read_text()
+    for needle in (
+        "illness_risk",
+        "rhr_high_from",
+        "hrv_low_from",
+        "streak",
+        "confounders",
+        "снять интенсивное",
+        "лечь раньше",
+        "нагрузку не добирать",
+    ):
+        assert needle in text, needle
+
+
+def test_coach_md_reads_illness_signals() -> None:
+    assert "illness.signals" in (ROOT / "agents" / "coach.md").read_text()
+
+
+def test_recalc_handles_illness_risk_and_fits_limit() -> None:
+    path = ROOT / "skills" / "coach-plan" / "recalc.md"
+    assert "illness_risk" in path.read_text()
+    assert len(path.read_bytes()) <= 3072
+
+
+def test_recovery_mentions_illness_and_fits_limit() -> None:
+    path = ROOT / "skills" / "coach-morning" / "recovery.md"
+    assert "illness" in path.read_text()
+    assert len(path.read_bytes()) <= 3072
 
 
 def test_coach_wellbeing_mentions_workload_tool() -> None:

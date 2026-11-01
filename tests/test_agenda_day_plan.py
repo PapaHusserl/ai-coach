@@ -12,6 +12,7 @@ from ai_coach.agenda.day_plan import (
     BREAK_MIN,
     FOCUS_MAX,
     FOCUS_MIN,
+    FOCUS_UNTIL,
     REST_MIN,
     SNACK_MIN,
     TRAINING_PAD_MIN,
@@ -810,14 +811,28 @@ TUE = MON + timedelta(days=1)
 MORNING = datetime(2026, 11, 2, 9, 0)
 
 
-def put_night(conn: sqlite3.Connection, day: date, hours: float, wake: str | None = None) -> None:
+def put_night(
+    conn: sqlite3.Connection,
+    day: date,
+    hours: float,
+    wake: str | None = None,
+    pulse: tuple[float, float] | None = None,
+) -> None:
+    """pulse - (пульс покоя, HRV за ночь) для сигнала болезни."""
     sleep: dict[str, Any] = {}
     if wake is not None:
         moment = datetime.fromisoformat(f"{day.isoformat()}T{wake}:00").replace(tzinfo=UTC)
         sleep["dailySleepDTO"] = {"sleepEndTimestampLocal": int(moment.timestamp() * 1000)}
+    if pulse is not None:
+        sleep["restingHeartRate"] = pulse[0]
     upsert_daily_metrics(
         conn,
-        {"date": day.isoformat(), "sleep_seconds": int(hours * 3600), "raw_json": {"sleep": sleep}},
+        {
+            "date": day.isoformat(),
+            "sleep_seconds": int(hours * 3600),
+            "hrv_last_night": None if pulse is None else pulse[1],
+            "raw_json": {"sleep": sleep},
+        },
     )
 
 
@@ -919,6 +934,89 @@ def test_tomorrow_with_only_short_night_keeps_three_blocks(conn: sqlite3.Connect
     result = make(conn, TUE, now=MORNING)
     assert len(focus_blocks(result)) == FOCUS_MAX
     assert not [s for s in result["skipped"] if "ночь" in s]
+
+
+# --- болезнь: illness_risk и фокус ---
+
+ILLNESS_REASON = "возможно, заболеваешь"
+
+
+def illness_nights(
+    conn: sqlite3.Connection,
+    out_days: int = 2,
+    tonight: float = 7,
+    wake: str = "07:10",
+) -> None:
+    """28 ночей по 7 ч с пульсом 50 и HRV 60 (в одной - 60 и 70), затем out_days последних дней
+    TODAY вне коридора (пульс 90, HRV 10); ночь TODAY - tonight ч."""
+    for number in range(28, out_days - 1, -1):
+        outlier = number == 20
+        pulse = (60, 70) if outlier else (50, 60)
+        put_night(conn, TODAY - timedelta(days=number), 7, pulse=pulse)
+    for number in range(out_days - 1, 0, -1):
+        put_night(conn, TODAY - timedelta(days=number), 7, pulse=(90, 10))
+    put_night(conn, TODAY, tonight, wake, pulse=(90, 10) if out_days else (50, 60))
+
+
+def test_illness_today_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
+    illness_nights(conn)
+    result = make(conn, MON, now=MORNING)
+    focus = focus_blocks(result)
+    assert len(focus) == FOCUS_MAX - 1
+    assert max(d["end_at"] for d in focus) <= f"{MON.isoformat()}T{FOCUS_UNTIL:%H:%M}"
+    reasons = [s for s in result["skipped"] if ILLNESS_REASON in s]
+    assert len(reasons) == 1
+    assert "пульс покоя 90" in reasons[0]
+    assert "HRV 10" in reasons[0]
+
+
+def test_illness_tomorrow_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
+    illness_nights(conn)
+    result = make(conn, TUE, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if ILLNESS_REASON in s]
+
+
+def test_one_day_out_of_corridor_keeps_three_blocks(conn: sqlite3.Connection) -> None:
+    illness_nights(conn, out_days=1)
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if ILLNESS_REASON in s]
+
+
+def test_short_night_and_illness_give_two_blocks_not_one(conn: sqlite3.Connection) -> None:
+    illness_nights(conn, tonight=5)
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if "короткая ночь" in s]
+    assert not [s for s in result["skipped"] if ILLNESS_REASON in s]
+
+
+def test_illness_alone_does_not_apply_caution_from(conn: sqlite3.Connection) -> None:
+    illness_nights(conn, wake="02:00")  # ночь 7 ч: caution_from 18:00 есть, сигналов сна нет
+    until, blocks, reasons = sleep_limits(conn, TODAY, TODAY, MORNING, time(19, 0), FOCUS_MAX)
+    assert (until, blocks) == (time(19, 0), FOCUS_MAX - 1)
+    assert len(reasons) == 1
+    assert ILLNESS_REASON in reasons[0]
+
+
+def test_illness_alone_keeps_focus_ending_after_caution_from(conn: sqlite3.Connection) -> None:
+    illness_nights(conn, wake="02:00")
+    assert late_focus_after_meeting(conn)
+
+
+def test_illness_day_after_tomorrow_is_untouched(conn: sqlite3.Connection) -> None:
+    illness_nights(conn)
+    day = TODAY + timedelta(days=2)
+    assert sleep_limits(conn, day, TODAY, MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+def test_illness_on_saturday_is_untouched(conn: sqlite3.Connection) -> None:
+    for number in range(28, 0, -1):
+        put_night(conn, SAT - timedelta(days=number), 7, pulse=(50, 60))
+    put_night(conn, SAT - timedelta(days=1), 7, pulse=(90, 10))
+    put_night(conn, SAT, 7, "07:10", pulse=(90, 10))
+    assert sleep_limits(conn, SAT, SAT, SAT_MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
 
 
 # --- сон: sleep_limits и фокус (мутанты) ---
