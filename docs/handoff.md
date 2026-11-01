@@ -44,5 +44,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n11.md](plan-n11.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие Н11). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: ed8c456 (закрытие Н11). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-01-n11.md`.
