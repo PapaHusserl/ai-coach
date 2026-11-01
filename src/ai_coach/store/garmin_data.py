@@ -37,6 +37,19 @@ def list_sleep_nights(conn: sqlite3.Connection, start: str, end: str) -> list[di
     return fetch_all(conn, sql, (start, end))
 
 
+def list_recovery_days(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь) и
+    rhr (пульс покоя: restingHeartRate сна у API или метрика HR у импорта; None - нет)."""
+    sql = (
+        "SELECT date, hrv_last_night AS hrv, "
+        "COALESCE(json_extract(raw_json, '$.sleep.restingHeartRate'), "
+        "(SELECT json_extract(value, '$.value') FROM json_each(raw_json, '$.hrv.metrics') "
+        "WHERE json_extract(value, '$.type') = 'HR')) AS rhr "
+        "FROM daily_metrics WHERE date BETWEEN ? AND ? ORDER BY date"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def upsert_activity(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     """Ключ — activity_id. raw_json обязателен."""
     upsert(conn, "activities", ["activity_id"], values)

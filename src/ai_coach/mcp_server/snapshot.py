@@ -8,7 +8,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
 from ai_coach.agenda import agenda_rows
-from ai_coach.load import overload_report, sleep_report
+from ai_coach.load import illness_report, overload_report, sleep_report
 from ai_coach.load.overload import overloaded
 from ai_coach.mcp_server import tools
 from ai_coach.meds import short_meds
@@ -75,6 +75,7 @@ NOT_LISTS = (
     "week_review_due",
     "overload",
     "sleep",
+    "illness",
     "catalog",
 )
 DATE_SERIES = (
@@ -184,6 +185,8 @@ def morning_snapshot(
     snapshot["agenda"] = part([{k: row[k] for k in AGENDA_FIELDS} for row in found_agenda])
     snapshot["overload"] = overload_report(conn, date, tss)
     snapshot["sleep"] = sleep_report(conn, date, tools.now())
+    found_illness = illness_report(conn, date, tss, snapshot["sleep"])
+    snapshot["illness"] = {k: v for k, v in found_illness.items() if k != "days"}
     evening_day = wellbeing_day(tools.now()) if date == tools.today().isoformat() else date
     snapshot["evening_done_today"] = evening_done(conn, evening_day)
     snapshot["week_review_due"] = review_due(conn, evening_day)

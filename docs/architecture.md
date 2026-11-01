@@ -240,6 +240,11 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - MCP `get_sleep(date)`; `awake_h` (часов от подъёма даты) у строк `get_focus_log` (`tools.with_awake`). `find_deviations` и план тренировок не меняются.
 - `agenda/sleep_limits.py`: `sleep_limits` — при сигнале сна на сегодня фокус-блоков на один меньше (`FOCUS_MAX − 1`) и не позже `caution_from` той же даты, на завтра — на один меньше при `sleep_debt`; причина — в `skipped`; `create_day_plan` зовёт её перед `plan_day`.
 
+## Н11: сигнал «возможно, заболеваешь»
+- `load/illness.py` (константы — догадка, калибрует v2.9): коридор — среднее за 7 предыдущих дней ± `SWC_K` (0,5) × SD за 28 предыдущих дней (минимум 4 дня в центре и 14 в базе, сегодня в расчёт не входит), отдельно для пульса покоя и HRV (мс). День вне коридора — пульс строго выше и HRV строго ниже; `illness_risk` — 2 дня подряд (`STREAK_DAYS`). Сон (`short_night`) и вчерашняя тренировка (`trained_yesterday`, `tss_yesterday`) — `confounders`, `sleep_debt` — отдельное поле; сигнал они не меняют. `illness_report(conn, day, tss, sleep)` — интерфейс для MCP и snapshot.
+- `store/garmin_data.list_recovery_days`: пульс покоя читается `json_extract` из `raw_json` двумя путями (API `$.sleep.restingHeartRate`, импорт `$.hrv.metrics[type=HR].value`), HRV — колонка `hrv_last_night`; без колонки и миграции, без `raw_json` в ответе.
+- MCP `get_illness(date)` (`mcp_server/illness.py`, TSS вчера — через `load`, нет нагрузки — `load_error`); ключ `illness` в утренней сводке — без `days` (размер). `find_deviations` и план не меняются.
+
 ## Н14: справка
 - Справка тренера — файлы без кода: `.claude/agents/coach-help.md` (оглавление и правило ответа, ≤ 6 144 Б) и `.claude/agents/coach-help/<тема>.md` (12 тем, ≤ 8 192 Б): `start`, `training`, `goals-profile`, `wellbeing`, `workload`, `calendar`, `food`, `pantry`, `supplements`, `habits`, `pvt`, `sleep`. Карточка функции — поля по Р2: что это, зачем (одной строкой на тему), как запустить (команда или фраза), как заполнять (шкалы, смысл чисел — только где они есть), что получу; подробности опций — `coach <команда> --help`.
 - Доступ: триггер 9г в `coach.md` («что умеешь», «как …», «что значит …») → `cat` оглавления и файла темы (по строке allow на каждый файл в `.claude/settings.json`); отдельной команды `coach help` нет. Строка «что умею» в сводке указывает на «справка».

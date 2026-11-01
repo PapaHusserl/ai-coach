@@ -10,7 +10,7 @@ from mcp_fakes import tool_names
 
 from ai_coach import pvt
 from ai_coach.cli import main
-from ai_coach.load import deviations, overload, sleep, training
+from ai_coach.load import deviations, illness, overload, sleep, training
 from ai_coach.workload.config import DEMANDS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -178,6 +178,28 @@ def test_sleep_topic_thresholds_match_constants() -> None:
         f"{sleep.DEBT_14_H:g}",
     ):
         assert needle in text, needle
+
+
+def test_sleep_topic_describes_illness_tool() -> None:
+    text = topic("sleep.md")
+    for needle in (
+        "get_illness",
+        "illness_risk",
+        "rhr_high_from",
+        "hrv_low_from",
+        "streak",
+        "confounders",
+        "trained_yesterday",
+        f"{illness.MIN_BASELINE_DAYS} дней",
+        f"{illness.BASELINE_DAYS} дней",
+        f"{illness.CENTER_DAYS} дней",
+        f"{illness.STREAK_DAYS} дня подряд",
+    ):
+        assert needle in text, needle
+
+
+def test_help_index_lists_illness_tool() -> None:
+    assert "get_illness" in HELP.read_text()
 
 
 def test_pvt_topic_has_metric_poles() -> None:

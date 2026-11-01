@@ -1,6 +1,7 @@
 """load."""
 
 from ai_coach.load.deviations import find_deviations, main_wellbeing
+from ai_coach.load.illness import illness_report
 from ai_coach.load.overload import find_overload, overload_report, total_load
 from ai_coach.load.plan_actual import rebuild_plan_actual
 from ai_coach.load.sleep import sleep_report
@@ -13,6 +14,7 @@ __all__ = [
     "find_deviations",
     "find_overload",
     "hr_tss",
+    "illness_report",
     "load_series",
     "main_wellbeing",
     "overload_report",

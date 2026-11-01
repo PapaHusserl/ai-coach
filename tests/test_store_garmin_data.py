@@ -8,6 +8,7 @@ from ai_coach.store.garmin_data import (
     get_daily_metrics,
     list_activities,
     list_daily_metrics,
+    list_recovery_days,
     list_sleep_nights,
     list_strength_sets,
     upsert_activity,
@@ -254,3 +255,57 @@ def test_nap_seconds_sum_of_nap_list(conn: sqlite3.Connection) -> None:
 def test_nap_seconds_absent_is_none(conn: sqlite3.Connection) -> None:
     night_row(conn, "2026-10-31", {"sleep": {}})
     assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["nap_seconds"] is None
+
+
+# --- list_recovery_days ---
+
+
+def recovery_row(conn: sqlite3.Connection, day: str, raw: dict, hrv: float | None = 60) -> None:
+    upsert_daily_metrics(conn, {"date": day, "hrv_last_night": hrv, "raw_json": raw})
+
+
+def test_recovery_days_inclusive_range_sorted_three_keys(conn: sqlite3.Connection) -> None:
+    for day in ("2026-10-03", "2026-10-01", "2026-10-02", "2026-10-04"):
+        recovery_row(conn, day, {"sleep": {"restingHeartRate": 50}})
+    found = list_recovery_days(conn, "2026-10-01", "2026-10-03")
+    assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
+    assert set(found[0]) == {"date", "hrv", "rhr"}
+
+
+def test_recovery_days_hrv_from_last_night(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {}, hrv=63)
+    assert list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]["hrv"] == 63
+
+
+def test_recovery_days_rhr_from_sleep(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"sleep": {"restingHeartRate": 49}})
+    assert list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]["rhr"] == 49
+
+
+def test_recovery_days_rhr_from_import_metric_hr(conn: sqlite3.Connection) -> None:
+    metrics = [{"type": "HRV", "value": 60}, {"type": "HR", "value": 52}]
+    recovery_row(conn, "2026-10-01", {"hrv": {"metrics": metrics}})
+    assert list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]["rhr"] == 52
+
+
+def test_recovery_days_api_path_wins_over_import(conn: sqlite3.Connection) -> None:
+    raw = {"sleep": {"restingHeartRate": 49}, "hrv": {"metrics": [{"type": "HR", "value": 52}]}}
+    recovery_row(conn, "2026-10-01", raw)
+    assert list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]["rhr"] == 49
+
+
+def test_recovery_days_rhr_none_without_either_path(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"hrv": {"metrics": [{"type": "HRV", "value": 60}]}})
+    assert list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]["rhr"] is None
+
+
+def test_recovery_days_rhr_none_for_empty_raw(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {}, hrv=None)
+    found = list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]
+    assert (found["rhr"], found["hrv"]) == (None, None)
+
+
+def test_recovery_days_have_no_raw_json(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"secret": "SECRET", "sleep": {"restingHeartRate": 50}})
+    found = list_recovery_days(conn, "2026-10-01", "2026-10-01")
+    assert "SECRET" not in json.dumps(found)

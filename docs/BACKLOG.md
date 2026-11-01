@@ -138,3 +138,54 @@ updated: 2026-10-31
 cancel_draft_workout, и только для черновиков. Открыто для архитектора: какие статусы удаляются
 (draft, approved, pushed), удалять ли строку или ставить cancelled, снимать ли с календаря Garmin
 у pushed (remove_old в plan/service.py это уже умеет) и с подтверждением y/N; справка — coach-help.
+
+## 29. Статусы HRV импорта в find_deviations
+status: idea
+priority: low
+updated: 2026-11-01
+
+`BAD_HRV_STATUSES = ("LOW", "UNBALANCED")` не знает статусов импорта (IN_RANGE/BELOW/ABOVE): плохой HRV
+импортных строк до 2026-09-30 (BELOW — 19 строк) отклонением не считается. Источник — docs/plan-n11.md
+«Побочные находки» 1.
+
+## 30. last_rest_hr не видит пульс покоя импорта
+status: idea
+priority: medium
+updated: 2026-11-01
+
+`store/garmin_data.py last_rest_hr` читает только `$.sleep.restingHeartRate` (API): для дат до 2026-10-01
+`get_load` отвечает «нет свежего пульса покоя», хотя он есть в `$.hrv.metrics[type=HR]`. Мешает анализу
+истории (Н6, Н9). Источник — docs/plan-n11.md «Побочные находки» 2.
+
+## 31. Snapshot у лимита размера
+status: idea
+priority: medium
+updated: 2026-11-01
+
+Сводка на живой базе 19 813 / 20 000 Б: каждый новый ключ молча режет списки. Варианты — поднять
+`MAX_CHARS` или вынести редкие разделы (`recipes`, `pantry`). Источник — docs/plan-n11.md «Побочные находки» 3.
+
+## 32. Пульс покоя импорта и API расходятся на 10 %
+status: idea
+priority: medium
+updated: 2026-11-01
+
+Средние за сентябрь (импорт) и октябрь (API) расходятся на 10 % — возможно, разные определения.
+Проверить при чтении истории для Н6/Н9. Источник — docs/plan-n11.md «Побочные находки» 4.
+
+## 33. Хранить статус и коридор HRV Garmin импорта
+status: idea
+priority: low
+updated: 2026-11-01
+
+`export_days.add_hrv` не пишет `hrv_weekly_avg` и `hrv_status` импорта; коридор Garmin
+(`hrvSummary.baseline`, границы) не хранится — источник для сверки своего коридора в v2.9.
+Источник — docs/plan-n11.md «Побочные находки» 5.
+
+## 34. Одна константа лимитов текстов в тестах
+status: idea
+priority: low
+updated: 2026-11-01
+
+Лимит `coach-wellbeing.md` — в трёх файлах тестов, `coach.md` — в 11: одна константа в общем модуле
+тестов. Источник — docs/plan-n11.md «Побочные находки» 6 (и кандидат handoff Н4).

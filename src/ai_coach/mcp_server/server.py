@@ -17,6 +17,7 @@ from ai_coach.mcp_server import (
     variety,
     workload,
 )
+from ai_coach.mcp_server import illness as illness_tool
 from ai_coach.mcp_server import overload as overload_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.nutrition.groups import FOOD_GROUPS, GROUP_MAX_DAYS, GROUP_MIN_DAYS
@@ -58,7 +59,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "workload (нагрузка вне тренировок за 7 дней: часы встреч, вечера, туду, груминг), "
         "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков; overloaded - "
         "день перегружен только по календарю, без тренировок: нет флага - не гарантия), "
-        "overload (как get_overload), sleep (как get_sleep), evening_done_today (чек-ин сделан), "
+        "overload (как get_overload), sleep (как get_sleep), illness (как get_illness, без days), "
+        "evening_done_today (чек-ин сделан), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "habits_today (привычки на день самочувствия: name, unit, done true - сделано, false - "
@@ -160,6 +162,17 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(YYYY-MM-DD HH:MM, подъём + 16 ч, может быть следующей датой - после этого момента "
         "тяжёлых решений не планировать), signals - short_night, sleep_debt (kind, value, "
         "limit; пустой список - норма).",
+    ),
+    "get_illness": (
+        illness_tool.illness,
+        "Сигнал «возможно, заболеваешь» на дату (YYYY-MM-DD): rhr / hrv - пульс покоя и HRV за "
+        "ночь; rhr_mean7, hrv_mean7 - среднее за 7 предыдущих дней; rhr_high_from / hrv_low_from - "
+        "границы личного коридора (±0,5 SD за 28 дней; null - данных меньше 14 дней); rhr_high, "
+        "hrv_low, out_today - день вне коридора (пульс выше и HRV ниже); streak - таких дней "
+        "подряд, до 7; baseline_days - дней из 28 с пульсом и HRV; "
+        "days - 7 дней (date, rhr, hrv, out); confounders - что могло сдвинуть цифры без "
+        "болезни (short_night, trained_yesterday); tss_yesterday; sleep_debt - долг сна (риск "
+        "выше); signals - illness_risk (kind, value = streak, limit; пусто - норма). Не диагноз.",
     ),
     "get_profile": (
         tools.profile,
