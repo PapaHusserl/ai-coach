@@ -105,6 +105,19 @@ def test_coach_wellbeing_describes_all_screen_fields() -> None:
         assert field in text
 
 
+def test_coach_wellbeing_describes_claude_fields_as_observation() -> None:
+    text = WELLBEING.read_text()
+    for field in (
+        "claude_prompts",
+        "claude_prompts_evening",
+        "claude_decisions",
+        "claude_repos",
+        "claude_switches",
+    ):
+        assert field in text
+    assert "наблюдение" in text
+
+
 def test_coach_wellbeing_explains_unmarked_demand_note() -> None:
     assert "вызов/помеха не размечены" in WELLBEING.read_text()
 

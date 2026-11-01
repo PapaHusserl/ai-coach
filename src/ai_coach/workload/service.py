@@ -5,6 +5,7 @@
 All-day рабочее событие даёт только флаг all_day_work. Вечер - после EVENING_FROM.
 """
 
+import json
 import sqlite3
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -143,9 +144,13 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
 
 
 def workload_day(conn: sqlite3.Connection, day: str, events: bool = False) -> dict[str, Any]:
-    """Метрики одного дня; events=True - ещё и список событий дня с названиями (events)."""
+    """Метрики одного дня; events=True - ещё и список событий дня с названиями (events)
+    и имена каталогов Claude Code дня (claude_repos_names: [{repo, prompts}] или None)."""
     row = _rows(conn, date.fromisoformat(day), date.fromisoformat(day))[0]
     if events:
+        stored = list_counters(conn, day, day, "claude_repos")
+        raw = stored[0]["raw_json"] if stored else None
+        row["claude_repos_names"] = json.loads(raw)["repos"] if raw else None
         # событие, начатое накануне, попадает в день, если заходит за полночь
         current = date.fromisoformat(day)
         before = (current - timedelta(days=1)).isoformat()

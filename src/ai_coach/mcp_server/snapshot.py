@@ -50,8 +50,16 @@ WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
+WORKLOAD_CHARS = 5000
 WORKLOAD_SKIP = CLAUDE_COUNTERS
-AHEAD_SKIP = (
+CLAUDE_KEYS = {
+    "prompts": "claude_prompts",
+    "evening": "claude_prompts_evening",
+    "decisions": "claude_decisions",
+    "repos": "claude_repos",
+    "switches": "claude_switches",
+}
+AHEAD_SKIP = CLAUDE_COUNTERS + (
     "todo_open",
     "todo_closed",
     "grooming_done",
@@ -91,6 +99,7 @@ DATE_SERIES = (
     "food_today",
     "wellbeing",
     "workload",
+    "claude",
 )
 
 
@@ -174,8 +183,18 @@ def morning_snapshot(
     snapshot["wellbeing"] = tools.cap(marks, newest=True)
     snapshot["deviations"] = part(tools.day_deviations(conn, date, load_row))
     week = workload_series(conn, tools.shift_day(date, -6), date)
-    snapshot["workload"] = part(
-        [{k: v for k, v in r.items() if k not in WORKLOAD_SKIP} for r in week], True
+    snapshot["workload"] = tools.cap(
+        [{k: v for k, v in r.items() if k not in WORKLOAD_SKIP} for r in week],
+        SNAPSHOT_ROWS,
+        WORKLOAD_CHARS,
+        True,
+    )
+    snapshot["claude"] = part(
+        [
+            {"date": r["date"]} | {short: r[kind] for short, kind in CLAUDE_KEYS.items()}
+            for r in week
+        ],
+        True,
     )
     ahead = workload_series(
         conn, tools.shift_day(date, 1), tools.shift_day(date, WORKLOAD_AHEAD_DAYS)

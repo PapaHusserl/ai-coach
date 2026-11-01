@@ -252,6 +252,12 @@ def test_claude_topic_has_commands_and_fields() -> None:
         assert needle in text, needle
 
 
+def test_claude_topic_describes_mcp_access() -> None:
+    text = topic("claude.md")
+    for needle in ("get_workload", "events=true", "claude_repos_names", "`claude`"):
+        assert needle in text, needle
+
+
 def test_claude_topic_says_what_is_not_counted() -> None:
     text = topic("claude.md")
     for needle in ("субагент", "коммит", "не попадают"):

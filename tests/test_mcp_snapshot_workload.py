@@ -8,6 +8,7 @@ import pytest
 from mcp_fakes import call, call_text
 from workload_fakes import FakeCalendar, stored_event, write_config
 
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
 from ai_coach.sync.workload_sync import sync_workload
 from ai_coach.workload.claude import CLAUDE_COUNTERS
@@ -78,6 +79,75 @@ def test_snapshot_workload_has_no_claude_keys(conn: sqlite3.Connection) -> None:
     assert rows
     for row in rows:
         assert [k for k in row if k.startswith("claude_")] == []
+
+
+def put_claude_week(conn: sqlite3.Connection) -> None:
+    for day in range(1, 8):
+        for i, kind in enumerate(CLAUDE_COUNTERS):
+            upsert_counter(
+                conn,
+                {
+                    "date": f"2026-10-0{day}",
+                    "kind": kind,
+                    "value": day + i,
+                    "source": "claude",
+                    "raw_json": {"repos": [{"repo": "alpha-repo", "prompts": 1}]}
+                    if kind == "claude_repos"
+                    else None,
+                    "synced_at": "2026-10-08T10:00:00",
+                },
+            )
+
+
+def test_snapshot_claude_has_seven_rows_with_short_keys(conn: sqlite3.Connection) -> None:
+    put_claude_week(conn)
+    claude = call(conn, "get_morning_snapshot", date=DAY)["claude"]
+    assert claude["truncated"] is False
+    assert [r["date"] for r in claude["rows"]] == [f"2026-10-0{d}" for d in range(1, 8)]
+    for row in claude["rows"]:
+        assert set(row) == {"date", "prompts", "evening", "decisions", "repos", "switches"}
+    last = claude["rows"][-1]
+    assert last["prompts"] == 7
+    assert last["evening"] == 8
+    assert last["decisions"] == 9
+    assert last["repos"] == 10
+    assert last["switches"] == 11
+
+
+def test_snapshot_claude_without_data_has_nulls(conn: sqlite3.Connection) -> None:
+    rows = call(conn, "get_morning_snapshot", date=DAY)["claude"]["rows"]
+    assert len(rows) == 7
+    assert all(r["prompts"] is None for r in rows)
+
+
+def test_snapshot_claude_has_no_repo_names(conn: sqlite3.Connection) -> None:
+    put_claude_week(conn)
+    text = call_text(conn, "get_morning_snapshot", date=DAY)
+    assert "alpha-repo" not in text
+    assert "claude_repos_names" not in text
+
+
+def test_snapshot_workload_ahead_has_no_claude_keys(conn: sqlite3.Connection) -> None:
+    for day in range(8, 15):
+        for kind in CLAUDE_COUNTERS:
+            put_screen(conn, f"2026-10-{day:02d}", kind, 3)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert ahead
+    for row in ahead:
+        assert [k for k in row if k.startswith("claude_")] == []
+
+
+def test_snapshot_workload_has_seven_rows_not_truncated_on_empty_base(
+    conn: sqlite3.Connection,
+) -> None:
+    workload = call(conn, "get_morning_snapshot", date=DAY)["workload"]
+    assert len(workload["rows"]) == 7
+    assert workload["truncated"] is False
+
+
+def test_snapshot_with_claude_data_fits_max_chars(conn: sqlite3.Connection) -> None:
+    put_claude_week(conn)
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= SNAPSHOT_MAX_CHARS
 
 
 def test_snapshot_workload_days_do_not_depend_on_claude_data(conn: sqlite3.Connection) -> None:

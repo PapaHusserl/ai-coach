@@ -172,3 +172,79 @@ def test_workload_never_returns_raw_json(conn: sqlite3.Connection) -> None:
         text = call_text(conn, "get_workload", date_from=DAY, date_to=DAY, events=events)
         assert RAW not in text
         assert "raw_json" not in text
+
+
+REPOS = [{"repo": "alpha-repo", "prompts": 5}, {"repo": "beta-repo", "prompts": 2}]
+
+
+def put_claude(
+    conn: sqlite3.Connection, day: str, kind: str, value: int, raw: object = None
+) -> None:
+    upsert_counter(
+        conn,
+        {
+            "date": day,
+            "kind": kind,
+            "value": value,
+            "source": "claude",
+            "raw_json": raw,
+            "synced_at": "2026-10-08T10:00:00",
+        },
+    )
+
+
+def put_claude_day(conn: sqlite3.Connection, day: str) -> None:
+    put_claude(conn, day, "claude_prompts", 7)
+    put_claude(conn, day, "claude_prompts_evening", 3)
+    put_claude(conn, day, "claude_decisions", 4)
+    put_claude(conn, day, "claude_repos", 2, {"repos": REPOS})
+    put_claude(conn, day, "claude_switches", 1)
+
+
+def test_workload_claude_counters_are_integers(conn: sqlite3.Connection) -> None:
+    put_claude_day(conn, DAY)
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["claude_prompts"] == 7
+    assert row["claude_prompts_evening"] == 3
+    assert row["claude_decisions"] == 4
+    assert row["claude_repos"] == 2
+    assert row["claude_switches"] == 1
+    for kind in ("claude_prompts", "claude_decisions", "claude_repos"):
+        assert type(row[kind]) is int
+
+
+def test_workload_claude_counters_without_data_are_none(conn: sqlite3.Connection) -> None:
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["claude_prompts"] is None
+    assert row["claude_switches"] is None
+
+
+def test_workload_without_events_has_no_claude_repo_names(conn: sqlite3.Connection) -> None:
+    put_claude_day(conn, DAY)
+    text = call_text(conn, "get_workload", date_from=DAY, date_to=DAY)
+    assert "claude_repos_names" not in text
+    assert "alpha-repo" not in text
+
+
+def test_workload_range_has_no_claude_repo_names(conn: sqlite3.Connection) -> None:
+    put_claude_day(conn, DAY)
+    text = call_text(conn, "get_workload", date_from="2026-10-06", date_to=DAY)
+    assert "claude_repos_names" not in text
+    assert "alpha-repo" not in text
+
+
+def test_workload_events_on_one_day_has_claude_repo_names(conn: sqlite3.Connection) -> None:
+    put_claude_day(conn, DAY)
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY, events=True)[0]
+    assert row["claude_repos_names"] == REPOS
+
+
+def test_workload_events_without_claude_data_has_none_names(conn: sqlite3.Connection) -> None:
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY, events=True)[0]
+    assert row["claude_repos_names"] is None
+
+
+def test_get_workload_description_mentions_claude() -> None:
+    description = TOOLS["get_workload"][1]
+    for name in ("claude_prompts", "claude_decisions", "claude_repos_names"):
+        assert name in description

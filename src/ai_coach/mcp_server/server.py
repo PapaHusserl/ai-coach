@@ -36,14 +36,21 @@ INSTRUCTIONS = (
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
     "Нагрузка вне тренировок (get_workload): календарь, туду, груминг и экранное время "
-    "(часы по категориям) берутся из базы, их кладёт coach sync или coach screen; к календарю "
-    "и ActivityWatch MCP не ходит; названия событий — только "
-    "get_workload(events=true) на один день, названий приложений и окон нет. "
+    "(часы по категориям) и события Claude Code берутся из базы, их кладёт coach sync или "
+    "coach screen; к календарю и ActivityWatch MCP не ходит; названия событий и каталогов "
+    "Claude — только get_workload(events=true) на один день, названий приложений и окон нет. "
     "Недельный обзор (get_weekly_review): цифры по неделям Пн-Вс и дельты, без выводов; "
     "в сводке week_review_due - пора проводить обзор, после обзора тренер "
     "отмечает его командой coach review done (CLI, не MCP). "
     "События в календаре тренера (get_agenda): MCP пишет только черновики, в календарь их "
     "кладёт пользователь командой coach event write (CLI, не MCP)."
+)
+
+CLAUDE_WORKLOAD = (
+    "claude_prompts (реплики пользователя в Claude Code за день 04:00-04:00, без сессий "
+    "тренера), claude_prompts_evening (после 19:00), claude_decisions (вопросы-решения "
+    "AskUserQuestion), claude_repos (каталогов проектов), claude_switches (переключения "
+    "между ними); null - не считалось. "
 )
 
 # имя инструмента -> (функция из tools.py, описание для Claude)
@@ -62,6 +69,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "overload (как get_overload), sleep (как get_sleep), illness (как get_illness, без days), "
         "who5 (последний WHO-5: score, prev_score, delta, days_since, due - пора проводить, "
         "low_until, signals), "
+        "claude (Claude Code за 7 дней: prompts, evening, decisions, repos, switches; без имён), "
         "evening_done_today (чек-ин сделан), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
@@ -93,8 +101,10 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "screen_challenge/hindrance_hours - вызов и помехи внутри экранной работы "
         "(null - не размечено); challenge/hindrance_hours - вызов и помехи внутри work_hours "
         "календаря (рабочая встреча без правила - помеха). "
-        "events=true - только на один день "
-        "(date_from = date_to): ещё и events с названиями. Пишет coach sync (и coach screen).",
+        + CLAUDE_WORKLOAD
+        + "events=true - только на один день "
+        "(date_from = date_to): ещё и events с названиями и claude_repos_names (каталоги "
+        "Claude Code дня). Пишет coach sync (и coach screen, coach claude).",
     ),
     "get_overload": (
         overload_tool.overload,
