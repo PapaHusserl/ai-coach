@@ -512,3 +512,33 @@ morning_snapshot tests/`; при Р5 = 1 `agenda.sleep_limits:sleep_limits`, `ag
 | **итого с Декартом** | | 36–58M | **26,8–39,0** |
 
 Модели (`grep -H '^model:' ~/.claude/agents/<роль>.md`): kaban.md:model: sonnet; kaban-doeba.md:model: sonnet; kaban-dekart.md:model: fable; mama-kaban.md:model: opus; kaban-svekrov.md:model: opus; kaban-test.md:model: opus; papa-kaban.md:model: fable. Мой запуск — sonnet-5-5, kaban-test.md просит opus: р.3 считаю по opus.
+
+## Итог
+
+Закрыты BACKLOG 25 и 31 (`docs/done/025-…`, `docs/done/031-…`); коммиты 08e94b9 (п1), 451a086 (п2), закрытие — следующий коммит.
+
+**Источник токенов:** `metrics.py --from 2026-11-01T11:55 ~/.claude/projects/-Users-vladislavahtamov-projects-ai-coach/681aa929-0f9e-42e4-bba1-8e484e913473.jsonl`; **цены:** тариф metrics.py 2026-10-25 (https://platform.claude.com/docs/en/about-claude/pricing), страницу сегодня не сверял — не проверено; fable — по Opus.
+
+| Партия | Смета | Факт |
+|---|---|---|
+| План (папа) | 20,5 мин (прошло) | 20,5 мин (11:56–12:17 UTC) |
+| 1. Таблица, команда, MCP, сводка, справка | 35–55 мин | ~40 мин интервал 12:31–13:11 UTC, в т. ч. простой; 4 прогона make check (~6 мин каждый) и 6 кругов ревью (правки 4–12) |
+| 2. Реакция тренера | 25–45 мин | ~29 мин интервал 13:18–13:47 UTC, в т. ч. make check 8:46 и круг правок 13–14 |
+| Декарт + тесть р.3 | 10–15 мин | Декарт не звали; тесть р.3 ~3 мин |
+| Весь шаг | 70–115 мин | 70 мин работы (metrics.py «Время шага»); ожидание 81,3 мин, из них вопросы текстом 65,9 — превышение по стене от ожидания Влада, не от работы |
+
+| Роль | Модель | Токены | $ |
+|---|---|---|---|
+| orchestrator | opus (на момент подсчёта 14:27 UTC) | 15,19M | 6,07 |
+| papa-kaban (6 запусков) | fable / opus | 3,85M | 4,42 |
+| kaban | sonnet | 3,72M | 1,79 |
+| kaban-doeba | sonnet | 6,63M | 2,94 |
+| mama-kaban | opus | 2,12M | 2,59 |
+| kaban-svekrov | opus | 1,93M | 2,96 |
+| kaban-test (р.1 sonnet; р.3 opus на момент подсчёта 14:27 UTC) | sonnet / opus | 0,41M | 0,44 |
+| kaban-dekart | — | 0 | 0 (не звали) |
+| **итого** | | 33,85M | **21,20** |
+
+**Итого:** смета 16,4–28,6 $ без Декарта (26,8–39,0 с ним) → факт 21,20 $; 70–115 → 70 мин работы. Доеба выше сметы (6,6M против 3–5,5M) — правки 6, 11, 12: перевод тестов лимита сводки и `overfill`.
+Churn после ревью: код +41/−28, тесты +281/−48 (32 % от строк до T0)
+Разбор — кабан Декарта.
