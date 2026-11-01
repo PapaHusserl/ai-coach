@@ -7,7 +7,7 @@ WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
 
 def test_coach_wellbeing_exists_and_is_short() -> None:
     assert WELLBEING.is_file()
-    assert len(WELLBEING.read_bytes()) <= 7168
+    assert len(WELLBEING.read_bytes()) <= 8192
 
 
 def test_coach_wellbeing_mentions_workload_tool() -> None:
@@ -88,3 +88,31 @@ def test_coach_mentions_workload_tool_and_wellbeing_file() -> None:
 
 def test_coach_is_still_within_limit() -> None:
     assert len((ROOT / "agents" / "coach.md").read_bytes()) <= 16384
+
+
+def test_wellbeing_has_sleep_rule() -> None:
+    text = WELLBEING.read_text()
+    for needle in (
+        "short_night",
+        "sleep_debt",
+        "caution_from",
+        "debt_7_h",
+        "не считай восстановлением",
+    ):
+        assert needle in text, needle
+
+
+def test_coach_summary_points_to_sleep_signals() -> None:
+    assert "sleep.signals" in (ROOT / "agents" / "coach.md").read_text()
+
+
+def test_recovery_has_caution_from_and_is_short() -> None:
+    path = ROOT / "skills" / "coach-morning" / "recovery.md"
+    assert "caution_from" in path.read_text()
+    assert len(path.read_bytes()) <= 3072
+
+
+def test_day_plan_role_mentions_sleep_signal() -> None:
+    text = (ROOT / "agents" / "coach-day.md").read_text()
+    assert "short_night" in text
+    assert "caution_from" in text

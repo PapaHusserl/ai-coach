@@ -78,6 +78,7 @@ check` партии 1 (среда запрещает агентам, преце�
 - Р6 — `wake_at`/`caution_from` — полные дата и время `YYYY-MM-DD HH:MM`, не `HH:MM` (против рекомендации).
 - Умолчание 2, дневной сон: учесть — папе на доработку (вопрос Влада «почему не считается»).
 - Р7 — дневной сон гасит долг, не входит в норму и короткую ночь (рекомендация).
+- Р8 — при двух сигналах сна в `skipped` одна причина по первому сигналу (рекомендация; Влад 2026-11-01).
 - Остальные умолчания приняты.
 
 ## Справка (правило AGENTS.md)
@@ -269,7 +270,9 @@ EXPECTED_TOOLS` с `get_sleep`; справка — раздел «Справка
 tests/` после партии 1); `mcp_server.snapshot:morning_snapshot` — `tests/test_mcp_snapshot.py`, `tests/test_mcp_overload.py`,
 `tests/test_mcp_sleep.py` (всего 24 файла по `grep -l morning_snapshot tests/` после партии 1); при Р5 = 1 `agenda.day_plan:plan_day`, `agenda.day_plan:create_day_plan`,
 `agenda.day_plan:_sleep_limits` (новая), `agenda.day_plan:_Layout.focus` — `tests/test_agenda_day_plan.py`,
-`tests/test_mcp_day_plan.py`. Каталоги — `make mutate` по правилу проекта (фоном вне агента; долги Н2/Н13 — handoff).
+`tests/test_mcp_day_plan.py`. После выноса («Правки по ревью», партия 2, п. 4): `agenda.sleep_limits:sleep_limits`,
+`agenda.sleep_limits:_sleep_reason` (новые по месту) вместо `agenda.day_plan:_sleep_limits` — те же два файла тестов.
+Каталоги — `make mutate` по правилу проекта (фоном вне агента; долги Н2/Н13 — handoff).
 
 ## Развилки и риски
 
@@ -307,6 +310,16 @@ tests/` после партии 1); `mcp_server.snapshot:morning_snapshot` — `
   знака (как медиана, умолчание 3; кабан выровнял `last_night_h` по `norm_h`, принято 2026-11-01). Следствие: `_sleep_limits` (Р5) сравнивает дату
   `caution_from` с `day`, справка не нуждается в оговорке «после полуночи».
 - **Р7. Дневной сон (`napTimeSeconds`).** Влад 2026-11-01: учесть. Как — «Открытые вопросы» 1.
+- **Р8. Причина в `skipped`, когда сигналов сна два (короткая ночь и долг сразу).** Блоков в любом случае на один меньше
+  (`FOCUS_MAX − 1`, не минус два), вопрос — что написать в строке `skipped` (`day_plan.py:_sleep_limits`, `_sleep_reason`).
+  (1) Одна строка по первому сигналу в порядке `sleep_signals` — короткая ночь, иначе долг (так в коде партии 2 и в
+  умолчании 11 «или»; долг Влад и так видит цифрой в утренней фразе по Р4 и в `sleep` snapshot). (2) Одна строка по долгу
+  первым: долг — хроника и тяжелее одной ночи, короткая ночь при долге — частность. (3) Обе причины в одной строке через
+  запятую: «… - короткая ночь (5.0 ч против нормы 7.0), долг сна 3.5 ч за 7 ночей» — ~3 строки кода, строка длиннее.
+  Рекомендую (1): минимум, уже написано и покрыто тестами доебы; обе цифры Влад получает в сводке, `skipped` объясняет
+  поправку, а не пересказывает сон. (3) — если Влад хочет видеть в плане дня полную причину без возврата к сводке.
+  Разблокирует: ничего — код партии 2 при (1) не меняется; при (2)/(3) — правка `_sleep_limits`/`_sleep_reason` и тест
+  доебы в той же партии. Решает Влад.
 
 Риски:
 
@@ -421,6 +434,86 @@ tests/` после партии 1); `mcp_server.snapshot:morning_snapshot` — `
 `test_gap_rounded_to_limit_fires`, переименование `…_four_columns`. Решения — архитектора (п. 1–2) и мамы; Влада
 не требовали. Повторное ревью мамы — `sleep_norm` через `night_hours(n) or 0.0` (кабан; `or 0.0` — только для pyright,
 `_window` пустые ночи уже отбросил). Строку allow `coach-help/sleep.md` в `.claude/settings.json` добавил Влад (подтвердил 2026-11-01).
+
+Партия 2, хэнд-бэк кабана 2026-11-01 (архитектор, 2026-11-01):
+
+1. **Лимит `coach-wellbeing.md` 7 168 → 8 192 в трёх файлах тестов, не в одном.** Принято. `git grep 7168 aba17d4 -- tests/`
+   — 4 строки в 3 файлах: `test_skills_workload.py:10`, `test_skills_agenda.py:84`, `test_skills_practices.py:12,31`; в плане
+   был назван один — недосчёт архитектора, как в умолчании 8. Кабан поднял все; на дереве партии 2 `grep -rn 7168 tests/` пуст.
+   Размер `coach-wellbeing.md` — 8 160 Б (`wc -c`), запас 32 Б: следующая правка файла (Н12 WHO-5) поднимет лимит до 9 216 —
+   в риски Н12, не сюда. Остальные тексты в лимитах: `coach.md` 15 524 / 16 384, `coach-day.md` 5 336 / 6 144, `recovery.md`
+   1 396 / 3 072.
+2. **«При нескольких сигналах причина — по первому в списке».** Плану соответствует: `_sleep_limits` возвращает `str | None`
+   («Модули», партия 2), умолчание 11 — «короткая ночь … или … долг сна»; порядок — `sleep_signals` (`load/sleep.py:66`):
+   `short_night`, затем `sleep_debt`. Видимое Владу — вынесено развилкой Р8 («Развилки и риски»), код при рекомендации (1)
+   не меняется.
+3. **`_sleep_reason` для `short_night` пишет разрыв, а не ночь — править код.** В коде `({signal['value']} ч против нормы
+   {norm_h})`, где `value` сигнала — `gap = norm − last` (`sleep.py:71-73`): при ночи 5 ч и норме 7 строка читается «короткая
+   ночь (2.0 ч против нормы 7.0)» — как будто спал 2 ч. Умолчание 11: «короткая ночь (N ч против нормы M)», N — ночь.
+   Правило: было `signal['value']` в тексте `short_night` → станет `report["last_night_h"]` (`_sleep_reason(signal, report)`
+   вместо `(signal, norm_h)`; для `sleep_debt` `value` — долг, верно). Доебе: в
+   `test_short_night_today_gives_two_focus_blocks_with_reason` (`tests/test_agenda_day_plan.py`) сверить подстроку
+   «5.0 ч против нормы 7.0» (данные теста — 5 ч при 25 ночах по 7 ч), а не только «короткая ночь». Решение архитектора, Влада
+   не требует.
+
+4. **Smell `High total complexity` в `agenda/day_plan.py` при `SMELLS_MAX = 0` — вынести поправку по сну в новый модуль
+   `src/ai_coach/agenda/sleep_limits.py`.** Разведка (qlty 0.651, `qlty metrics --functions`, 2026-11-01): порог
+   `file_complexity` — умолчание 50, строгий `>=` (docs/plan-25-smells.md:16–17, цель ≤ 49); HEAD `0ef98a7` — файл 46;
+   дерево партии 2 после упрощений кабана — 52 = 46 + `_sleep_reason` 1 + `_sleep_limits` 5 (остальные функции без
+   изменений: `create_day_plan` 11, `_tasks` 8, `focus` 6, `plan_day` 3). Внутри файла снять ≥ 3 нечем — кабан уже
+   ужал 57 → 52. Решение архитектора, не развилка Влада (на экране ничего не меняется); поднимать порог Влад отказал
+   2026-10-27 (docs/plan-25-smells.md «Решения», Р1 = рефакторинг, пороги как есть) — не переспрашиваю; вариант кабана
+   «убрать проверку выходных» отвергнут: в сб/вс в `skipped` появилась бы причина про фокус, которого там нет — видимое
+   поведение. Прецедент разреза — шаг 25 (`cli/profile.py`, `mcp_server/snapshot.py`: растущее — в свой модуль).
+   Что сделать (кабан):
+   - `src/ai_coach/agenda/sleep_limits.py` — новый: docstring модуля «Поправка плана дня по сну: сегодня при сигнале —
+     фокус-блоков на один меньше и не позже caution_from, завтра — на один меньше при sleep_debt»; `sleep_limits(conn, day,
+     today, now, focus_until, focus_max) -> tuple[time, int, list[str]]` — публичная (импортируется другим модулем;
+     прецедент plan-25 «Умолчания»: межмодульные helper-ы публичные, `reportPrivateUsage`), тело — нынешняя
+     `_sleep_limits`, умолчания `FOCUS_UNTIL`/`FOCUS_MAX` приходят параметрами (иначе цикл импорта `day_plan` ↔
+     `sleep_limits`), `plain = (focus_until, focus_max, [])`, при сигнале `focus_max - 1`; `_sleep_reason(signal, report)`
+     — приватная, как есть. Импорты: `sleep_report` из `ai_coach.load`, `DEBT_14_H` из `ai_coach.load.sleep`, `SATURDAY`
+     из `ai_coach.workload.service` (там он и живёт, `:39`); из `day_plan` — ничего.
+   - `src/ai_coach/agenda/day_plan.py`: убрать `_sleep_reason`, `_sleep_limits`, импорты `sleep_report`/`DEBT_14_H`;
+     `from ai_coach.agenda.sleep_limits import sleep_limits`; в `create_day_plan` — `sleep_limits(conn, day, today, now,
+     FOCUS_UNTIL, FOCUS_MAX)`; строка docstring модуля (`:8`) — «не позже FOCUS_UNTIL (при сигнале сна — `sleep_limits`)».
+   - `docs/architecture.md:240` (раздел Н4) — строка: «`agenda/sleep_limits.py`: `sleep_limits` — при сигнале сна на
+     сегодня фокус-блоков на один меньше (`FOCUS_MAX − 1`) и не позже `caution_from` той же даты, на завтра — на один
+     меньше при `sleep_debt`; причина — в `skipped`; `create_day_plan` зовёт её перед `plan_day`».
+   - Тесты не правятся: `tests/test_agenda_day_plan.py` и `tests/test_mcp_day_plan.py` зовут `create_day_plan`, имена
+     `_sleep_*` не импортируют (`grep -rn '_sleep_limits\|_sleep_reason' tests/` пуст). Проверка: `make smells` → «smells:
+     0 (max 0)»; ожидание `day_plan.py` 46 (= HEAD), `sleep_limits.py` ≈ 6 — по измеренным вкладам, критерий — `make
+     smells` (сумма функций у qlty может расходиться с count на 1–2, plan-25 «Риски»). `make dead` — обе функции в
+     употреблении. Для `make mutate` новый файл попадёт в `MOD` только после `git add` (`Makefile:5` — `git diff HEAD`).
+   Правило: было `_sleep_limits` в `agenda/day_plan.py` (сумма файла 52 ≥ 50) → станет `agenda/sleep_limits.py:
+   sleep_limits(…, focus_until, focus_max)`, `day_plan.py` ≤ 49; пороги `.qlty/qlty.toml` и `SMELLS_MAX` не меняются.
+   mutmut-карта — в «Тестах» выше. Поведение не меняется.
+5. **Отступление кабана: возврат `_sleep_limits` — `list[str]` вместо `str | None`.** Принято. Внутреннее: в `skipped`
+   та же одна строка, `create_day_plan` — `more.extend(reasons)` без `if`; при Р8 = (1) список пуст или из одной
+   строки, при (3) — тоже одна (длиннее). Правило: было (план «Модули» :171) `-> tuple[time, int, str | None]` → станет
+   `-> tuple[time, int, list[str]]` (в `sleep_limits` после п. 4). Остальные упрощения кабана (ночей `{DEBT_14_H: 14}.get(limit,
+   7)`, один `min` по datetime без проверки даты `caution_from`, цепочка `today <= day <= today + 1`) — приняты:
+   поведение то же, переход `caution_from` через дату держит `test_caution_on_next_date_does_not_become_limit`.
+
+Ревью мамы партии 2 (2026-11-01, «можно мержить»), замечания по тестам — доебе. Исправлено 2026-11-01 (доеба,
+`tests/test_agenda_day_plan.py`): пустой `all(...)` в `test_caution_at_1800_cuts_late_focus` — тест разбит на
+`…_drops_focus_ending_after_it` и `…_keeps_focus_ending_before_it` (с `assert focus`); «без предела по часу» у завтрашнего
+долга — новый тест `test_tomorrow_focus_may_end_after_todays_caution_from`; `test_caution_at_1900_does_not_cut_focus` — не
+менялся (мама: можно оставить). Решения — мамы; Влада не требовали. Аудит свекрови партии 2 — чисто.
+
+Smell партии 2 (`make check` 2026-11-01: `day_plan.py` complexity 57 при пороге 0) — исправлено 2026-11-01 (кабан) по п. 4–5
+выше, решение архитектора: новый `src/ai_coach/agenda/sleep_limits.py` (`sleep_limits`, `_sleep_reason`), в `day_plan.py`
+вызов и docstring, строка в `docs/architecture.md`; `make smells` — 0. Тесты не менялись. Влада не требовали.
+
+Мутанты партии 2 (mutmut по окнам Влада 2026-11-01) — доеба-мутант, `tests/test_agenda_day_plan.py`: +8 тестов (текст причины
+7/14 ночей, сб/вс и день после завтра без поправки, раскладка фокус-блоков, заголовок «Фокус», задачи раньше трапез). Эквивалентные
+(повтор mutmut — выжили только они): `sleep_limits` 13, 16 и `create_day_plan` 131 — подмена `now`, а `now` в `sleep_report`
+влияет только на `awake_h`, который план дня не читает. Мутанты нетронутого кода плана дня (`_window`, `_tasks`, `_training`,
+`anchor`, `_clock`) — вне партии. По ревью мамы (косметика) доеба переименовал `test_task_before_dinner_is_placed_before_breakfast`
+→ `test_task_is_placed_before_breakfast`, `NOON` → `SAT_MORNING`. Решения — мамы; Влада не требовали. По повторному ревью
+мамы (п. 4: тесты `_sleep_*` не импортируют) — импорт `_sleep_reason` убран, тесты причины переписаны через `sleep_limits(...)[2]`:
+`test_sleep_limits_reason_debt_14_names_14_nights` (долг 6.0 ч за 14 ночей) и `test_sleep_limits_reason_debt_7_names_7_nights`
+(завтра, 7.0 ч за 7 ночей: сегодня первым сигналом шёл бы `short_night`).
 
 ## Смета (кабан-тесть, режим 1)
 

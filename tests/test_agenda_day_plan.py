@@ -2,7 +2,7 @@
 
 import random
 import sqlite3
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import pytest
@@ -23,8 +23,10 @@ from ai_coach.agenda.day_plan import (
     plan_day,
 )
 from ai_coach.agenda.service import AgendaError, agenda_rows
+from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import MIN_SLOT, STEP_MIN, busy_spans, free_slots
 from ai_coach.store.agenda import add_event, get_event
+from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.workload import replace_calendar_window
 
@@ -780,3 +782,201 @@ def test_frames_match_numbers_from_user() -> None:
     assert (WEEKEND.start.hour, WEEKEND.breakfast.hour, WEEKEND.dinner.hour) == (11, 12, 19)
     assert (WEEKDAY.snack.hour, WEEKDAY.snack.minute) == (15, 30)
     assert (WEEKEND.snack.hour, WEEKEND.snack.minute) == (16, 0)
+
+
+# --- сон: plan_day(focus_until, focus_max) ---
+
+
+def focus_ends(blocks: list[dict[str, Any]]) -> list[str]:
+    return [b["end_at"][11:16] for b in blocks if b["kind"] == "focus"]
+
+
+def test_plan_day_focus_max_two_gives_two_focus_blocks() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_max=2)
+    assert len(focus_ends(blocks)) == 2
+
+
+def test_plan_day_focus_until_cuts_late_blocks() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_until=time(15, 0))
+    ends = focus_ends(blocks)
+    assert ends
+    assert all(end <= "15:00" for end in ends)
+
+
+# --- сон: create_day_plan ---
+
+TODAY = MON
+TUE = MON + timedelta(days=1)
+MORNING = datetime(2026, 11, 2, 9, 0)
+
+
+def put_night(conn: sqlite3.Connection, day: date, hours: float, wake: str | None = None) -> None:
+    sleep: dict[str, Any] = {}
+    if wake is not None:
+        moment = datetime.fromisoformat(f"{day.isoformat()}T{wake}:00").replace(tzinfo=UTC)
+        sleep["dailySleepDTO"] = {"sleepEndTimestampLocal": int(moment.timestamp() * 1000)}
+    upsert_daily_metrics(
+        conn,
+        {"date": day.isoformat(), "sleep_seconds": int(hours * 3600), "raw_json": {"sleep": sleep}},
+    )
+
+
+def nights_before_today(conn: sqlite3.Connection, recent_hours: float = 7) -> None:
+    """24 ночи перед TODAY: 17 по 7 ч и 7 последних по recent_hours (медиана остаётся 7)."""
+    for number in range(1, 25):
+        hours = recent_hours if number <= 7 else 7
+        put_night(conn, TODAY - timedelta(days=number), hours)
+
+
+def short_night_today(conn: sqlite3.Connection, wake: str = "07:10") -> None:
+    nights_before_today(conn)
+    put_night(conn, TODAY, 5, wake)
+
+
+def focus_blocks(result: dict[str, Any]) -> list[dict[str, Any]]:
+    return [d for d in result["drafts"] if d["kind"] == "focus"]
+
+
+def test_no_sleep_rows_three_focus_and_no_sleep_reason(conn: sqlite3.Connection) -> None:
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "короткая ночь" in s or "долг сна" in s]
+
+
+def test_short_night_today_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
+    short_night_today(conn)
+    result = make(conn, MON, now=MORNING)
+    focus = focus_blocks(result)
+    assert len(focus) == FOCUS_MAX - 1
+    assert max(d["end_at"] for d in focus) <= f"{MON.isoformat()}T19:00"
+    reasons = [s for s in result["skipped"] if "короткая ночь" in s]
+    assert len(reasons) == 1
+    assert "5.0 ч против нормы 7.0" in reasons[0]
+
+
+def test_normal_night_today_keeps_three_blocks(conn: sqlite3.Connection) -> None:
+    nights_before_today(conn)
+    put_night(conn, TODAY, 7, "07:10")
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+
+
+def test_response_keys_unchanged_with_sleep_signal(conn: sqlite3.Connection) -> None:
+    short_night_today(conn)
+    assert set(make(conn, MON, now=MORNING)) == {"date", "drafts", "skipped", "busy"}
+
+
+def late_focus_after_meeting(
+    conn: sqlite3.Connection, until: str = "16:30"
+) -> list[dict[str, Any]]:
+    calendar(conn, MON, meeting(MON, "11:00", until))
+    return focus_blocks(make(conn, MON, now=MORNING))
+
+
+def test_caution_at_1900_does_not_cut_focus(conn: sqlite3.Connection) -> None:
+    short_night_today(conn, wake="03:00")
+    assert late_focus_after_meeting(conn)
+
+
+def test_caution_at_1800_drops_focus_ending_after_it(conn: sqlite3.Connection) -> None:
+    short_night_today(conn, wake="02:00")
+    assert late_focus_after_meeting(conn) == []
+
+
+def test_caution_at_1800_keeps_focus_ending_before_it(conn: sqlite3.Connection) -> None:
+    short_night_today(conn, wake="02:00")
+    focus = late_focus_after_meeting(conn, until="15:30")
+    assert focus
+    assert all(d["end_at"] <= f"{MON.isoformat()}T18:00" for d in focus)
+
+
+def test_caution_on_next_date_does_not_become_limit(conn: sqlite3.Connection) -> None:
+    short_night_today(conn, wake="09:30")
+    assert late_focus_after_meeting(conn)
+
+
+def test_tomorrow_with_sleep_debt_gives_two_blocks_without_hour_limit(
+    conn: sqlite3.Connection,
+) -> None:
+    nights_before_today(conn, recent_hours=6)
+    put_night(conn, TODAY, 6, "07:10")
+    result = make(conn, TUE, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if "долг сна" in s]
+
+
+def test_tomorrow_focus_may_end_after_todays_caution_from(conn: sqlite3.Connection) -> None:
+    nights_before_today(conn, recent_hours=6)
+    put_night(conn, TODAY, 6, "02:00")  # caution_from сегодня 18:00
+    calendar(conn, TUE, meeting(TUE, "11:00", "16:30"))
+    focus = focus_blocks(make(conn, TUE, now=MORNING))
+    assert focus
+    assert max(d["end_at"] for d in focus) > f"{TUE.isoformat()}T18:00"
+
+
+def test_tomorrow_with_only_short_night_keeps_three_blocks(conn: sqlite3.Connection) -> None:
+    short_night_today(conn)
+    result = make(conn, TUE, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "ночь" in s]
+
+
+# --- сон: sleep_limits и фокус (мутанты) ---
+
+SAT_MORNING = datetime(2026, 11, 7, 9, 0)
+
+
+def test_sleep_limits_reason_debt_14_names_14_nights(conn: sqlite3.Connection) -> None:
+    for number in range(1, 25):
+        put_night(conn, TODAY - timedelta(days=number), 6 if 7 < number <= 14 else 7)
+    put_night(conn, TODAY, 7, "07:10")  # долг за 7 ночей 0, за 14 - 6
+    reasons = sleep_limits(conn, TODAY, TODAY, MORNING, time(19, 0), 3)[2]
+    assert reasons == ["фокус: блоков меньше - долг сна 6.0 ч за 14 ночей"]
+
+
+def test_sleep_limits_reason_debt_7_names_7_nights(conn: sqlite3.Connection) -> None:
+    nights_before_today(conn, recent_hours=6)
+    put_night(conn, TODAY, 6, "07:10")  # 7 ночей по 6 ч при норме 7 - долг 7
+    reasons = sleep_limits(conn, TUE, TODAY, MORNING, time(19, 0), 3)[2]
+    assert reasons == ["фокус: блоков меньше - долг сна 7.0 ч за 7 ночей"]
+
+
+def test_sleep_limits_saturday_today_is_untouched(conn: sqlite3.Connection) -> None:
+    for number in range(1, 25):
+        put_night(conn, SAT - timedelta(days=number), 7)
+    put_night(conn, SAT, 5, "07:10")
+    assert sleep_limits(conn, SAT, SAT, SAT_MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+def test_sleep_limits_day_after_tomorrow_is_untouched(conn: sqlite3.Connection) -> None:
+    nights_before_today(conn, recent_hours=6)
+    put_night(conn, TODAY, 6, "07:10")
+    day = TODAY + timedelta(days=2)
+    assert sleep_limits(conn, day, TODAY, MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+def test_focus_blocks_are_titled_focus() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False)
+    assert {b["title"] for b in blocks if b["kind"] == "focus"} == {"Фокус"}
+
+
+def test_focus_fits_window_of_exactly_focus_min() -> None:
+    blocks, _ = plan_day(
+        WEEKDAY, window(MON, "12:00"), [], [], None, False, focus_until=time(13, 30)
+    )
+    assert [(b["start_at"][11:16], b["end_at"][11:16]) for b in blocks if b["kind"] == "focus"] == [
+        ("12:00", "13:30")
+    ]
+
+
+def test_focus_break_kept_when_busy_gap_is_shorter_than_break() -> None:
+    busy = [span(MON, "13:30", "13:40")]
+    blocks, _ = plan_day(WEEKDAY, window(MON, "12:00"), busy, [], None, False)
+    starts = [b["start_at"][11:16] for b in blocks if b["kind"] == "focus"]
+    assert starts[:2] == ["12:00", "13:45"]
+
+
+def test_task_is_placed_before_breakfast() -> None:
+    blocks, _ = plan(tasks=[Task("Долгая", 90, "work")])
+    assert (named(blocks, "Долгая")["start_at"][11:16]) == "10:00"
+    assert named(blocks, "Завтрак")["start_at"][11:16] == "11:30"

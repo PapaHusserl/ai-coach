@@ -5,9 +5,9 @@
 (draft, written), кроме checkin. Порядок укладки: тренировка (время назвал пользователь) ->
 задачи до ужина -> завтрак, перекус, отдых после него, ужин (занято - ближайшее окно после, не
 позже чем через MEAL_SHIFT_MIN, иначе skipped) -> задачи, не влезшие до ужина -> фокус
-(не в сб/вс, не позже FOCUS_UNTIL). Блоки не пересекаются; окна короче MIN_SLOT пусты для задач
-и фокуса. Рамка дня - до полуночи следующего дня. Сюда в календарь не пишем: это делает
-пользователь командой coach event write.
+(не в сб/вс, не позже FOCUS_UNTIL; при сигнале сна - sleep_limits). Блоки не пересекаются;
+окна короче MIN_SLOT пусты для задач и фокуса. Рамка дня - до полуночи следующего дня. Сюда в
+календарь не пишем: это делает пользователь командой coach event write.
 """
 
 import re
@@ -16,6 +16,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, NamedTuple
 
 from ai_coach.agenda.service import AHEAD_DAYS, AgendaError, agenda_rows, create_draft
+from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import (
     MEAL_SHIFT_MIN,
     anchored,
@@ -148,16 +149,16 @@ class _Layout:
             self.anchor("Прогулка / отдых", "rest", snack[1], REST_MIN, "rest")
         self.anchor("Ужин", "meal", datetime.combine(day, frame.dinner), MEAL_MIN)
 
-    def focus(self) -> None:
-        """Фокус-блоки first-fit до FOCUS_UNTIL: не больше FOCUS_MAX, пауза BREAK_MIN."""
-        limit = datetime.combine(self.window[0].date(), FOCUS_UNTIL)
+    def focus(self, focus_until: time, focus_max: int) -> None:
+        """Фокус-блоки first-fit до focus_until: не больше focus_max, пауза BREAK_MIN."""
+        limit = datetime.combine(self.window[0].date(), focus_until)
         count = 0
         last_end: datetime | None = None
         for first, last in free_slots((self.window[0], min(limit, self.window[1])), self.taken):
             cursor = first
             if last_end is not None:
                 cursor = ceil_step(max(first, last_end + minutes_span(BREAK_MIN)))
-            while count < FOCUS_MAX and cursor + minutes_span(FOCUS_MIN) <= last:
+            while count < focus_max and cursor + minutes_span(FOCUS_MIN) <= last:
                 last_end = cursor + minutes_span(FOCUS_MIN)
                 self.put("focus", "Фокус", (cursor, last_end))
                 count += 1
@@ -171,9 +172,12 @@ def plan_day(
     tasks: list[Task],
     training: Training | None,
     weekend: bool,
+    focus_until: time = FOCUS_UNTIL,
+    focus_max: int = FOCUS_MAX,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Блоки дня (kind, title, start_at, end_at, category, workout_id; по времени) и причины,
-    по которым что-то не поставлено. Чистая функция: базы не знает."""
+    по которым что-то не поставлено. Чистая функция: базы не знает. Фокус - не позже
+    focus_until и не больше focus_max блоков."""
     layout = _Layout(window, busy)
     if training is not None:
         layout.training(training)
@@ -183,7 +187,7 @@ def plan_day(
     for task in layout.tasks(window, later):
         layout.skipped.append(f"{task.title}: {task.minutes} мин не влезают в день")
     if not weekend:
-        layout.focus()
+        layout.focus(focus_until, focus_max)
     layout.blocks.sort(key=lambda block: block["start_at"])
     return layout.blocks, layout.skipped
 
@@ -294,7 +298,11 @@ def create_day_plan(
     checked = fresh
     training = _training(conn, day, at, skipped) if at is not None else None
     busy = busy_spans(conn, day)
-    blocks, more = plan_day(frame, (first, last), busy, checked, training, weekend)
+    until, focus_max, reasons = sleep_limits(conn, day, today, now, FOCUS_UNTIL, FOCUS_MAX)
+    blocks, more = plan_day(
+        frame, (first, last), busy, checked, training, weekend, until, focus_max
+    )
+    more.extend(reasons)
     drafts: list[dict[str, Any]] = []
     with conn:
         for block in blocks:
