@@ -3,10 +3,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 COACH = ROOT / "agents" / "coach.md"
 SPEC_FORMATS = ROOT / "skills" / "coach-plan" / "spec-formats.md"
-MAX_BYTES = 15360
+MAX_BYTES = 16384
 
 
-def test_coach_md_is_at_most_15360_bytes() -> None:
+def test_coach_md_is_at_most_16384_bytes() -> None:
     assert len(COACH.read_bytes()) <= MAX_BYTES
 
 

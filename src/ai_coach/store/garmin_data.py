@@ -21,6 +21,22 @@ def list_daily_metrics(conn: sqlite3.Connection, start: str, end: str) -> list[d
     return fetch_all(conn, sql, (start, end))
 
 
+def list_sleep_nights(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Ночи start..end включительно, по возрастанию даты, без raw_json: date, sleep_seconds,
+    sleep_end (подъём, местное 'YYYY-MM-DD HH:MM:SS'; None у импорта) и nap_seconds (дневной сон:
+    napTimeSeconds у API или сумма napList[].napTimeSec у импорта; None - не записан)."""
+    sql = (
+        "SELECT date, sleep_seconds, "
+        "datetime(json_extract(raw_json, '$.sleep.dailySleepDTO.sleepEndTimestampLocal') / 1000, "
+        "'unixepoch') AS sleep_end, "
+        "COALESCE(json_extract(raw_json, '$.sleep.dailySleepDTO.napTimeSeconds'), "
+        "(SELECT SUM(json_extract(value, '$.napTimeSec')) "
+        "FROM json_each(raw_json, '$.sleep.napList'))) AS nap_seconds "
+        "FROM daily_metrics WHERE date BETWEEN ? AND ? ORDER BY date"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def upsert_activity(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     """Ключ — activity_id. raw_json обязателен."""
     upsert(conn, "activities", ["activity_id"], values)

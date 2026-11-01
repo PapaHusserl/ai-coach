@@ -48,6 +48,7 @@ EXPECTED_TOOLS = {
     "get_focus_log",
     "get_pvt_log",
     "get_deviations",
+    "get_sleep",
     "save_food_nutrition",
     "get_food_without_groups",
     "save_food_groups",

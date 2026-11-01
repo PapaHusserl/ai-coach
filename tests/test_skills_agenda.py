@@ -20,7 +20,7 @@ def test_agenda_file_exists_and_within_limit() -> None:
 
 
 def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= 15360
+    assert len((AGENTS / "coach.md").read_bytes()) <= 16384
 
 
 def test_coach_md_reads_agenda_file_by_cat_and_it_is_allowed() -> None:

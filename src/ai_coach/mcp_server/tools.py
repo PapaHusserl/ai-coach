@@ -19,7 +19,9 @@ from ai_coach.load import (
     load_series,
     main_wellbeing,
     resolve_thresholds,
+    sleep_report,
 )
+from ai_coach.load.sleep import awake_hours
 from ai_coach.meds import public_meds
 from ai_coach.nutrition.groups import FOOD_GROUPS
 from ai_coach.pantry import stock
@@ -36,6 +38,7 @@ from ai_coach.store.garmin_data import (
     last_rest_hr,
     list_activities,
     list_daily_metrics,
+    list_sleep_nights,
     list_strength_sets,
 )
 from ai_coach.store.intake import list_intake
@@ -175,9 +178,28 @@ def wellbeing(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
 
 
 def focus_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    """Дневные оценки (фокус, усталость, усилие 1-5) по времени."""
+    """Дневные оценки (фокус, усталость, усилие 1-5) по времени и awake_h - часов от подъёма."""
     period(start, end)
-    return cap(list_focus(conn, start, end), newest=True)
+    rows = with_awake(list_focus(conn, start, end), list_sleep_nights(conn, start, end))
+    return cap(rows, newest=True)
+
+
+def with_awake(rows: list[dict[str, Any]], nights: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """К строкам с date и logged_at - awake_h: часы от подъёма этой даты (нет подъёма - None)."""
+    wake = {n["date"]: n["sleep_end"] for n in nights}
+    return [
+        {**r, "awake_h": awake_hours(wake.get(r["date"]), datetime.fromisoformat(r["logged_at"]))}
+        for r in rows
+    ]
+
+
+def sleep(
+    conn: sqlite3.Connection,
+    date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
+) -> dict[str, Any]:
+    """Долг сна на дату: норма, ночь, долг за 7 и 14 ночей, подъём, сигналы (load/sleep.py)."""
+    period(date, date)
+    return sleep_report(conn, date, now())
 
 
 def pvt_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:

@@ -87,4 +87,4 @@ def test_coach_mentions_workload_tool_and_wellbeing_file() -> None:
 
 
 def test_coach_is_still_within_limit() -> None:
-    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= 15360
+    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= 16384

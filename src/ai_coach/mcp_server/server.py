@@ -58,7 +58,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "workload (нагрузка вне тренировок за 7 дней: часы встреч, вечера, туду, груминг), "
         "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков; overloaded - "
         "день перегружен только по календарю, без тренировок: нет флага - не гарантия), "
-        "overload (как get_overload), evening_done_today (чек-ин сделан), "
+        "overload (как get_overload), sleep (как get_sleep), evening_done_today (чек-ин сделан), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "habits_today (привычки на день самочувствия: name, unit, done true - сделано, false - "
@@ -135,7 +135,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_focus_log": (
         tools.focus_log,
         "Дневные оценки по времени: focus (фокус), fatigue (умственная усталость), effort (трудно "
-        "заставить себя), все 1-5, и текст. Пишет пользователь командой coach focus.",
+        "заставить себя), все 1-5, и текст; awake_h - часов от подъёма (null - подъёма нет). "
+        "Пишет пользователь командой coach focus.",
     ),
     "get_pvt_log": (
         tools.pvt_log,
@@ -148,6 +149,17 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         tools.deviations,
         "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "
         "список - всё в норме, пересчёт плана не нужен. date - YYYY-MM-DD.",
+    ),
+    "get_sleep": (
+        tools.sleep,
+        "Долг сна на дату (YYYY-MM-DD): norm_h - личная норма (медиана за 90 ночей, null - ночей "
+        "меньше 20), norm_nights, last_night_h, debt_7_h / debt_14_h - недосып против нормы за "
+        "7 / 14 ночей (минус - выспался; ночи без часов не считаются, nights_7 / nights_14 - "
+        "сколько учтено; дневной сон гасит долг), nap_h (дневной сон за день), wake_at "
+        "(YYYY-MM-DD HH:MM), awake_h (часов от подъёма, только на сегодня), caution_from "
+        "(YYYY-MM-DD HH:MM, подъём + 16 ч, может быть следующей датой - после этого момента "
+        "тяжёлых решений не планировать), signals - short_night, sleep_debt (kind, value, "
+        "limit; пустой список - норма).",
     ),
     "get_profile": (
         tools.profile,

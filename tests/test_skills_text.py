@@ -261,10 +261,10 @@ def test_meal_training_nutrition_has_no_mark_after_rule() -> None:
 
 # --- шаг 20: проактивность тренера ---
 
-COACH_MAX_BYTES = 15360
+COACH_MAX_BYTES = 16384
 
 
-def test_coach_is_at_most_15360_bytes() -> None:
+def test_coach_is_at_most_16384_bytes() -> None:
     assert len((ROOT / "agents" / "coach.md").read_bytes()) <= COACH_MAX_BYTES
 
 

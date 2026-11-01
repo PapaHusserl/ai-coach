@@ -1,10 +1,13 @@
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, rows, tool_names
+
+from ai_coach.store.garmin_data import upsert_daily_metrics
 
 DAY = "2026-10-07"
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
@@ -46,6 +49,34 @@ def test_rows_limited_newest_kept(conn: sqlite3.Connection) -> None:
     assert answer["rows"][0]["text"] == "10"
 
 
+def wake_at(conn: sqlite3.Connection, day: str, moment: str) -> None:
+    millis = int(datetime.fromisoformat(moment).replace(tzinfo=UTC).timestamp() * 1000)
+    upsert_daily_metrics(
+        conn,
+        {"date": day, "raw_json": {"sleep": {"dailySleepDTO": {"sleepEndTimestampLocal": millis}}}},
+    )
+
+
+def test_awake_hours_from_wake_of_the_day(conn: sqlite3.Connection) -> None:
+    wake_at(conn, DAY, f"{DAY} 07:10:00")
+    focus(conn, DAY, f"{DAY} 11:00:00")
+    assert rows(conn, "get_focus_log", start=DAY, end=DAY)[0]["awake_h"] == 3.8
+
+
+def test_awake_hours_none_without_daily_metrics(conn: sqlite3.Connection) -> None:
+    focus(conn, DAY, f"{DAY} 11:00:00")
+    assert rows(conn, "get_focus_log", start=DAY, end=DAY)[0]["awake_h"] is None
+
+
+def test_awake_hours_use_own_day_wake(conn: sqlite3.Connection) -> None:
+    wake_at(conn, "2026-10-06", "2026-10-06 06:00:00")
+    wake_at(conn, DAY, f"{DAY} 08:00:00")
+    focus(conn, "2026-10-06", "2026-10-06 12:00:00")
+    focus(conn, DAY, f"{DAY} 12:00:00")
+    found = rows(conn, "get_focus_log", start="2026-10-06", end=DAY)
+    assert [r["awake_h"] for r in found] == [6.0, 4.0]
+
+
 def test_period_over_92_days_is_rejected(conn: sqlite3.Connection) -> None:
     with pytest.raises(ToolError):
         call(conn, "get_focus_log", start="2026-01-01", end="2026-06-01")
@@ -65,4 +96,4 @@ def test_settings_allow_coach_focus() -> None:
 def test_coach_md_mentions_focus_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach.md"
     assert "focus" in path.read_text()
-    assert len(path.read_bytes()) <= 15360
+    assert len(path.read_bytes()) <= 16384

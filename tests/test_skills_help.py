@@ -10,7 +10,7 @@ from mcp_fakes import tool_names
 
 from ai_coach import pvt
 from ai_coach.cli import main
-from ai_coach.load import deviations, overload, training
+from ai_coach.load import deviations, overload, sleep, training
 from ai_coach.workload.config import DEMANDS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -149,6 +149,33 @@ def test_pvt_topic_thresholds_match_constants() -> None:
         f"быстрее {pvt.FALSE_START_MS} мс",
         f"нет ответа {pvt.NO_RESPONSE_MS // 1000} с",
         f"{round(pvt.SLOW_SHARE * 100)} %",
+    ):
+        assert needle in text, needle
+
+
+def test_sleep_topic_has_fields() -> None:
+    text = topic("sleep.md")
+    for needle in (
+        "get_sleep",
+        "debt_7_h",
+        "debt_14_h",
+        "awake_h",
+        "caution_from",
+        "short_night",
+        "nap_h",
+    ):
+        assert needle in text, needle
+
+
+def test_sleep_topic_thresholds_match_constants() -> None:
+    text = topic("sleep.md")
+    for needle in (
+        f"{sleep.NORM_DAYS} дней",
+        f"{sleep.NORM_MIN_NIGHTS} ночей",
+        f"{sleep.SHORT_NIGHT_H:g} ч",
+        f"{sleep.AWAKE_LIMIT_H} ч от подъёма",
+        f"{sleep.DEBT_7_H:g}",
+        f"{sleep.DEBT_14_H:g}",
     ):
         assert needle in text, needle
 

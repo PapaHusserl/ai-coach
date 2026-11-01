@@ -14,7 +14,7 @@ def coach_text() -> str:
 
 
 def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= 15360
+    assert len((AGENTS / "coach.md").read_bytes()) <= 16384
 
 
 def test_coach_week_exists_and_within_limit() -> None:

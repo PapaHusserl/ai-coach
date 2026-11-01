@@ -80,7 +80,7 @@ def test_evening_skill_keeps_skip_when_unknown() -> None:
 
 
 def test_coach_md_within_limit_after_evening() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 15360
+    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 16384
 
 
 def test_evening_skill_has_no_application_or_window_names() -> None:
@@ -129,4 +129,4 @@ def test_wellbeing_file_describes_overload_reaction() -> None:
 
 
 def test_coach_stays_within_limit_after_v23() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 15360
+    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 16384

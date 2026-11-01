@@ -8,6 +8,7 @@ from ai_coach.store.garmin_data import (
     get_daily_metrics,
     list_activities,
     list_daily_metrics,
+    list_sleep_nights,
     list_strength_sets,
     upsert_activity,
     upsert_daily_metrics,
@@ -206,3 +207,50 @@ def test_get_and_list_return_raw_json_as_string(conn: sqlite3.Connection) -> Non
         list_strength_sets(conn, 5)[0],
     ):
         assert isinstance(row["raw_json"], str)
+
+
+def night_row(conn: sqlite3.Connection, day: str, raw: dict, seconds: int | None = 25200) -> None:
+    upsert_daily_metrics(conn, {"date": day, "sleep_seconds": seconds, "raw_json": raw})
+
+
+def test_sleep_nights_inclusive_range_sorted_four_columns(conn: sqlite3.Connection) -> None:
+    for day in ("2026-10-03", "2026-10-01", "2026-10-02", "2026-10-04"):
+        night_row(conn, day, {})
+    found = list_sleep_nights(conn, "2026-10-01", "2026-10-03")
+    assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
+    assert set(found[0]) == {"date", "sleep_seconds", "sleep_end", "nap_seconds"}
+    assert found[0]["sleep_seconds"] == 25200
+
+
+def test_sleep_nights_have_no_raw_json(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-01", {"secret": "SECRET"})
+    assert "raw_json" not in list_sleep_nights(conn, "2026-10-01", "2026-10-01")[0]
+
+
+def test_sleep_end_is_local_datetime_text(conn: sqlite3.Connection) -> None:
+    raw = {"sleep": {"dailySleepDTO": {"sleepEndTimestampLocal": 1793435400000}}}
+    night_row(conn, "2026-10-31", raw)
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["sleep_end"] == (
+        "2026-10-31 08:30:00"
+    )
+
+
+def test_sleep_end_without_key_is_none(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {"dailySleepDTO": {}}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["sleep_end"] is None
+
+
+def test_nap_seconds_from_daily_dto(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {"dailySleepDTO": {"napTimeSeconds": 4620}}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["nap_seconds"] == 4620
+
+
+def test_nap_seconds_sum_of_nap_list(conn: sqlite3.Connection) -> None:
+    raw = {"sleep": {"napList": [{"napTimeSec": 1500}, {"napTimeSec": 600}]}}
+    night_row(conn, "2026-10-31", raw)
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["nap_seconds"] == 2100
+
+
+def test_nap_seconds_absent_is_none(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["nap_seconds"] is None

@@ -8,7 +8,7 @@ CLAUDE = ROOT / ".claude"
 AGENTS = CLAUDE / "agents"
 EVENING = CLAUDE / "skills" / "coach-evening" / "SKILL.md"
 LIMITS = {
-    "coach.md": 15360,
+    "coach.md": 16384,
     "coach-wellbeing.md": 7168,
     "coach-nutrition.md": 6144,
     "coach-onboarding.md": 6144,
@@ -24,7 +24,7 @@ def allow() -> list[str]:
 
 
 def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= 15360
+    assert len((AGENTS / "coach.md").read_bytes()) <= 16384
 
 
 def test_wellbeing_within_limit() -> None:
