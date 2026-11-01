@@ -10,12 +10,19 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from ai_coach.store.workload import list_calendar_events, list_counters
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 from ai_coach.workload.config import DEMANDS
 
 EVENING_FROM = time(19, 0)
 AHEAD_DAYS = 14
 HOURS = ("work", "personal", "hobby", "rest")
-INT_COUNTERS = ("todo_open", "todo_closed", "grooming_done", "grooming_pending")
+INT_COUNTERS = (
+    "todo_open",
+    "todo_closed",
+    "grooming_done",
+    "grooming_pending",
+    *CLAUDE_COUNTERS,
+)
 SCREEN_COUNTERS = (
     "screen_work_hours",
     "screen_hobby_hours",
@@ -127,6 +134,8 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
     {work,personal,hobby,rest}_hours и _evening_hours (после 19:00),
     challenge_hours и hindrance_hours (части work_hours по [calendar.demand]),
     all_day_work, todo_open, todo_closed, grooming_done, grooming_pending (None - не считались),
+    claude_prompts, claude_prompts_evening, claude_decisions, claude_repos, claude_switches
+    (Claude Code за день 04:00-04:00; None - не считались),
     screen_work/hobby/browser/evening_hours (часы экрана 04:00→04:00, вечер 19:00→04:00;
     None - нет данных экрана за день), screen_challenge/hindrance_hours (вызов и помехи внутри
     screen_work_hours; None - не размечено)."""

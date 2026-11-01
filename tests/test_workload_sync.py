@@ -20,8 +20,10 @@ from workload_fakes import (
 
 from ai_coach.store.journal import add_sync_log, sync_runs_on
 from ai_coach.store.workload import list_calendar_events, list_counters, replace_calendar_window
+from ai_coach.sync import workload_sync
 from ai_coach.sync.workload_sync import read_counters, resolve_config, sync_workload
 from ai_coach.workload.calendar_eventkit import CalendarError
+from ai_coach.workload.claude import ClaudeError
 from ai_coach.workload.config import WorkloadConfig, default_config, load_config
 from ai_coach.workload.screen import AwReader, ScreenError
 
@@ -45,7 +47,8 @@ class Env:
             write_config(
                 tmp_path / "w.toml",
                 f'[calendar]\nwork = ["Work"]\npersonal = ["Home"]\nignore = ["Skip"]\n'
-                f'[paths]\ntodo = "{self.todo}"\nhb_watch = "{self.hb}"\n',
+                f'[paths]\ntodo = "{self.todo}"\nhb_watch = "{self.hb}"\n'
+                f'claude_projects = "{tmp_path / "no-claude"}"\n',
             )
         )
 
@@ -213,6 +216,7 @@ def test_no_calendar_config_skips_calendar_but_reads_todo(
     conn: sqlite3.Connection, env: Env, tmp_path: Path
 ) -> None:
     paths = f'[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+    paths += f'claude_projects = "{tmp_path / "no-claude"}"\n'
     config = load_config(write_config(tmp_path / "nocal.toml", paths))
     reader = FakeCalendar([raw_event(uid="a")])
     sync_workload(conn, reader=reader, config=config, days=DAYS, today=TODAY)
@@ -225,6 +229,7 @@ def demand_config(env: Env, tmp_path: Path, patterns: str) -> WorkloadConfig:
     text = (
         f'[calendar]\nwork = ["Work"]\npersonal = ["Home"]\n'
         f'[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        f'claude_projects = "{tmp_path / "no-claude"}"\n'
         f"[calendar.demand]\nchallenge = {patterns}\n"
     )
     return load_config(write_config(tmp_path / "demand.toml", text))
@@ -291,6 +296,7 @@ SCREEN_TITLE = "СЕКРЕТНЫЙ_ЗАГОЛОВОК_ОКНА"
 def with_screen(env: Env, tmp_path: Path) -> WorkloadConfig:
     text = (
         f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        f'claude_projects = "{tmp_path / "no-claude"}"\n'
         '[screen]\nwork = ["Alpha Editor"]\nhobby = ["BetaGame"]\n'
     )
     return load_config(write_config(tmp_path / "screen.toml", text))
@@ -345,6 +351,7 @@ def test_sync_with_demand_lists_has_no_unmarked_note(
 ) -> None:
     text = (
         f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        f'claude_projects = "{tmp_path / "no-claude"}"\n'
         '[screen]\nwork = ["Alpha Editor"]\nhobby = ["BetaGame"]\nchallenge = ["Alpha Editor"]\n'
     )
     config = load_config(write_config(tmp_path / "demand.toml", text))
@@ -525,7 +532,9 @@ def test_all_sources_failing_keep_notes_then_errors_in_order(
     todo = tmp_path / "todo.json"
     todo.write_text("{broken", encoding="utf-8")
     hb = write_hb(tmp_path / "hb", {"a.md": "2026-10-06 10:00"}, {})
-    text = f'[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n[screen]\nwork = ["Alpha Editor"]\n'
+    text = f'[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n'
+    text += f'claude_projects = "{tmp_path / "no-claude"}"\n'
+    text += '[screen]\nwork = ["Alpha Editor"]\n'
     config = load_config(write_config(tmp_path / "w.toml", text))
     (hb / "done").chmod(0)
     try:
@@ -540,7 +549,7 @@ def test_all_sources_failing_keep_notes_then_errors_in_order(
     finally:
         (hb / "done").chmod(0o755)
     assert message == (
-        "событий 0, счётчиков 0; календарь не настроен; "
+        "событий 0, счётчиков 0; календарь не настроен; Claude: каталог не найден; "
         "туду: todo не читается: не JSON; "
         "груминг: hb-watch не читается: PermissionError; "
         "экран: aw-server не отвечает"
@@ -562,9 +571,9 @@ def test_broken_config_file_is_last_error_calendar_skipped_default_paths_read(
     reader = FakeCalendar([raw_event(uid="a")])
     message = sync_workload(conn, days=DAYS, today=TODAY, reader=reader)
     parts = message.split("; ")
-    assert parts[1:3] == ["календарь не настроен", "экран не настроен"]
-    assert parts[3].startswith("Конфиг нагрузки не читается (bad.toml)")
-    assert len(parts) == 4
+    assert parts[1:4] == ["календарь не настроен", "экран не настроен", "Claude: каталог не найден"]
+    assert parts[4].startswith("Конфиг нагрузки не читается (bad.toml)")
+    assert len(parts) == 5
     assert reader.calls == []
     assert kinds(conn)["todo_open"] == 1
     assert kinds(conn)["grooming_pending"] == 1
@@ -603,7 +612,7 @@ def test_read_counters_no_screen_section_notes_it_and_reads_other_sources(env: E
     notes: list[str] = []
     errors: list[str] = []
     found = read_counters(env.config, None, date(2026, 10, 1), TODAY, notes, errors)
-    assert notes == ["экран не настроен"]
+    assert notes == ["экран не настроен", "Claude: каталог не найден"]
     assert errors == []
     assert {c["kind"] for c in found} == {
         "todo_closed",
@@ -621,7 +630,7 @@ def test_read_counters_screen_error_goes_to_errors_other_counters_stay(
     aw = FakeAw(error=ScreenError("нет связи"))
     found = read_counters(with_screen(env, tmp_path), aw, date(2026, 10, 1), TODAY, notes, errors)
     assert errors == ["экран: нет связи"]
-    assert notes == []
+    assert notes == ["Claude: каталог не найден"]
     assert "todo_open" in {c["kind"] for c in found}
 
 
@@ -629,5 +638,121 @@ def test_read_counters_appends_to_existing_lists(env: Env) -> None:
     notes = ["раньше"]
     errors = ["календарь: x"]
     read_counters(env.config, None, date(2026, 10, 1), TODAY, notes, errors)
-    assert notes == ["раньше", "экран не настроен"]
+    assert notes == ["раньше", "экран не настроен", "Claude: каталог не найден"]
     assert errors == ["календарь: x"]
+
+
+CLAUDE_SECRET = "синтетический-секрет-реплики"
+
+
+def with_claude(env: Env, tmp_path: Path, records: list[dict[str, object]]) -> Path:
+    """Каталог транскриптов с одной сессией; конфиг env указывает на него."""
+    root = tmp_path / "projects"
+    folder = root / "-synthetic-home-alpha"
+    folder.mkdir(parents=True)
+    lines = [json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in records]
+    (folder / "sess-1234.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    text = (
+        f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{env.todo}"\nhb_watch = "{env.hb}"\n'
+        f'claude_projects = "{root}"\n'
+    )
+    env.config = load_config(write_config(tmp_path / "claude.toml", text))
+    return root
+
+
+def claude_prompt(ts: str, text: str = CLAUDE_SECRET) -> dict[str, object]:
+    message = {"role": "user", "content": text}
+    return {
+        "type": "user",
+        "timestamp": ts,
+        "message": message,
+        "cwd": "/synthetic/home/alpha",
+        "sessionId": "sess-1234",
+    }
+
+
+def test_sync_writes_claude_counters_for_window(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    with_claude(env, tmp_path, [claude_prompt("2026-10-07T12:00:00Z")])
+    run(conn, env, FakeCalendar())
+    found = list_counters(conn, "2026-10-07", "2026-10-07", "claude_prompts")
+    assert [(c["value"], c["source"]) for c in found] == [(1.0, "claude")]
+    window = list_counters(conn, "2026-10-01", "2026-10-08", "claude_prompts")
+    assert [c["date"] for c in window] == [f"2026-10-0{d}" for d in range(1, 9)]
+
+
+def test_sync_writes_claude_repos_raw_json_with_names(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    with_claude(env, tmp_path, [claude_prompt("2026-10-07T12:00:00Z")])
+    run(conn, env, FakeCalendar())
+    found = list_counters(conn, "2026-10-07", "2026-10-07", "claude_repos")
+    assert json.loads(found[0]["raw_json"]) == {"repos": [{"repo": "alpha", "prompts": 1}]}
+
+
+def test_sync_stores_claude_names_only_in_claude_repos_raw_json(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    with_claude(env, tmp_path, [claude_prompt("2026-10-07T12:00:00Z")])
+    message = run(conn, env, FakeCalendar())
+    rows = conn.execute("SELECT kind, raw_json FROM day_counters").fetchall()
+    for forbidden in (CLAUDE_SECRET, "/synthetic", "sess-1234", "-synthetic-home"):
+        assert forbidden not in "\n".join(conn.iterdump())
+        assert forbidden not in message
+    named = [r["kind"] for r in rows if "alpha" in (r["raw_json"] or "")]
+    assert named == ["claude_repos"] * len(named)
+    assert named
+
+
+def test_sync_without_claude_directory_notes_it(conn: sqlite3.Connection, env: Env) -> None:
+    message = run(conn, env, FakeCalendar())
+    assert "Claude: каталог не найден" in message
+    assert list_counters(conn, *ALL, "claude_prompts") == []
+    assert log_rows(conn) == [("workload", "ok")]
+
+
+def test_sync_claude_files_without_records_note_not_recognized(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    with_claude(env, tmp_path, [{"type": "summary", "timestamp": "2026-10-07T12:00:00Z"}])
+    message = run(conn, env, FakeCalendar())
+    assert "Claude: записей не распознано" in message
+    assert "каталог не найден" not in message
+
+
+def test_sync_recognized_claude_has_no_notes(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    with_claude(env, tmp_path, [claude_prompt("2026-10-07T12:00:00Z")])
+    message = run(conn, env, FakeCalendar())
+    assert "Claude:" not in message
+
+
+def test_sync_window_of_coach_sessions_only_has_no_note(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    coach: dict[str, object] = {"type": "agent-setting", "agentSetting": "coach"}
+    with_claude(env, tmp_path, [coach, claude_prompt("2026-10-07T12:00:00Z")])
+    message = run(conn, env, FakeCalendar())
+    assert "Claude:" not in message
+    found = list_counters(conn, "2026-10-07", "2026-10-07", "claude_prompts")
+    assert [c["value"] for c in found] == [0.0]
+
+
+def test_sync_claude_error_is_error_and_other_counters_are_written(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = with_claude(env, tmp_path, [claude_prompt("2026-10-07T12:00:00Z")])
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise ClaudeError("файл транскрипта не читается")
+
+    monkeypatch.setattr(workload_sync, "scan_claude", broken)
+    message = run(conn, env, FakeCalendar())
+    assert root.is_dir()
+    assert log_rows(conn) == [("workload", "error")]
+    assert "Claude: файл транскрипта не читается" in message
+    assert kinds(conn)["todo_open"] == 1
+    assert kinds(conn)["grooming_pending"] == 1
+    assert "claude_prompts" not in kinds(conn)

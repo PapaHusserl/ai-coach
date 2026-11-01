@@ -10,6 +10,7 @@ from workload_fakes import FakeCalendar, stored_event, write_config
 
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
 from ai_coach.sync.workload_sync import sync_workload
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 from ai_coach.workload.config import load_config
 from ai_coach.workload.screen import AwReader
 
@@ -68,6 +69,25 @@ def put_screen(conn: sqlite3.Connection, day: str, kind: str, value: float) -> N
             "synced_at": "2026-10-08T10:00:00",
         },
     )
+
+
+def test_snapshot_workload_has_no_claude_keys(conn: sqlite3.Connection) -> None:
+    for kind in CLAUDE_COUNTERS:
+        put_screen(conn, "2026-10-05", kind, 3)
+    rows = call(conn, "get_morning_snapshot", date=DAY)["workload"]["rows"]
+    assert rows
+    for row in rows:
+        assert [k for k in row if k.startswith("claude_")] == []
+
+
+def test_snapshot_workload_days_do_not_depend_on_claude_data(conn: sqlite3.Connection) -> None:
+    before = call(conn, "get_morning_snapshot", date=DAY)["workload"]
+    for day in range(1, 8):
+        for kind in CLAUDE_COUNTERS:
+            put_screen(conn, f"2026-10-0{day}", kind, 12)
+    after = call(conn, "get_morning_snapshot", date=DAY)["workload"]
+    assert [r["date"] for r in after["rows"]] == [r["date"] for r in before["rows"]]
+    assert after["truncated"] == before["truncated"]
 
 
 def test_snapshot_workload_rows_have_screen_hours(conn: sqlite3.Connection) -> None:

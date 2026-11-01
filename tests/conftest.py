@@ -12,6 +12,7 @@ def no_real_workload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Нагрузка не читает настоящие календарь, туду и hb-watch: конфиг без календарей, пути tmp."""
     config = tmp_path / "no-workload.toml"
     paths = f'[paths]\ntodo = "{tmp_path / "no-todo.json"}"\nhb_watch = "{tmp_path / "no-hb"}"\n'
+    paths += f'claude_projects = "{tmp_path / "no-claude"}"\n'
     config.write_text(paths, encoding="utf-8")
     monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
 

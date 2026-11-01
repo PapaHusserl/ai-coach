@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import time
 from datetime import date, timedelta
@@ -35,7 +36,8 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     hb = write_hb(tmp_path / "hb", {"a.md": f"{TODAY.isoformat()} 09:00"}, {})
     config = write_config(
         tmp_path / "w.toml",
-        f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n',
+        f'[calendar]\nwork = ["Work"]\n[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n'
+        f'claude_projects = "{tmp_path / "no-claude"}"\n',
     )
     monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
     return db
@@ -114,6 +116,29 @@ def test_sync_does_not_modify_todo_and_hb_watch(
     runner.invoke(main.app, ["sync", "--days", "2"])
     runner.invoke(main.app, ["sync", "--days", "2"])
     assert tree_state(tmp_path / "todo.json", tmp_path / "hb") == before
+
+
+def test_sync_does_not_modify_claude_transcripts(
+    isolated: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "projects"
+    folder = root / "-synthetic-alpha"
+    folder.mkdir(parents=True)
+    line = {
+        "type": "user",
+        "timestamp": f"{TODAY.isoformat()}T10:00:00Z",
+        "message": {"role": "user", "content": "синтетическая реплика"},
+        "cwd": "/synthetic/alpha",
+    }
+    (folder / "s1.jsonl").write_text(json.dumps(line) + "\n", encoding="utf-8")
+    config = write_config(tmp_path / "c.toml", f'[paths]\nclaude_projects = "{root}"\n')
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    before = tree_state(root)
+    runner.invoke(main.app, ["sync", "--days", "2"])
+    assert rows(isolated, "SELECT COUNT(*) FROM day_counters WHERE source = 'claude'")[0][0] > 0
+    assert tree_state(root) == before
 
 
 def test_second_sync_keeps_first_run_today_logic(

@@ -21,6 +21,11 @@ COUNTER_KINDS = (
     "screen_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
+    "claude_prompts",
+    "claude_prompts_evening",
+    "claude_decisions",
+    "claude_repos",
+    "claude_switches",
 )
 
 

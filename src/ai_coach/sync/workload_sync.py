@@ -17,6 +17,7 @@ from ai_coach.workload import (
     AwReader,
     CalendarError,
     CalendarReader,
+    ClaudeError,
     EventReader,
     GroomingError,
     ScreenError,
@@ -30,6 +31,7 @@ from ai_coach.workload import (
     read_screen,
     read_todo,
 )
+from ai_coach.workload.claude import scan_claude
 
 KIND = "workload"
 
@@ -145,8 +147,8 @@ def read_counters(
     notes: list[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
-    """Счётчики туду, груминга и экрана за дни first..today; замечания и сбои источников
-    дописывает в notes и errors в порядке чтения."""
+    """Счётчики туду, груминга, экрана и Claude Code за дни first..today; замечания и сбои
+    источников дописывает в notes и errors в порядке чтения."""
     counters: list[dict[str, Any]] = []
     try:
         counters += read_todo(config.todo_path, first, today, today)
@@ -167,7 +169,25 @@ def read_counters(
             notes += screen_notes
         except ScreenError as e:
             errors.append(f"экран: {e}")
+    counters += claude_counters(config, first, today, notes, errors)
     return counters
+
+
+def claude_counters(
+    config: WorkloadConfig, first: date, today: date, notes: list[str], errors: list[str]
+) -> list[dict[str, Any]]:
+    """Счётчики Claude Code за дни first..today; нет каталога и нераспознанный формат -
+    замечание в notes, сбой чтения - в errors."""
+    try:
+        found, files, seen = scan_claude(config.claude_projects_path, first, today)
+        if not found:
+            notes.append("Claude: каталог не найден")
+        elif files and not seen:
+            notes.append("Claude: записей не распознано")
+    except ClaudeError as e:
+        errors.append(f"Claude: {e}")
+        return []
+    return found
 
 
 def sync_workload(

@@ -2,11 +2,13 @@
   "permissions": {
     "allow": [
       "mcp__ai-coach",
+      "Bash(cat .claude/agents/coach-help/claude.md)",
       "Bash(uv run coach sync:*)",
       "Bash(uv run coach screen:*)",
       "Bash(uv run coach food:*)",
       "Bash(cat .claude/agents/coach-help/sleep.md)",
       "Bash(uv run coach feel:*)",
+      "Bash(uv run coach claude:*)",
       "Bash(uv run coach focus:*)",
       "Bash(uv run coach who5:*)",
       "Bash(cat ~/.config/ai-coach/workload.toml)",

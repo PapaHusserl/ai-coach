@@ -11,6 +11,7 @@ from mcp_fakes import tool_names
 from ai_coach import pvt
 from ai_coach.cli import main
 from ai_coach.load import deviations, illness, overload, sleep, training, who5
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 from ai_coach.workload.config import DEMANDS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -242,6 +243,23 @@ def test_help_index_lists_who5() -> None:
     text = HELP.read_text()
     for needle in ("who5.md", "coach who5", "get_who5"):
         assert needle in text, needle
+
+
+def test_claude_topic_has_commands_and_fields() -> None:
+    text = topic("claude.md")
+    needles = ("coach sync", "uv run coach claude", "--days", "04:00", "30 дней")
+    for needle in (*needles, *CLAUDE_COUNTERS):
+        assert needle in text, needle
+
+
+def test_claude_topic_says_what_is_not_counted() -> None:
+    text = topic("claude.md")
+    for needle in ("субагент", "коммит", "не попадают"):
+        assert needle in text, needle
+
+
+def test_help_index_lists_claude() -> None:
+    assert "claude.md" in HELP.read_text()
 
 
 def test_pvt_topic_has_metric_poles() -> None:

@@ -36,6 +36,7 @@ def config(tmp_path: Path) -> WorkloadConfig:
     text = (
         '[calendar]\nwork = ["Work"]\n[coach]\ncalendar = "Coach"\n'
         f'[paths]\ntodo = "{todo}"\nhb_watch = "{hb}"\n'
+        f'claude_projects = "{tmp_path / "no-claude"}"\n'
     )
     return load_config(write_config(tmp_path / "w.toml", text))
 

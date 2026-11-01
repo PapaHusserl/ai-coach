@@ -1,14 +1,17 @@
+import json
 import sqlite3
 
 import pytest
 from workload_fakes import stored_event
 
 from ai_coach.store.workload import (
+    COUNTER_KINDS,
     list_calendar_events,
     list_counters,
     replace_calendar_window,
     upsert_counter,
 )
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 
 START = "2026-10-01"
 END = "2026-10-31"
@@ -167,6 +170,24 @@ def test_upsert_counter_screen_kinds_are_allowed(conn: sqlite3.Connection, kind:
     upsert_counter(conn, {**counter("2026-10-07", kind, 2.25, "screen"), "raw_json": None})
     found = list_counters(conn, "2026-10-07", "2026-10-07", kind)
     assert [(c["value"], c["source"]) for c in found] == [(2.25, "screen")]
+
+
+@pytest.mark.parametrize("kind", CLAUDE_COUNTERS)
+def test_upsert_counter_claude_kinds_are_allowed(conn: sqlite3.Connection, kind: str) -> None:
+    upsert_counter(conn, counter("2026-10-07", kind, 4, "claude"))
+    found = list_counters(conn, "2026-10-07", "2026-10-07", kind)
+    assert [(c["value"], c["source"]) for c in found] == [(4.0, "claude")]
+
+
+def test_claude_counters_are_in_store_whitelist() -> None:
+    assert set(CLAUDE_COUNTERS) <= set(COUNTER_KINDS)
+
+
+def test_upsert_counter_keeps_claude_repos_raw_json(conn: sqlite3.Connection) -> None:
+    repos = {"repos": [{"repo": "alpha", "prompts": 2}]}
+    upsert_counter(conn, {**counter("2026-10-07", "claude_repos", 1, "claude"), "raw_json": repos})
+    found = list_counters(conn, "2026-10-07", "2026-10-07", "claude_repos")
+    assert json.loads(found[0]["raw_json"]) == repos
 
 
 def test_upsert_counter_unknown_screen_kind_is_refused(conn: sqlite3.Connection) -> None:

@@ -1,6 +1,6 @@
-"""Команды `coach`: sync (Garmin и нагрузка), screen (экран), import, approve, push, link, status,
-weight, food, feel, profile, goal, pantry, shop, meal, recipe, practice, habit, protocol,
-supplement, med, event, log, edit, delete."""
+"""Команды `coach`: sync (Garmin и нагрузка), screen (экран), claude (Claude Code), import,
+approve, push, link, status, weight, food, feel, profile, goal, pantry, shop, meal, recipe,
+practice, habit, protocol, supplement, med, event, log, edit, delete."""
 
 from datetime import date, datetime, timedelta
 from getpass import getpass
@@ -56,7 +56,15 @@ from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
 from ai_coach.sync import sync_workload as run_workload
-from ai_coach.workload import AwReader, ScreenError, WorkloadConfigError, load_config, read_screen
+from ai_coach.workload import (
+    AwReader,
+    ClaudeError,
+    ScreenError,
+    WorkloadConfigError,
+    load_config,
+    read_claude,
+    read_screen,
+)
 from ai_coach.workouts import describe_workout, workout_link_url
 
 app = typer.Typer(help="Личный ИИ-тренер на данных Garmin", no_args_is_help=True)
@@ -379,3 +387,46 @@ def screen(
         return
     parts = [f"{label} {hours[kind]} ч" for kind, label in SCREEN_LABELS if kind in hours]
     typer.echo(f"Экран {day}: {', '.join(parts)}.")
+
+
+CLAUDE_LABELS = (
+    ("claude_decisions", "решений"),
+    ("claude_repos", "репо"),
+    ("claude_switches", "переключений"),
+)
+
+
+@app.command()
+def claude(
+    days: Annotated[int, typer.Option(min=1, help="За сколько последних дней")] = 1,
+) -> None:
+    """Прочитать транскрипты Claude Code в базу (только Claude, не sync) и напечатать числа за
+    день самочувствия (до 04:00 — вчера): реплики, вопросы-решения, репо, переключения; имена
+    каталогов не печатаются. Нет каталога транскриптов — одна строка, код 0."""
+    try:
+        config = load_config()
+    except WorkloadConfigError as e:
+        fail(str(e))
+        return
+    moment = now()
+    day = wellbeing_day(datetime.fromisoformat(moment))
+    first = date.fromisoformat(day) - timedelta(days=days - 1)
+    try:
+        rows = read_claude(config.claude_projects_path, first, date.fromisoformat(day))
+    except ClaudeError as e:
+        fail(f"Claude: {e}")
+        return
+    if not rows:
+        typer.echo(f"Claude {day}: транскриптов нет.")
+        return
+    conn = open_db()
+    try:
+        with conn:
+            for row in rows:
+                upsert_counter(conn, {**row, "synced_at": moment})
+    finally:
+        conn.close()
+    values = {r["kind"]: r["value"] for r in rows if r["date"] == day}
+    tail = ", ".join(f"{label} {values[kind]}" for kind, label in CLAUDE_LABELS)
+    prompts = f"реплик {values['claude_prompts']} (вечером {values['claude_prompts_evening']})"
+    typer.echo(f"Claude {day}: {prompts}, {tail}.")

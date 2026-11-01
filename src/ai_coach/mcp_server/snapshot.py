@@ -33,6 +33,7 @@ from ai_coach.store.plans import list_plan_actual, list_planned_workouts
 from ai_coach.store.recipes import list_recipes
 from ai_coach.store.sport_nutrition import list_protocols, list_supplements
 from ai_coach.workload import workload_series
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
@@ -49,6 +50,7 @@ WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
+WORKLOAD_SKIP = CLAUDE_COUNTERS
 AHEAD_SKIP = (
     "todo_open",
     "todo_closed",
@@ -171,7 +173,10 @@ def morning_snapshot(
     marks = list_wellbeing(conn, tools.shift_day(date, -(WELLBEING_DAYS - 1)), date)
     snapshot["wellbeing"] = tools.cap(marks, newest=True)
     snapshot["deviations"] = part(tools.day_deviations(conn, date, load_row))
-    snapshot["workload"] = part(workload_series(conn, tools.shift_day(date, -6), date), True)
+    week = workload_series(conn, tools.shift_day(date, -6), date)
+    snapshot["workload"] = part(
+        [{k: v for k, v in r.items() if k not in WORKLOAD_SKIP} for r in week], True
+    )
     ahead = workload_series(
         conn, tools.shift_day(date, 1), tools.shift_day(date, WORKLOAD_AHEAD_DAYS)
     )

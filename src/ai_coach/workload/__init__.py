@@ -1,6 +1,7 @@
 """workload: нагрузка вне тренировок - календарь, туду, груминг, экран. Запись НЕ делает commit."""
 
 from ai_coach.workload.calendar_eventkit import CalendarError, CalendarReader, EventReader
+from ai_coach.workload.claude import ClaudeError, read_claude
 from ai_coach.workload.config import (
     WorkloadConfig,
     WorkloadConfigError,
@@ -17,6 +18,7 @@ __all__ = [
     "AwReader",
     "CalendarError",
     "CalendarReader",
+    "ClaudeError",
     "EventReader",
     "GroomingError",
     "ScreenError",
@@ -26,6 +28,7 @@ __all__ = [
     "WorkloadConfigError",
     "default_config",
     "load_config",
+    "read_claude",
     "read_grooming",
     "read_screen",
     "read_todo",

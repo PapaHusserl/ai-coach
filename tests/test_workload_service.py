@@ -5,6 +5,7 @@ import pytest
 from workload_fakes import stored_event
 
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
+from ai_coach.workload.claude import CLAUDE_COUNTERS
 from ai_coach.workload.service import workload_day, workload_series
 
 WED = "2026-10-07"
@@ -275,6 +276,31 @@ def test_day_has_counters_of_that_day(conn: sqlite3.Connection) -> None:
 
 def test_missing_counter_is_none(conn: sqlite3.Connection) -> None:
     assert workload_day(conn, WED)["todo_open"] is None
+
+
+def test_claude_counters_are_integers_in_day_and_series(conn: sqlite3.Connection) -> None:
+    for kind in CLAUDE_COUNTERS:
+        upsert_counter(
+            conn,
+            {
+                "date": WED,
+                "kind": kind,
+                "value": 3.0,
+                "source": "claude",
+                "raw_json": None,
+                "synced_at": "2026-10-08T10:00:00",
+            },
+        )
+    for row in (workload_day(conn, WED), workload_series(conn, WED, WED)[0]):
+        for kind in CLAUDE_COUNTERS:
+            assert row[kind] == 3
+            assert isinstance(row[kind], int)
+
+
+def test_claude_counters_without_data_are_none(conn: sqlite3.Connection) -> None:
+    day = workload_day(conn, WED)
+    assert [day[kind] for kind in CLAUDE_COUNTERS] == [None] * len(CLAUDE_COUNTERS)
+    assert workload_series(conn, WED, WED)[0]["claude_prompts"] is None
 
 
 def counter(conn: sqlite3.Connection, kind: str, value: float, source: str = "screen") -> None:

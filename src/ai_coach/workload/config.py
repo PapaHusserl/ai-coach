@@ -51,13 +51,15 @@ class ScreenConfig:
 @dataclass(frozen=True)
 class WorkloadConfig:
     """categories: название календаря (strip) -> категория; ignore - названия, которые
-    пропускаем; todo_path и hb_watch_path - откуда читать туду и груминг; coach_calendar -
-    название календаря коуча (None - не задан), его события пишет и читает тренер."""
+    пропускаем; todo_path и hb_watch_path - откуда читать туду и груминг;
+    claude_projects_path - каталог транскриптов Claude Code; coach_calendar - название
+    календаря коуча (None - не задан), его события пишет и читает тренер."""
 
     categories: dict[str, str]
     ignore: frozenset[str]
     todo_path: Path
     hb_watch_path: Path
+    claude_projects_path: Path
     coach_calendar: str | None = None
     screen: ScreenConfig | None = None
     demand_rules: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
@@ -92,7 +94,11 @@ def default_config() -> WorkloadConfig:
     """Календарей нет, пути по умолчанию (домашний каталог берётся при вызове)."""
     home = Path.home()
     return WorkloadConfig(
-        {}, frozenset(), home / ".claude" / "todo.json", home / "bin" / "hb-watch"
+        {},
+        frozenset(),
+        home / ".claude" / "todo.json",
+        home / "bin" / "hb-watch",
+        home / ".claude" / "projects",
     )
 
 
@@ -270,7 +276,8 @@ def load_config(path: str | Path | None = None) -> WorkloadConfig:
     coach = _coach_calendar(_table(data, "coach"), set(categories) | ignore)
     todo = Path(_path(paths, "todo", fallback.todo_path)).expanduser()
     hb_watch = Path(_path(paths, "hb_watch", fallback.hb_watch_path)).expanduser()
+    projects = Path(_path(paths, "claude_projects", fallback.claude_projects_path)).expanduser()
     screen = _screen(_table(data, "screen")) if "screen" in data else None
     return WorkloadConfig(
-        categories, ignore, todo, hb_watch, coach, screen, _calendar_demand(section)
+        categories, ignore, todo, hb_watch, projects, coach, screen, _calendar_demand(section)
     )

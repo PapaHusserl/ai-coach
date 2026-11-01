@@ -67,6 +67,22 @@ def test_config_without_paths_uses_defaults(tmp_path: Path) -> None:
     assert config.hb_watch_path == home / "bin" / "hb-watch"
 
 
+def test_claude_projects_path_is_expanded(tmp_path: Path) -> None:
+    text = '[paths]\nclaude_projects = "~/synthetic-claude"\n'
+    config = load_config(write_config(tmp_path / "w.toml", text))
+    assert config.claude_projects_path == tmp_path / "home" / "synthetic-claude"
+
+
+def test_claude_projects_path_defaults_to_claude_projects(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path / "w.toml", '[calendar]\nwork = ["A"]\n'))
+    assert config.claude_projects_path == tmp_path / "home" / ".claude" / "projects"
+
+
+def test_no_file_gives_default_claude_projects_path(tmp_path: Path) -> None:
+    config = load_config(tmp_path / "missing.toml")
+    assert config.claude_projects_path == tmp_path / "home" / ".claude" / "projects"
+
+
 def test_config_with_calendars_is_configured(tmp_path: Path) -> None:
     assert load_config(write_config(tmp_path / "w.toml", FULL)).has_calendar
 
