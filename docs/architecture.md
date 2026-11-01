@@ -248,6 +248,7 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 
 ## Н12: WHO-5
 - Таблица `who5_log` (миграция 0026; `q1..q5` 0–5, `score` = сумма × 4, `text`) — отдельно от `wellbeing_log`: замер раз в 2 недели не должен сдвигать «основную запись дня» (довод Н1 для `focus_log`). Store: `add_who5`, `list_who5`, `last_who5(day, n)`.
+- `agenda/sleep_limits.py`: `who5_low` (сегодня и завтра, пока замер свежий) — фокус-блоков на один меньше, предел `caution_from` только от сна, причина по первому сигналу (сон, болезнь, WHO-5).
 - `load/who5.py` (пороги фиксированы, Topp 2015; WHO-5 © ВОЗ, CC BY-NC-SA 3.0 IGO): `who5_score`, `who5_signals` — `who5_low` (≤ 28), `who5_reduced` (28 < балл ≤ 50, не вместе с `low`), `who5_drop` (падение на 10+), пока замер свежий (< 14 дней); `who5_report(conn, day)` — `last_date, score, prev_date, prev_score, delta, days_since, due, low_until, signals`; `due` — замеров нет или прошло 14 дней.
 - CLI `coach who5 q1..q5 [текст]` (`cli/journal.py`, `check_scores` с границами 0–5), `coach log who5`; MCP `get_who5` (`tools.who5_log`); ключ `who5` в сводке (в `NOT_LISTS`, день — день самочувствия). Лимит сводки — `SNAPSHOT_MAX_CHARS` 32 768, `wellbeing` в ней за 7 дней: при 30 днях сводка резала самочувствие до 6 строк.
 

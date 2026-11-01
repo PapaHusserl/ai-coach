@@ -7,7 +7,7 @@ WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
 
 def test_coach_wellbeing_exists_and_is_short() -> None:
     assert WELLBEING.is_file()
-    assert len(WELLBEING.read_bytes()) <= 9216
+    assert len(WELLBEING.read_bytes()) <= 11264
 
 
 def test_coach_wellbeing_describes_illness_reaction() -> None:
@@ -23,6 +23,53 @@ def test_coach_wellbeing_describes_illness_reaction() -> None:
         "нагрузку не добирать",
     ):
         assert needle in text, needle
+
+
+def test_coach_wellbeing_describes_who5_reaction() -> None:
+    text = WELLBEING.read_text()
+    for needle in (
+        "WHO-5",
+        "who5_low",
+        "low_until",
+        "врачу или психологу",
+        "щажения",
+        "предложение одно",
+        "двумя окнами",
+        "coach-help/who5.md",
+    ):
+        assert needle in text, needle
+
+
+def test_coach_md_offers_who5_and_fits_limit() -> None:
+    path = ROOT / "agents" / "coach.md"
+    text = path.read_text()
+    assert "who5.due" in text
+    assert "9е" in text
+    assert len(path.read_bytes()) <= 16384
+
+
+def test_recalc_mentions_who5_low_and_fits_limit() -> None:
+    path = ROOT / "skills" / "coach-plan" / "recalc.md"
+    assert "who5_low" in path.read_text()
+    assert len(path.read_bytes()) <= 3072
+
+
+def test_recovery_mentions_who5_and_fits_limit() -> None:
+    path = ROOT / "skills" / "coach-morning" / "recovery.md"
+    assert "who5" in path.read_text()
+    assert len(path.read_bytes()) <= 3072
+
+
+def test_coach_day_mentions_who5_low_and_fits_limit() -> None:
+    path = ROOT / "agents" / "coach-day.md"
+    assert "who5_low" in path.read_text()
+    assert len(path.read_bytes()) <= 6144
+
+
+def test_coach_week_reads_who5_and_fits_limit() -> None:
+    path = ROOT / "agents" / "coach-week.md"
+    assert "get_who5" in path.read_text()
+    assert len(path.read_bytes()) <= 6144
 
 
 def test_coach_md_reads_illness_signals() -> None:

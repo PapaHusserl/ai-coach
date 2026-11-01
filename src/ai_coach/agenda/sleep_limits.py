@@ -1,12 +1,12 @@
-"""Поправка плана дня по сну и сигналу болезни: сегодня при сигнале сна - фокус-блоков на один
-меньше и не позже caution_from, завтра - на один меньше при sleep_debt; при illness_risk
-(сегодня и завтра) - на один меньше, предел не меняется."""
+"""Поправка плана дня по сну, сигналу болезни и низкому WHO-5: сегодня при сигнале сна - фокус-
+блоков на один меньше и не позже caution_from, завтра - на один меньше при sleep_debt; при
+illness_risk и who5_low (сегодня и завтра) - на один меньше, предел не меняется."""
 
 import sqlite3
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from ai_coach.load import illness_report, sleep_report
+from ai_coach.load import illness_report, sleep_report, who5_report
 from ai_coach.load.sleep import DEBT_14_H
 from ai_coach.workload.service import SATURDAY
 
@@ -16,6 +16,12 @@ def _sleep_reason(signal: dict[str, Any], report: dict[str, Any]) -> str:
         return (
             "фокус: блоков меньше - возможно, заболеваешь (пульс покоя "
             f"{report['rhr']}, HRV {report['hrv']} вне коридора {signal['value']} дня подряд)"
+        )
+    if signal["kind"] == "who5_low":
+        who5 = report["who5"]
+        return (
+            "фокус: блоков меньше - режим щажения "
+            f"(WHO-5 {who5['score']} из 100, замер {who5['last_date']})"
         )
     if signal["kind"] == "short_night":
         night, norm = report["last_night_h"], report["norm_h"]
@@ -43,12 +49,15 @@ def sleep_limits(
     report = sleep_report(conn, today.isoformat(), now)
     sleep_signals = [s for s in report["signals"] if day == today or s["kind"] == "sleep_debt"]
     illness = illness_report(conn, today.isoformat(), {}, report)
-    signals = sleep_signals + illness["signals"]
+    who5 = who5_report(conn, today.isoformat())
+    low_who5 = [s for s in who5["signals"] if s["kind"] == "who5_low"]
+    signals = sleep_signals + illness["signals"] + low_who5
     if not signals:
         return plain
     until = datetime.combine(day, focus_until)
     if sleep_signals and day == today and report["caution_from"] is not None:
         # caution_from на следующую дату (подъём после 08:00) предел не режет
         until = min(until, datetime.strptime(report["caution_from"], "%Y-%m-%d %H:%M"))
-    reason = _sleep_reason(signals[0], report | {"rhr": illness["rhr"], "hrv": illness["hrv"]})
+    extra = {"rhr": illness["rhr"], "hrv": illness["hrv"], "who5": who5}
+    reason = _sleep_reason(signals[0], report | extra)
     return until.time(), focus_max - 1, [reason]

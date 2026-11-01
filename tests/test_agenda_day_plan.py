@@ -28,6 +28,7 @@ from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import MIN_SLOT, STEP_MIN, busy_spans, free_slots
 from ai_coach.store.agenda import add_event, get_event
 from ai_coach.store.garmin_data import upsert_daily_metrics
+from ai_coach.store.journal import add_who5
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.workload import replace_calendar_window
 
@@ -1017,6 +1018,113 @@ def test_illness_on_saturday_is_untouched(conn: sqlite3.Connection) -> None:
     put_night(conn, SAT - timedelta(days=1), 7, pulse=(90, 10))
     put_night(conn, SAT, 7, "07:10", pulse=(90, 10))
     assert sleep_limits(conn, SAT, SAT, SAT_MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+# --- WHO-5: who5_low и фокус ---
+
+WHO5_REASON = "режим щажения (WHO-5 28 из 100"
+
+
+def put_who5(conn: sqlite3.Connection, day: date, score: int = 28) -> None:
+    """Замер WHO-5 с баллом score (кратен 4, не больше 100): ответы раскладываются по пяти."""
+    total = score // 4
+    items = [min(5, max(0, total - 5 * n)) for n in range(5)]
+    add_who5(
+        conn,
+        {
+            "date": day.isoformat(),
+            "logged_at": f"{day.isoformat()} 09:00:00",
+            **{f"q{n}": value for n, value in enumerate(items, 1)},
+            "score": score,
+        },
+    )
+
+
+def normal_sleep_today(conn: sqlite3.Connection) -> None:
+    """Ночь 7 ч, подъём «02:00»: caution_from 18:00 есть, сигналов сна нет."""
+    nights_before_today(conn)
+    put_night(conn, TODAY, 7, "02:00")
+
+
+def test_who5_low_today_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
+    normal_sleep_today(conn)
+    put_who5(conn, TODAY - timedelta(days=1))
+    result = make(conn, MON, now=MORNING)
+    focus = focus_blocks(result)
+    assert len(focus) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if WHO5_REASON in s]
+
+
+def test_who5_low_does_not_apply_caution_from(conn: sqlite3.Connection) -> None:
+    normal_sleep_today(conn)
+    put_who5(conn, TODAY - timedelta(days=1))
+    until, blocks, reasons = sleep_limits(conn, TODAY, TODAY, MORNING, FOCUS_UNTIL, FOCUS_MAX)
+    assert (until, blocks) == (FOCUS_UNTIL, FOCUS_MAX - 1)
+    assert len(reasons) == 1
+    assert WHO5_REASON in reasons[0]
+
+
+def test_who5_low_tomorrow_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
+    normal_sleep_today(conn)
+    put_who5(conn, TODAY - timedelta(days=1))
+    result = make(conn, TUE, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if WHO5_REASON in s]
+
+
+def test_who5_low_15_days_ago_keeps_all_focus_blocks(conn: sqlite3.Connection) -> None:
+    normal_sleep_today(conn)
+    put_who5(conn, TODAY - timedelta(days=15))
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "щажения" in s]
+
+
+def test_who5_reduced_does_not_change_focus(conn: sqlite3.Connection) -> None:
+    normal_sleep_today(conn)
+    put_who5(conn, TODAY - timedelta(days=1), 44)
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "щажения" in s]
+
+
+def test_short_night_and_who5_low_give_one_minus_with_sleep_reason(
+    conn: sqlite3.Connection,
+) -> None:
+    short_night_today(conn)
+    put_who5(conn, TODAY - timedelta(days=1))
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if "короткая ночь" in s]
+    assert not [s for s in result["skipped"] if "щажения" in s]
+
+
+def test_illness_and_who5_low_give_one_minus_with_illness_reason(
+    conn: sqlite3.Connection,
+) -> None:
+    illness_nights(conn)
+    put_who5(conn, TODAY - timedelta(days=1))
+    result = make(conn, MON, now=MORNING)
+    assert len(focus_blocks(result)) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if ILLNESS_REASON in s]
+    assert not [s for s in result["skipped"] if "щажения" in s]
+
+
+def test_who5_low_on_saturday_is_untouched(conn: sqlite3.Connection) -> None:
+    put_who5(conn, SAT - timedelta(days=1))
+    assert sleep_limits(conn, SAT, SAT, SAT_MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+def test_who5_low_on_sunday_is_untouched(conn: sqlite3.Connection) -> None:
+    put_who5(conn, SUN - timedelta(days=1))
+    now = datetime(2026, 11, 8, 9, 0)
+    assert sleep_limits(conn, SUN, SUN, now, time(19, 0), 3) == (time(19, 0), 3, [])
+
+
+def test_who5_low_day_after_tomorrow_is_untouched(conn: sqlite3.Connection) -> None:
+    put_who5(conn, TODAY - timedelta(days=1))
+    day = TODAY + timedelta(days=2)
+    assert sleep_limits(conn, day, TODAY, MORNING, time(19, 0), 3) == (time(19, 0), 3, [])
 
 
 # --- сон: sleep_limits и фокус (мутанты) ---

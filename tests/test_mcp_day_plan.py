@@ -15,6 +15,7 @@ import ai_coach.agenda.day_plan as day_plan_module
 import ai_coach.agenda.slots as slots_module
 from ai_coach.agenda.day_plan import FOCUS_MAX
 from ai_coach.store.garmin_data import upsert_daily_metrics
+from ai_coach.store.journal import add_who5
 
 DAY = "2026-11-02"  # понедельник; «сегодня» в тестах - воскресенье 2026-11-01
 
@@ -156,6 +157,36 @@ def test_no_illness_signal_keeps_three_focus_blocks(conn: sqlite3.Connection) ->
     result = plan(conn)
     assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX
     assert not [s for s in result["skipped"] if "заболеваешь" in s]
+
+
+def who5_low_yesterday(conn: sqlite3.Connection, day: str = "2026-10-31") -> None:
+    add_who5(
+        conn,
+        {
+            "date": day,
+            "logged_at": f"{day} 09:00:00",
+            "q1": 5,
+            "q2": 2,
+            "q3": 0,
+            "q4": 0,
+            "q5": 0,
+            "score": 28,
+        },
+    )
+
+
+def test_who5_low_gives_two_focus_blocks_and_reason(conn: sqlite3.Connection) -> None:
+    who5_low_yesterday(conn)
+    result = plan(conn)
+    assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX - 1
+    assert [s for s in result["skipped"] if "режим щажения (WHO-5 28 из 100" in s]
+
+
+def test_who5_low_15_days_ago_keeps_three_focus_blocks(conn: sqlite3.Connection) -> None:
+    who5_low_yesterday(conn, "2026-10-17")
+    result = plan(conn)
+    assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX
+    assert not [s for s in result["skipped"] if "щажения" in s]
 
 
 @pytest.mark.parametrize("module", [day_plan_module, slots_module], ids=lambda m: m.__name__)
