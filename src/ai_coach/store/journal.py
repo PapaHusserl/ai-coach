@@ -191,6 +191,26 @@ def list_pvt(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, A
     return fetch_all(conn, sql, (start, end))
 
 
+def add_who5(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
+    """values: date, logged_at, q1..q5 (0-5), score (сумма × 4), text (может быть пуст).
+    Только добавление."""
+    return insert(conn, "who5_log", values)
+
+
+def list_who5(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Замеры WHO-5 с датой date start..end включительно, по времени."""
+    sql = "SELECT * FROM who5_log WHERE date BETWEEN ? AND ? ORDER BY logged_at, id"
+    return fetch_all(conn, sql, (start, end))
+
+
+def last_who5(conn: sqlite3.Connection, day: str, n: int = 2) -> list[dict[str, Any]]:
+    """Последние n замеров WHO-5 с датой не позже day, новые первыми."""
+    sql = (
+        "SELECT * FROM who5_log WHERE date <= ? ORDER BY date DESC, logged_at DESC, id DESC LIMIT ?"
+    )
+    return fetch_all(conn, sql, (day, n))
+
+
 def evening_done(conn: sqlite3.Connection, day: str) -> bool:
     """Вечерний чек-ин за день сделан: есть запись самочувствия с настроением или стрессом."""
     sql = (

@@ -10,7 +10,7 @@ from mcp_fakes import call, call_text, db_file
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
-from ai_coach.mcp_server.tools import MAX_CHARS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 
 runner = CliRunner()
 TODAY = "2026-10-11"
@@ -167,5 +167,5 @@ def test_snapshot_stays_in_limit_with_many_habits(
     for number in range(80):
         coach("habit", "add", f"привычка {number} {big}")
     text = call_text(conn, "get_morning_snapshot", date=TODAY)
-    assert len(text) <= MAX_CHARS
+    assert len(text) <= SNAPSHOT_MAX_CHARS
     assert "habits_today" in json.loads(text)

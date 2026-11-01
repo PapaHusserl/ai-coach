@@ -9,7 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, rows, tool_names
 from workload_fakes import stored_event
 
-from ai_coach.mcp_server.tools import MAX_CHARS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
 
 DAY = "2026-10-07"
@@ -280,7 +280,7 @@ def test_snapshot_with_seven_screen_days_fits_the_limit(conn: sqlite3.Connection
         feel(conn, shift(DAY, -number), "20:00:00", mood=2, stress=5, text="т" * 200)
     heavy_days(conn, shift(DAY, -13), 21)
     answer = call_text(conn, "get_morning_snapshot", date=DAY)
-    assert len(answer) <= MAX_CHARS
+    assert len(answer) <= SNAPSHOT_MAX_CHARS
     assert "screen_work_hours" in answer
 
 
@@ -288,7 +288,7 @@ def test_snapshot_with_overload_fits_the_limit(conn: sqlite3.Connection) -> None
     heavy_days(conn, shift(DAY, -13), 21)
     for number in range(30):
         feel(conn, shift(DAY, -number), "20:00:00", mood=2, stress=5, text="т" * 200)
-    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= SNAPSHOT_MAX_CHARS
 
 
 # --- evening_done_today ---
@@ -380,7 +380,7 @@ def test_snapshot_with_detachment_fields_fits_total_limit(conn: sqlite3.Connecti
             conn, shift(DAY, -number), "20:00:00", mood=2, stress=5, text="т" * 200,
             work_thoughts=5, hindrance=5, valuable=1, flow=1,
         )  # fmt: skip
-    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= SNAPSHOT_MAX_CHARS
 
 
 def test_detachment_fields_alone_do_not_make_evening_done(conn: sqlite3.Connection) -> None:

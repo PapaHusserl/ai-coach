@@ -47,6 +47,7 @@ EXPECTED_TOOLS = {
     "get_wellbeing",
     "get_focus_log",
     "get_pvt_log",
+    "get_who5",
     "get_deviations",
     "get_sleep",
     "get_illness",

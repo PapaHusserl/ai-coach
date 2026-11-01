@@ -2,7 +2,9 @@ import sqlite3
 from typing import Any
 
 from mcp_fakes import call, call_text, rows
+from test_mcp_snapshot import overfill
 
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.pantry.service import PantryEntry
 from ai_coach.pantry.service import record as save
@@ -140,8 +142,9 @@ def test_snapshot_keeps_profile_and_pantry_when_squeezed(conn: sqlite3.Connectio
     for number in range(100):
         add_goal(conn, {"title": f"Цель {number} {big}", "status": "active"})
         record(conn, "add", f"продукт {number}", 1, "g", "2026-10-05T10:00:00")
+    overfill(conn)  # данных больше SNAPSHOT_MAX_CHARS: обрезка случилась
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
-    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+    assert MAX_CHARS < len(call_text(conn, "get_morning_snapshot", date=DAY)) <= SNAPSHOT_MAX_CHARS
     assert snapshot["profile"]["values"]["sex"] == "m"
     assert snapshot["profile"]["nutrition_remaining"]["kcal"] > 0
     assert snapshot["pantry"]["rows"]

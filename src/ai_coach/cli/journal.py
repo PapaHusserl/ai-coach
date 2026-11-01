@@ -7,12 +7,14 @@ from typing import Annotated, NoReturn
 
 import typer
 
+from ai_coach.load.who5 import ITEM_MAX, ITEM_MIN, ITEMS_COUNT, who5_report, who5_score
 from ai_coach.pvt import format_summary
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import (
     add_focus,
     add_food,
     add_weight,
+    add_who5,
     delete_food,
     delete_weight,
     edit_food,
@@ -21,6 +23,7 @@ from ai_coach.store.journal import (
     list_food,
     list_pvt,
     list_weights,
+    list_who5,
     wellbeing_day,
 )
 
@@ -41,11 +44,14 @@ def fail(message: str) -> NoReturn:
     raise typer.Exit(1)
 
 
-def check_scores(pairs: Iterable[tuple[str, int | None]]) -> None:
-    """Оценки (название, значение) от 1 до 5; None - не задана; вне диапазона - ошибка."""
+def check_scores(
+    pairs: Iterable[tuple[str, int | None]], low: int = MIN_SCORE, high: int = MAX_SCORE
+) -> None:
+    """Оценки (название, значение) от low до high (по умолчанию 1-5); None - не задана; вне
+    диапазона - ошибка."""
     for name, value in pairs:
-        if value is not None and not MIN_SCORE <= value <= MAX_SCORE:
-            fail(f"{name}: от {MIN_SCORE} до {MAX_SCORE}.")
+        if value is not None and not low <= value <= high:
+            fail(f"{name}: от {low} до {high}.")
 
 
 def now() -> str:
@@ -159,6 +165,44 @@ def focus(
     finally:
         conn.close()
     typer.echo("Оценка записана.")
+
+
+def who5(
+    q1: Annotated[int, typer.Argument(help="Утверждение 1, от 0 до 5")],
+    q2: Annotated[int, typer.Argument(help="Утверждение 2, от 0 до 5")],
+    q3: Annotated[int, typer.Argument(help="Утверждение 3, от 0 до 5")],
+    q4: Annotated[int, typer.Argument(help="Утверждение 4, от 0 до 5")],
+    q5: Annotated[int, typer.Argument(help="Утверждение 5, от 0 до 5")],
+    text: Annotated[str | None, typer.Argument(help="Пояснение, как есть")] = None,
+) -> None:
+    """Опросник WHO-5 раз в 2 недели: пять ответов 0-5 (5 - всё время, 0 - никогда), балл 0-100
+    (сумма × 4). Записи только добавляются. До 04:00 запись идёт на вчера."""
+    items = [q1, q2, q3, q4, q5]
+    check_scores(
+        [(f"Утверждение {n}", value) for n, value in enumerate(items, 1)], ITEM_MIN, ITEM_MAX
+    )
+    moment = now()
+    day = wellbeing_day(datetime.fromisoformat(moment))
+    values = {
+        "date": day,
+        "logged_at": moment,
+        **{f"q{n}": value for n, value in enumerate(items, 1)},
+        "score": who5_score(items),
+        "text": text,
+    }
+    conn = open_db()
+    try:
+        with conn:
+            add_who5(conn, values)
+        report = who5_report(conn, day)
+    finally:
+        conn.close()
+    prev = ""
+    if report["prev_score"] is not None:
+        prev = f" (прошлый {report['prev_score']}, {report['delta']:+})"
+    typer.echo(f"WHO-5: {report['score']} из 100{prev} - записано.")
+    for signal in report["signals"]:
+        typer.echo(f"Сигнал: {signal['kind']}")
 
 
 @edit_app.command("weight")
@@ -300,6 +344,27 @@ def log_pvt(
         typer.echo("Записей нет.")
     for row in rows:
         typer.echo(f"{row['id']}  {row['started_at']}  {format_summary(row)}")
+
+
+@log_app.command("who5")
+def log_who5(
+    day: Annotated[
+        str | None, typer.Option("--date", help="День, YYYY-MM-DD (по умолчанию сегодня)")
+    ] = None,
+) -> None:
+    """Замеры WHO-5 за день: id, время, балл, пять ответов, текст."""
+    day = log_day(day)
+    conn = open_db()
+    try:
+        rows = list_who5(conn, day, day)
+    finally:
+        conn.close()
+    if not rows:
+        typer.echo("Записей нет.")
+    for row in rows:
+        answers = " ".join(str(row[f"q{n}"]) for n in range(1, ITEMS_COUNT + 1))
+        head = f"{row['id']}  {row['logged_at']}  {row['score']}  {answers}"
+        typer.echo(f"{head}  {row['text'] or ''}".rstrip())
 
 
 @log_app.command("food")

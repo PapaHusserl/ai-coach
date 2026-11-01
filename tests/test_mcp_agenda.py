@@ -9,7 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text
 from workload_fakes import coach_event
 
-from ai_coach.mcp_server.tools import MAX_CHARS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.agenda import add_event, get_event
 
 TODAY = date.today()
@@ -229,4 +229,4 @@ def test_snapshot_with_20_long_events_fits_max_chars(conn: sqlite3.Connection) -
         day = f"2026-10-{10 + i % 8:02d}"
         put(conn, day, title="Длинное название " * 5, note="Очень длинная заметка " * 10)
     text = call_text(conn, "get_morning_snapshot", date=DAY)
-    assert len(text) <= MAX_CHARS
+    assert len(text) <= SNAPSHOT_MAX_CHARS

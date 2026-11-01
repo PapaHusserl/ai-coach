@@ -8,7 +8,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
 from ai_coach.agenda import agenda_rows
-from ai_coach.load import illness_report, overload_report, sleep_report
+from ai_coach.load import illness_report, overload_report, sleep_report, who5_report
 from ai_coach.load.overload import overloaded
 from ai_coach.mcp_server import tools
 from ai_coach.meds import short_meds
@@ -36,6 +36,7 @@ from ai_coach.workload import workload_series
 
 SNAPSHOT_ROWS = 20
 SNAPSHOT_CHARS = 4000
+SNAPSHOT_MAX_CHARS = 32768
 SNAPSHOT_GOALS = 10
 SNAPSHOT_PANTRY = 30
 SNAPSHOT_EXPIRING = 10
@@ -43,7 +44,7 @@ SNAPSHOT_RECIPES = 30
 SNAPSHOT_NUTRITION_ROWS = 10
 SNAPSHOT_MEDS = 10
 SNAPSHOT_HABITS = 10
-WELLBEING_DAYS = 30
+WELLBEING_DAYS = 7
 WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
@@ -76,6 +77,7 @@ NOT_LISTS = (
     "overload",
     "sleep",
     "illness",
+    "who5",
     "catalog",
 )
 DATE_SERIES = (
@@ -137,7 +139,7 @@ def morning_snapshot(
     date: str,
 ) -> dict[str, Any]:
     """Всё для утреннего разбора одним ответом: каждый список — до SNAPSHOT_ROWS/CHARS,
-    весь ответ — до MAX_CHARS (самый длинный список укорачивается: ряды по датам с начала,
+    весь ответ — до SNAPSHOT_MAX_CHARS (самый длинный список укорачивается: ряды по датам с начала,
     остальные с конца)."""
     tools.parse_day(date)
 
@@ -190,6 +192,7 @@ def morning_snapshot(
     evening_day = wellbeing_day(tools.now()) if date == tools.today().isoformat() else date
     snapshot["evening_done_today"] = evening_done(conn, evening_day)
     snapshot["week_review_due"] = review_due(conn, evening_day)
+    snapshot["who5"] = who5_report(conn, evening_day)
     snapshot["last_sync"] = last_sync_log(conn)
     snapshot["profile"] = _snapshot_profile(conn, date)
     short = [{k: row[k] for k in ("item", "qty", "unit")} for row in stock(conn)]
@@ -210,7 +213,7 @@ def morning_snapshot(
         "supplements": len(list_supplements(conn)),
         "meds": len(list_meds(conn)),
     }
-    while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > tools.MAX_CHARS:
+    while len(json.dumps(snapshot, ensure_ascii=False, default=str)) > SNAPSHOT_MAX_CHARS:
         sections: dict[str, dict[str, Any]] = {
             k: snapshot[k] for k in snapshot if k not in NOT_LISTS and snapshot[k]["rows"]
         }

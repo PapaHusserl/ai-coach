@@ -10,7 +10,7 @@ from mcp_fakes import tool_names
 
 from ai_coach import pvt
 from ai_coach.cli import main
-from ai_coach.load import deviations, illness, overload, sleep, training
+from ai_coach.load import deviations, illness, overload, sleep, training, who5
 from ai_coach.workload.config import DEMANDS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -200,6 +200,48 @@ def test_sleep_topic_describes_illness_tool() -> None:
 
 def test_help_index_lists_illness_tool() -> None:
     assert "get_illness" in HELP.read_text()
+
+
+def test_who5_topic_has_commands_and_fields() -> None:
+    text = topic("who5.md")
+    for needle in ("coach who5", "coach log who5", "get_who5", "who5.due", "04:00"):
+        assert needle in text, needle
+
+
+def test_who5_topic_has_items_and_scale() -> None:
+    text = topic("who5.md")
+    for needle in (
+        "бодрой",
+        "спокойной",
+        "активной",
+        "просыпаюсь",
+        "интерес",
+        "всё время",
+        "большую часть времени",
+        "более половины времени",
+        "менее половины времени",
+        "некоторое время",
+        "никогда",
+    ):
+        assert needle in text, needle
+
+
+def test_who5_topic_thresholds_match_constants() -> None:
+    text = topic("who5.md")
+    for needle in (
+        f"{who5.LOW_SCORE} и ниже",
+        f"{who5.REDUCED_SCORE} и ниже",
+        f"{who5.DROP_POINTS} баллов",
+        f"{who5.PERIOD_DAYS} дней",
+        "Topp и др., 2015",
+    ):
+        assert needle in text, needle
+
+
+def test_help_index_lists_who5() -> None:
+    text = HELP.read_text()
+    for needle in ("who5.md", "coach who5", "get_who5"):
+        assert needle in text, needle
 
 
 def test_pvt_topic_has_metric_poles() -> None:

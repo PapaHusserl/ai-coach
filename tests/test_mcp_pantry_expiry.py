@@ -3,7 +3,7 @@ from typing import Any
 
 from mcp_fakes import call, call_text, rows
 
-from ai_coach.mcp_server.tools import MAX_CHARS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.pantry.service import PantryEntry
 from ai_coach.pantry.service import record as save
 
@@ -81,7 +81,7 @@ def test_snapshot_pantry_expiring_has_at_most_10_rows(conn: sqlite3.Connection) 
 def test_snapshot_pantry_expiring_does_not_break_char_limit(conn: sqlite3.Connection) -> None:
     for number in range(100):
         record(conn, "add", f"продукт {number} " + "я" * 200, 1, "g", NOW, expires_on="2026-10-06")
-    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= SNAPSHOT_MAX_CHARS
 
 
 def test_snapshot_pantry_still_has_only_item_qty_unit(conn: sqlite3.Connection) -> None:

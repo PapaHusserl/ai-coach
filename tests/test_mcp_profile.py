@@ -1,9 +1,10 @@
 import sqlite3
 
 from mcp_fakes import call, call_text
+from test_mcp_snapshot import overfill
 
 from ai_coach.goals import create_goal
-from ai_coach.mcp_server.snapshot import SNAPSHOT_ROWS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS, SNAPSHOT_ROWS
 from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.profile.service import set_value
 from ai_coach.store.goals import add_goal, add_phase
@@ -153,8 +154,9 @@ def test_snapshot_profile_is_not_cut_when_snapshot_is_shrunk(conn: sqlite3.Conne
             conn, {"date": DAY, "sport": "run", "name": f"Бег {number} {big}", "workout_json": {}}
         )
         add_food(conn, {"logged_at": f"{DAY} 09:00:00", "text": f"еда {number} {big}"})
+    overfill(conn)  # данных больше SNAPSHOT_MAX_CHARS: обрезка случилась
     text = call_text(conn, "get_morning_snapshot", date=DAY)
-    assert len(text) <= MAX_CHARS
+    assert MAX_CHARS < len(text) <= SNAPSHOT_MAX_CHARS
     profile = call(conn, "get_morning_snapshot", date=DAY)["profile"]
     assert profile["values"]["sex"] == "m"
     assert "injuries" in profile["missing"]

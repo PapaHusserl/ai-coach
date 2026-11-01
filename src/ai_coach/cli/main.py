@@ -20,6 +20,7 @@ from ai_coach.cli.journal import (
     food,
     log_app,
     weight,
+    who5,
 )
 from ai_coach.cli.meds import med_app
 from ai_coach.cli.pantry import meal_app, pantry_app, shop
@@ -68,6 +69,7 @@ app.command()(weight)
 app.command()(food)
 app.command()(focus)
 app.command()(pvt)
+app.command()(who5)
 app.add_typer(pantry_app, name="pantry")
 app.add_typer(meal_app, name="meal")
 app.add_typer(recipe_app, name="recipe")

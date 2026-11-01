@@ -93,6 +93,10 @@ def test_feel_command_is_allowed() -> None:
     assert "Bash(uv run coach feel:*)" in allow()
 
 
+def test_who5_command_is_allowed() -> None:
+    assert "Bash(uv run coach who5:*)" in allow()
+
+
 def test_screen_command_is_allowed() -> None:
     assert "Bash(uv run coach screen:*)" in allow()
 

@@ -4,12 +4,14 @@ from datetime import date, timedelta
 
 from mcp_fakes import call, call_text
 
-from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS, SNAPSHOT_ROWS
+from ai_coach.mcp_server.server import TOOLS
+from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS, SNAPSHOT_MAX_CHARS, SNAPSHOT_ROWS
 from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
 from ai_coach.store.goals import add_goal, add_phase
 from ai_coach.store.journal import add_food, add_sync_log, add_weight
 from ai_coach.store.meds import add_med, delete_med
+from ai_coach.store.pantry import add_entry
 from ai_coach.store.plans import add_plan_actual, add_planned_workout
 from ai_coach.store.sport_nutrition import (
     add_protocol,
@@ -112,6 +114,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "overload",
         "sleep",
         "illness",
+        "who5",
         "evening_done_today",
         "habits_today",
         "week_review_due",
@@ -166,7 +169,8 @@ def test_snapshot_sections_are_limited(conn: sqlite3.Connection) -> None:
     assert len(json.dumps(goals["rows"], ensure_ascii=False)) <= SNAPSHOT_CHARS
 
 
-def test_snapshot_fits_total_limit(conn: sqlite3.Connection) -> None:
+def overfill(conn: sqlite3.Connection) -> None:
+    """Данных больше SNAPSHOT_MAX_CHARS: каждый список упирается в свой лимит."""
     big = "я" * 300
     for number in range(SNAPSHOT_ROWS * 2):
         add_goal(conn, {"title": f"Цель {number} {big}", "status": "active"})
@@ -190,7 +194,27 @@ def test_snapshot_fits_total_limit(conn: sqlite3.Connection) -> None:
             conn,
             {"date": DAY, "activity_id": number, "kind": "extra", "details_json": {"x": big}},
         )
-    assert len(call_text(conn, "get_morning_snapshot", date=DAY)) <= MAX_CHARS
+        add_entry(
+            conn,
+            {
+                "item": f"продукт {number} {big}",
+                "qty": 1.0,
+                "unit": "g",
+                "op": "add",
+                "logged_at": f"{DAY} 06:00:00",
+            },
+        )
+        conn.execute(
+            "INSERT INTO wellbeing_log (date, score, text, logged_at) VALUES (?, 3, ?, ?)",
+            (DAY, big, f"{DAY} 08:00:00"),
+        )
+
+
+def test_snapshot_fits_total_limit(conn: sqlite3.Connection) -> None:
+    overfill(conn)
+    # обрезка работает по новому лимиту, а не по прежним 20000
+    length = len(call_text(conn, "get_morning_snapshot", date=DAY))
+    assert MAX_CHARS < length <= SNAPSHOT_MAX_CHARS
 
 
 def test_snapshot_without_data_does_not_fail(conn: sqlite3.Connection) -> None:
@@ -421,12 +445,40 @@ def test_snapshot_first_run_today_counts_both_started_at_formats(
 def test_snapshot_first_run_today_is_kept_when_sections_are_cut(
     conn: sqlite3.Connection,
 ) -> None:
-    big = "я" * 300
     sync_at(conn, f"{DAY} 06:00:00")
     sync_at(conn, f"{DAY} 12:00:00")
-    for number in range(SNAPSHOT_ROWS * 2):
-        add_goal(conn, {"title": f"Цель {number} {big}", "status": "active"})
-        add_food(conn, {"logged_at": f"{DAY} 09:00:00", "text": f"еда {number} {big}"})
-    text = call_text(conn, "get_morning_snapshot", date=DAY)
-    assert len(text) <= MAX_CHARS
-    assert json.loads(text)["first_run_today"] is False
+    overfill(conn)
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert MAX_CHARS < len(json.dumps(snapshot, ensure_ascii=False)) <= SNAPSHOT_MAX_CHARS
+    assert snapshot["first_run_today"] is False
+
+
+# --- Н12: самочувствие за 7 дней ---
+
+
+def feel_at(conn: sqlite3.Connection, day: str) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, text, logged_at) VALUES (?, 3, NULL, ?)",
+        (day, f"{day} 08:00:00"),
+    )
+
+
+def test_snapshot_wellbeing_covers_seven_days_and_excludes_eighth(
+    conn: sqlite3.Connection,
+) -> None:
+    for day in ("2026-09-30", "2026-10-01", DAY):
+        feel_at(conn, day)
+    found = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"]
+    assert [r["date"] for r in found] == ["2026-10-01", DAY]
+
+
+def test_wellbeing_tool_keeps_entry_cut_from_snapshot(conn: sqlite3.Connection) -> None:
+    feel_at(conn, "2026-09-30")
+    found = call(conn, "get_wellbeing", start="2026-09-30", end=DAY)["rows"]
+    assert [r["date"] for r in found] == ["2026-09-30"]
+
+
+def test_snapshot_description_names_seven_days_and_limit() -> None:
+    text = TOOLS["get_morning_snapshot"][1]
+    assert "самочувствие за 7 дней" in text
+    assert "32768 символов" in text

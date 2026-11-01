@@ -7,6 +7,7 @@ from ai_coach.load.plan_actual import rebuild_plan_actual
 from ai_coach.load.sleep import sleep_report
 from ai_coach.load.thresholds import THRESHOLD_SPORTS, resolve_thresholds
 from ai_coach.load.training import daily_tss, hr_tss, load_series
+from ai_coach.load.who5 import who5_report
 
 __all__ = [
     "THRESHOLD_SPORTS",
@@ -22,4 +23,5 @@ __all__ = [
     "resolve_thresholds",
     "sleep_report",
     "total_load",
+    "who5_report",
 ]

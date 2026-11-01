@@ -50,6 +50,7 @@ from ai_coach.store.journal import (
     list_pvt,
     list_weights,
     list_wellbeing,
+    list_who5,
     update_food,
 )
 from ai_coach.store.plans import (
@@ -207,6 +208,12 @@ def pvt_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     period(start, end)
     rows = [{k: v for k, v in row.items() if k != "rts"} for row in list_pvt(conn, start, end)]
     return cap(rows, newest=True)
+
+
+def who5_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Замеры опросника WHO-5 по времени."""
+    period(start, end)
+    return cap(list_who5(conn, start, end), newest=True)
 
 
 def day_deviations(
