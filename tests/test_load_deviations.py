@@ -25,7 +25,7 @@ def test_thresholds_are_module_constants() -> None:
     assert deviations.READINESS_MIN == 33
     assert deviations.ATL_OVER_CTL_MAX == 15
     assert deviations.SLEEP_MIN_HOURS == 6
-    assert set(deviations.BAD_HRV_STATUSES) == {"LOW", "UNBALANCED"}
+    assert set(deviations.BAD_HRV_STATUSES) == {"LOW", "UNBALANCED", "BELOW"}
 
 
 def test_no_data_no_deviations() -> None:
@@ -55,12 +55,12 @@ def test_readiness_32_is_a_deviation_33_is_fine() -> None:
     assert kinds(day=metrics(readiness_score=33)) == []
 
 
-@pytest.mark.parametrize("status", ["LOW", "UNBALANCED"])
+@pytest.mark.parametrize("status", ["LOW", "UNBALANCED", "BELOW", "below"])
 def test_bad_hrv_status_is_a_deviation(status: str) -> None:
     assert kinds(day=metrics(hrv_status=status)) == ["hrv"]
 
 
-@pytest.mark.parametrize("status", ["BALANCED", "POOR", "NO_STATUS"])
+@pytest.mark.parametrize("status", ["BALANCED", "POOR", "NO_STATUS", "IN_RANGE", "ABOVE"])
 def test_other_hrv_status_is_fine(status: str) -> None:
     assert kinds(day=metrics(hrv_status=status)) == []
 

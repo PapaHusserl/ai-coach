@@ -21,6 +21,21 @@ def list_daily_metrics(conn: sqlite3.Connection, start: str, end: str) -> list[d
     return fetch_all(conn, sql, (start, end))
 
 
+_REST_HR_SQL = (
+    "COALESCE(json_extract(raw_json, '$.sleep.restingHeartRate'), "
+    "(SELECT json_extract(value, '$.value') FROM json_each(raw_json, '$.hrv.metrics') "
+    "WHERE json_extract(value, '$.type') = 'HR'))"
+)
+
+
+def _hrv_limit_sql(key: str) -> str:
+    """Граница коридора из метрики HRV импорта (json_each по $.hrv.metrics)."""
+    return (
+        f"(SELECT json_extract(value, '$.{key}') FROM json_each(raw_json, '$.hrv.metrics') "
+        "WHERE json_extract(value, '$.type') = 'HRV')"
+    )
+
+
 def list_sleep_nights(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Ночи start..end включительно, по возрастанию даты, без raw_json: date, sleep_seconds,
     sleep_end (подъём, местное 'YYYY-MM-DD HH:MM:SS'; None у импорта) и nap_seconds (дневной сон:
@@ -41,11 +56,28 @@ def list_recovery_days(conn: sqlite3.Connection, start: str, end: str) -> list[d
     """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь) и
     rhr (пульс покоя: restingHeartRate сна у API или метрика HR у импорта; None - нет)."""
     sql = (
-        "SELECT date, hrv_last_night AS hrv, "
-        "COALESCE(json_extract(raw_json, '$.sleep.restingHeartRate'), "
-        "(SELECT json_extract(value, '$.value') FROM json_each(raw_json, '$.hrv.metrics') "
-        "WHERE json_extract(value, '$.type') = 'HR')) AS rhr "
+        f"SELECT date, hrv_last_night AS hrv, {_REST_HR_SQL} AS rhr "
         "FROM daily_metrics WHERE date BETWEEN ? AND ? ORDER BY date"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
+def list_hrv_corridor(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь),
+    low и high (коридор HRV Garmin как в JSON: balancedLow/balancedUpper у API, метрика HRV
+    baselineLowerLimit/baselineUpperLimit у импорта), source ('api' - есть
+    $.hrv.hrvSummary, иначе 'import'). Дни без HRV в обоих источниках не возвращаются."""
+    api = "json_extract(raw_json, '$.hrv.hrvSummary.baseline"
+    imp_low = _hrv_limit_sql("baselineLowerLimit")
+    imp_high = _hrv_limit_sql("baselineUpperLimit")
+    sql = (
+        "SELECT date, hrv, low, high, source FROM ("
+        "SELECT date, hrv_last_night AS hrv, "
+        f"COALESCE({api}.balancedLow'), {imp_low}) AS low, "
+        f"COALESCE({api}.balancedUpper'), {imp_high}) AS high, "
+        "CASE WHEN json_extract(raw_json, '$.hrv.hrvSummary') IS NOT NULL "
+        "THEN 'api' ELSE 'import' END AS source "
+        "FROM daily_metrics WHERE date BETWEEN ? AND ?) WHERE hrv IS NOT NULL ORDER BY date"
     )
     return fetch_all(conn, sql, (start, end))
 
@@ -127,10 +159,10 @@ def max_hr(
 
 
 def last_rest_hr(conn: sqlite3.Connection, end: str) -> tuple[str, int] | None:
-    """(дата, пульс покоя) из ответа сна (raw_json) за последний день до end включительно,
-    где он есть."""
+    """(дата, пульс покоя) из raw_json за последний день до end включительно, где он есть:
+    restingHeartRate сна у API или метрика HR у импорта."""
     sql = (
-        "SELECT date, json_extract(raw_json, '$.sleep.restingHeartRate') AS rest_hr "
+        f"SELECT date, {_REST_HR_SQL} AS rest_hr "
         "FROM daily_metrics WHERE date <= ? AND rest_hr IS NOT NULL ORDER BY date DESC LIMIT 1"
     )
     row = fetch_one(conn, sql, (end,))

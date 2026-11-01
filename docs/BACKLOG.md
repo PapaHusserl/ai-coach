@@ -206,3 +206,19 @@ updated: 2026-11-01
 После Н5 `coach-wellbeing.md` 11 248 / 11 264 Б (запас 16 Б): любая следующая строка (Н6–Н8 читают Claude
 вечером и в выходные) не влезет — ужать текст или вынести справочное в `coach-help/`, иначе поднимать лимит.
 Лимит — в трёх тестах (см. BACKLOG 34, близнец — BACKLOG 39). Источник — docs/plan-n5.md «Правки по ревью» п2.
+
+## 42. POOR в плохих статусах HRV
+status: idea
+priority: low
+updated: 2026-11-01
+
+`BAD_HRV_STATUSES` (`load/deviations.py`) не содержит `POOR` (статус API), а `tests/test_load_deviations.py:63`
+закрепляет POOR как «fine» — проверить, решение это или пропуск. Источник — docs/plan-n16.md «Побочные находки» 2.
+
+## 43. Метрики Health Status импорта как признаки болезни
+status: idea
+priority: low
+updated: 2026-11-01
+
+Метрики Health Status импорта (RESPIRATION, SKIN_TEMP_C, SPO2) с личными границами лежат в `raw_json` и нигде
+не читаются — кандидат в признаки болезни (Н11 illness) для v2.9. Источник — docs/plan-n16.md «Побочные находки» 3.

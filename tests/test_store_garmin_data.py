@@ -6,8 +6,10 @@ import pytest
 from ai_coach.store.garmin_data import (
     get_activity,
     get_daily_metrics,
+    last_rest_hr,
     list_activities,
     list_daily_metrics,
+    list_hrv_corridor,
     list_recovery_days,
     list_sleep_nights,
     list_strength_sets,
@@ -303,6 +305,55 @@ def test_recovery_days_rhr_none_for_empty_raw(conn: sqlite3.Connection) -> None:
     recovery_row(conn, "2026-10-01", {}, hrv=None)
     found = list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]
     assert (found["rhr"], found["hrv"]) == (None, None)
+
+
+def test_last_rest_hr_from_import_metric_hr(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"hrv": {"metrics": [{"type": "HR", "value": 55}]}})
+    assert last_rest_hr(conn, "2026-10-05") == ("2026-10-01", 55)
+
+
+def test_last_rest_hr_api_wins_over_import(conn: sqlite3.Connection) -> None:
+    raw = {"sleep": {"restingHeartRate": 50}, "hrv": {"metrics": [{"type": "HR", "value": 55}]}}
+    recovery_row(conn, "2026-10-01", raw)
+    assert last_rest_hr(conn, "2026-10-01") == ("2026-10-01", 50)
+
+
+def test_last_rest_hr_skips_newer_day_without_either(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"hrv": {"metrics": [{"type": "HR", "value": 55}]}})
+    recovery_row(conn, "2026-10-02", {"hrv": {"metrics": [{"type": "HRV", "value": 60}]}})
+    assert last_rest_hr(conn, "2026-10-03") == ("2026-10-01", 55)
+
+
+# --- list_hrv_corridor ---
+
+
+def test_hrv_corridor_api_row(conn: sqlite3.Connection) -> None:
+    raw = {"hrv": {"hrvSummary": {"baseline": {"balancedLow": 45, "balancedUpper": 70}}}}
+    recovery_row(conn, "2026-10-01", raw, hrv=58)
+    assert list_hrv_corridor(conn, "2026-10-01", "2026-10-01") == [
+        {"date": "2026-10-01", "hrv": 58, "low": 45, "high": 70, "source": "api"}
+    ]
+
+
+def test_hrv_corridor_import_row(conn: sqlite3.Connection) -> None:
+    metric = {"type": "HRV", "value": 58, "baselineLowerLimit": 44, "baselineUpperLimit": 68}
+    raw = {"hrv": {"metrics": [{"type": "HR", "value": 52}, metric]}}
+    recovery_row(conn, "2026-10-01", raw, hrv=58)
+    assert list_hrv_corridor(conn, "2026-10-01", "2026-10-01") == [
+        {"date": "2026-10-01", "hrv": 58, "low": 44, "high": 68, "source": "import"}
+    ]
+
+
+def test_hrv_corridor_skips_day_without_hrv(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {}, hrv=None)
+    assert list_hrv_corridor(conn, "2026-10-01", "2026-10-01") == []
+
+
+def test_hrv_corridor_inclusive_range_sorted(conn: sqlite3.Connection) -> None:
+    for day in ("2026-10-03", "2026-10-01", "2026-10-02", "2026-10-04"):
+        recovery_row(conn, day, {})
+    found = list_hrv_corridor(conn, "2026-10-01", "2026-10-03")
+    assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
 
 
 def test_recovery_days_have_no_raw_json(conn: sqlite3.Connection) -> None:

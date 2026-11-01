@@ -245,9 +245,9 @@ def write_zip(path: Path, files: dict[str, str | bytes]) -> Path:
     return path
 
 
-def test_import_hr_metric_is_not_resting_hr(conn: sqlite3.Connection, export: Path) -> None:
+def test_import_hr_metric_is_resting_hr(conn: sqlite3.Connection, export: Path) -> None:
     import_export(conn, export)
-    assert last_rest_hr(conn, HRV_ONLY_DAY) is None
+    assert last_rest_hr(conn, HRV_ONLY_DAY) == (HRV_ONLY_DAY, 52)
 
 
 def test_import_sleep_null_seconds_count_as_zero(conn: sqlite3.Connection, tmp_path: Path) -> None:
