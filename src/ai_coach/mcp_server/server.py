@@ -156,7 +156,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_slip_log": (
         tools.slip_log,
         "Срывы по времени: text - свободный текст эмоций, как записал пользователь; awake_h - "
-        "часов от подъёма (null - подъёма нет). Пишет пользователь командой coach slip.",
+        "часов от подъёма (null - подъёма нет); stress_garmin - средний стресс Garmin 0-100 за "
+        "±15 мин вокруг отметки (null - нет замеров; до coach sync может быть пуст). Пишет "
+        "пользователь командой coach slip.",
     ),
     "get_pvt_log": (
         tools.pvt_log,

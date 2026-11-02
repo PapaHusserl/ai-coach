@@ -22,6 +22,7 @@ from ai_coach.load import (
     sleep_report,
 )
 from ai_coach.load.sleep import awake_hours
+from ai_coach.load.stress import stress_at
 from ai_coach.meds import public_meds
 from ai_coach.nutrition.groups import FOOD_GROUPS
 from ai_coach.pantry import stock
@@ -40,6 +41,7 @@ from ai_coach.store.garmin_data import (
     list_daily_metrics,
     list_sleep_nights,
     list_strength_sets,
+    list_stress_points,
 )
 from ai_coach.store.intake import list_intake
 from ai_coach.store.journal import (
@@ -187,9 +189,14 @@ def focus_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
 
 
 def slip_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
-    """Срывы (свободный текст эмоций) по времени и awake_h - часов от подъёма."""
+    """Срывы (свободный текст эмоций) по времени, awake_h - часов от подъёма и stress_garmin -
+    средний стресс Garmin ±15 мин вокруг отметки (None - нет замеров)."""
     period(start, end)
     rows = with_awake(list_slip(conn, start, end), list_sleep_nights(conn, start, end))
+    after = (date.fromisoformat(end) + timedelta(days=1)).isoformat()
+    points = list_stress_points(conn, start, after)
+    for row in rows:
+        row["stress_garmin"] = stress_at(points, datetime.fromisoformat(row["logged_at"]))
     return cap(rows, newest=True)
 
 

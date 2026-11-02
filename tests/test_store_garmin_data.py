@@ -13,6 +13,7 @@ from ai_coach.store.garmin_data import (
     list_recovery_days,
     list_sleep_nights,
     list_strength_sets,
+    list_stress_points,
     upsert_activity,
     upsert_daily_metrics,
     upsert_strength_set,
@@ -354,6 +355,39 @@ def test_hrv_corridor_inclusive_range_sorted(conn: sqlite3.Connection) -> None:
         recovery_row(conn, day, {})
     found = list_hrv_corridor(conn, "2026-10-01", "2026-10-03")
     assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
+
+
+def stress_row(conn: sqlite3.Connection, day: str, raw: dict) -> None:
+    upsert_daily_metrics(conn, {"date": day, "raw_json": raw})
+
+
+def test_stress_points_have_date_ts_and_level(conn: sqlite3.Connection) -> None:
+    array = [[1000, 20], [2000, -1], [3000, 60]]
+    stress_row(conn, "2026-10-01", {"stress": {"stressValuesArray": array}})
+    assert list_stress_points(conn, "2026-10-01", "2026-10-01") == [
+        {"date": "2026-10-01", "ts_ms": 1000, "level": 20},
+        {"date": "2026-10-01", "ts_ms": 2000, "level": -1},
+        {"date": "2026-10-01", "ts_ms": 3000, "level": 60},
+    ]
+
+
+def test_stress_points_without_stress_key_are_empty(conn: sqlite3.Connection) -> None:
+    stress_row(conn, "2026-10-01", {"sleep": {}})
+    stress_row(conn, "2026-10-02", {"stress": {"avgStressLevel": 30}})
+    assert list_stress_points(conn, "2026-10-01", "2026-10-02") == []
+
+
+def test_stress_points_inclusive_range_sorted_by_time(conn: sqlite3.Connection) -> None:
+    for day, ts in (("2026-10-03", 3000), ("2026-10-01", 1000), ("2026-10-02", 2000)):
+        stress_row(conn, day, {"stress": {"stressValuesArray": [[ts, 10]]}})
+    stress_row(conn, "2026-10-04", {"stress": {"stressValuesArray": [[4000, 10]]}})
+    found = list_stress_points(conn, "2026-10-01", "2026-10-03")
+    assert [r["ts_ms"] for r in found] == [1000, 2000, 3000]
+
+
+def test_stress_points_have_no_raw_json(conn: sqlite3.Connection) -> None:
+    stress_row(conn, "2026-10-01", {"secret": "SECRET", "stress": {"stressValuesArray": [[1, 5]]}})
+    assert "SECRET" not in json.dumps(list_stress_points(conn, "2026-10-01", "2026-10-01"))
 
 
 def test_recovery_days_have_no_raw_json(conn: sqlite3.Connection) -> None:

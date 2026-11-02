@@ -52,6 +52,17 @@ def list_sleep_nights(conn: sqlite3.Connection, start: str, end: str) -> list[di
     return fetch_all(conn, sql, (start, end))
 
 
+def list_stress_points(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Замеры стресса дней start..end включительно, по времени, без raw_json: date, ts_ms (epoch
+    GMT, мс) и level (0-100; отрицательный - нет замера). Дни без стресса не возвращаются."""
+    sql = (
+        "SELECT date, json_extract(value, '$[0]') AS ts_ms, json_extract(value, '$[1]') AS level "
+        "FROM daily_metrics, json_each(raw_json, '$.stress.stressValuesArray') "
+        "WHERE date BETWEEN ? AND ? ORDER BY ts_ms"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def list_recovery_days(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь) и
     rhr (пульс покоя: restingHeartRate сна у API или метрика HR у импорта; None - нет)."""

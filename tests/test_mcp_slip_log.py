@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import UTC, datetime
 
@@ -77,6 +78,64 @@ def test_snapshot_has_no_slip_keys(conn: sqlite3.Connection) -> None:
     slip(conn, DAY, f"{DAY} 12:00:00")
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
     assert not [key for key in snapshot if "slip" in key]
+
+
+def stress_points(conn: sqlite3.Connection, day: str, points: list[tuple[str, int]]) -> None:
+    array = [[int(datetime.fromisoformat(at).timestamp() * 1000), lvl] for at, lvl in points]
+    upsert_daily_metrics(conn, {"date": day, "raw_json": {"stress": {"stressValuesArray": array}}})
+
+
+def test_stress_garmin_is_average_around_the_slip(conn: sqlite3.Connection) -> None:
+    stress_points(
+        conn,
+        DAY,
+        [(f"{DAY} 13:55:00", 20), (f"{DAY} 14:00:00", 40), (f"{DAY} 14:05:00", 60)]
+        + [(f"{DAY} 16:00:00", 95)],
+    )
+    slip(conn, DAY, f"{DAY} 14:00:00")
+    assert rows(conn, "get_slip_log", start=DAY, end=DAY)[0]["stress_garmin"] == 40
+
+
+def test_stress_garmin_null_without_daily_metrics(conn: sqlite3.Connection) -> None:
+    slip(conn, DAY, f"{DAY} 14:00:00")
+    found = rows(conn, "get_slip_log", start=DAY, end=DAY)[0]
+    assert "stress_garmin" in found
+    assert found["stress_garmin"] is None
+
+
+def test_stress_garmin_null_when_no_points_near(conn: sqlite3.Connection) -> None:
+    stress_points(conn, DAY, [(f"{DAY} 09:00:00", 50), (f"{DAY} 14:05:00", -1)])
+    slip(conn, DAY, f"{DAY} 14:00:00")
+    assert rows(conn, "get_slip_log", start=DAY, end=DAY)[0]["stress_garmin"] is None
+
+
+def test_stress_garmin_uses_next_day_points_after_midnight(conn: sqlite3.Connection) -> None:
+    stress_points(conn, DAY, [(f"{DAY} 23:55:00", 20)])
+    stress_points(conn, "2026-10-08", [("2026-10-08 00:05:00", 40)])
+    slip(conn, DAY, f"{DAY} 23:58:00")
+    assert rows(conn, "get_slip_log", start=DAY, end=DAY)[0]["stress_garmin"] == 30
+
+
+def test_stress_garmin_after_midnight_slip_takes_next_row_points(conn: sqlite3.Connection) -> None:
+    stress_points(conn, "2026-10-08", [("2026-10-08 00:25:00", 20), ("2026-10-08 00:35:00", 60)])
+    slip(conn, DAY, "2026-10-08 00:30:00")
+    assert rows(conn, "get_slip_log", start=DAY, end=DAY)[0]["stress_garmin"] == 40
+
+
+def test_stress_garmin_per_row(conn: sqlite3.Connection) -> None:
+    stress_points(conn, DAY, [(f"{DAY} 10:00:00", 30), (f"{DAY} 15:00:00", 70)])
+    slip(conn, DAY, f"{DAY} 10:02:00")
+    slip(conn, DAY, f"{DAY} 15:02:00")
+    slip(conn, DAY, f"{DAY} 20:00:00")
+    found = rows(conn, "get_slip_log", start=DAY, end=DAY)
+    assert [r["stress_garmin"] for r in found] == [30, 70, None]
+
+
+def test_snapshot_has_no_stress_garmin(conn: sqlite3.Connection) -> None:
+    stress_points(conn, DAY, [(f"{DAY} 12:00:00", 50)])
+    slip(conn, DAY, f"{DAY} 12:00:00")
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert "stress_garmin" not in json.dumps(snapshot)
 
 
 def seed_day(conn: sqlite3.Connection, day: str) -> None:
