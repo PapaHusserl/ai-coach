@@ -51,5 +51,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n18.md](plan-n18.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие Н18). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: f0a3d15 (закрытие Н18); metrics.py на коммите: 4,51 $. Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-02-n18.md`.
