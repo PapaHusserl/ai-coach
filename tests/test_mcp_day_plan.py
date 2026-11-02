@@ -14,6 +14,7 @@ from mcp_fakes import call, tool_names
 import ai_coach.agenda.day_plan as day_plan_module
 import ai_coach.agenda.slots as slots_module
 from ai_coach.agenda.day_plan import FOCUS_MAX
+from ai_coach.mcp_server.server import TOOLS
 from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.journal import add_who5
 
@@ -48,6 +49,20 @@ def test_drafts_are_stored_as_drafts(conn: sqlite3.Connection) -> None:
     rows = conn.execute("SELECT id, status FROM coach_events").fetchall()
     assert {r["id"] for r in rows} == ids
     assert {r["status"] for r in rows} == {"draft"}
+
+
+def test_weekday_plan_has_nine_drafts_with_two_cooking_meals(conn: sqlite3.Connection) -> None:
+    result = plan(conn)
+    assert len(result["drafts"]) == 9
+    cooks = [d for d in result["drafts"] if d["title"] == "Готовка"]
+    assert [(c["kind"], c["start_at"], c["end_at"]) for c in cooks] == [
+        ("meal", f"{DAY}T10:30", f"{DAY}T11:00"),
+        ("meal", f"{DAY}T19:00", f"{DAY}T19:30"),
+    ]
+
+
+def test_tool_description_mentions_cooking() -> None:
+    assert "готовк" in TOOLS["create_day_plan"][1]
 
 
 def test_second_call_is_already_planned(conn: sqlite3.Connection) -> None:

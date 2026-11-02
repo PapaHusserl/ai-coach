@@ -116,6 +116,20 @@ def test_help_workload_topic_has_todo_list() -> None:
     assert "coach todo list" in (AGENTS / "coach-help" / "workload.md").read_text()
 
 
+def test_day_file_offers_cancelling_cooking_block_by_event_cancel() -> None:
+    text = day_text()
+    assert "готовк" in text
+    assert "`uv run coach event cancel <id>` блоков «Готовка»" in text
+
+
+def test_help_calendar_topic_mentions_cooking() -> None:
+    assert "готовк" in (AGENTS / "coach-help" / "calendar.md").read_text()
+
+
+def test_readme_mentions_cooking() -> None:
+    assert "готовк" in (BASE / "README.md").read_text()
+
+
 @pytest.mark.parametrize("word", ["create_day_plan", "coach todo list"])
 def test_readme_mentions_day_plan(word: str) -> None:
     assert word in (BASE / "README.md").read_text()

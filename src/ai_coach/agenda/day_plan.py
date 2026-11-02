@@ -3,9 +3,10 @@
 
 Занятое: события календаря дня (не отменённые, не отклонённые, не all-day) и события тренера
 (draft, written), кроме checkin. Порядок укладки: тренировка (время назвал пользователь) ->
-задачи до ужина -> завтрак, перекус, отдых после него, ужин (занято - ближайшее окно после, не
-позже чем через MEAL_SHIFT_MIN, иначе skipped) -> задачи, не влезшие до ужина -> фокус
-(не в сб/вс, не позже FOCUS_UNTIL; при сигнале сна - sleep_limits). Блоки не пересекаются;
+задачи до ужина -> готовка и завтрак (одним отрезком), перекус, отдых после него, готовка и
+ужин (занято - ближайшее окно после, не позже чем через MEAL_SHIFT_MIN, иначе skipped) ->
+задачи, не влезшие до ужина -> фокус (не в сб/вс, не позже FOCUS_UNTIL;
+при сигнале сна - sleep_limits). Блоки не пересекаются;
 окна короче MIN_SLOT пусты для задач и фокуса. Рамка дня - до полуночи следующего дня. Сюда в
 календарь не пишем: это делает пользователь командой coach event write.
 """
@@ -57,10 +58,11 @@ class Training(NamedTuple):
     workout_id: int
 
 
-WEEKDAY = Frame(time(10, 0), time(11, 0), time(15, 30), time(19, 0))
-WEEKEND = Frame(time(11, 0), time(12, 0), time(16, 0), time(19, 0))
+WEEKDAY = Frame(time(10, 0), time(11, 0), time(15, 30), time(19, 30))
+WEEKEND = Frame(time(11, 0), time(12, 0), time(16, 0), time(19, 30))
 DAY_END = time(0, 0)
 MEAL_MIN = 60
+COOK_MIN = 30
 SNACK_MIN = 15
 REST_MIN = 30
 FOCUS_MIN = 90
@@ -141,13 +143,32 @@ class _Layout:
                 self.put("task", task.title, span, task.category)
         return left
 
+    def meal(self, title: str, desired: datetime) -> None:
+        """Еда с готовкой перед ней: один отрезок COOK_MIN + MEAL_MIN, ищется и сдвигается
+        вместе; начало готовки раньше рамки - отрезок от начала рамки."""
+        if desired < self.window[0]:
+            self.skipped.append(f"{title} {desired:%H:%M}: раньше начала дня")
+            return
+        start = max(desired - minutes_span(COOK_MIN), self.window[0])
+        total = COOK_MIN + MEAL_MIN
+        if start + minutes_span(total) > self.window[1]:
+            self.skipped.append(f"{title}: вне рамки дня")
+            return
+        span = anchored(start, total, self.window, self.taken)
+        if span is None:
+            self.skipped.append(f"{title}: занято, окна в течение {MEAL_SHIFT_MIN // 60} ч нет")
+            return
+        cooked = span[0] + minutes_span(COOK_MIN)
+        self.put("meal", "Готовка", (span[0], cooked))
+        self.put("meal", title, (cooked, span[1]))
+
     def meals(self, frame: Frame) -> None:
         day = self.window[0].date()
-        self.anchor("Завтрак", "meal", datetime.combine(day, frame.breakfast), MEAL_MIN)
+        self.meal("Завтрак", datetime.combine(day, frame.breakfast))
         snack = self.anchor("Перекус", "meal", datetime.combine(day, frame.snack), SNACK_MIN)
         if snack is not None:
             self.anchor("Прогулка / отдых", "rest", snack[1], REST_MIN, "rest")
-        self.anchor("Ужин", "meal", datetime.combine(day, frame.dinner), MEAL_MIN)
+        self.meal("Ужин", datetime.combine(day, frame.dinner))
 
     def focus(self, focus_until: time, focus_max: int) -> None:
         """Фокус-блоки first-fit до focus_until: не больше focus_max, пауза BREAK_MIN."""
