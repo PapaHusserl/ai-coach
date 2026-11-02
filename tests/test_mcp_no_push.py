@@ -46,6 +46,7 @@ EXPECTED_TOOLS = {
     "get_food_pending",
     "get_wellbeing",
     "get_focus_log",
+    "get_slip_log",
     "get_pvt_log",
     "get_who5",
     "get_deviations",

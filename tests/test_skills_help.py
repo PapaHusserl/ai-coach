@@ -440,3 +440,19 @@ def test_agenda_note_has_focus_title_and_poles() -> None:
     for pole in ("рассеян", "собран", "свеж", "выжат", "легко", "через силу"):
         assert pole in text, pole
     assert len(path.read_bytes()) <= AGENT_LIMITS["coach-agenda.md"]
+
+
+def test_wellbeing_help_describes_slip() -> None:
+    path = TOPICS / "wellbeing.md"
+    text = path.read_text()
+    for needle in ("coach slip", "coach log slip", "get_slip_log"):
+        assert needle in text
+    assert len(path.read_bytes()) <= HELP_TOPIC_LIMIT
+
+
+def test_help_index_mentions_coach_slip() -> None:
+    assert "coach slip" in HELP.read_text()
+
+
+def test_slip_command_is_allowed() -> None:
+    assert "Bash(uv run coach slip:*)" in allow()

@@ -268,3 +268,8 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Источники: `coach sync` (`claude_counters`, замечания «каталог не найден» / «записей не распознано») и `coach claude [--days N]` (имена не печатает); путь — `[paths] claude_projects`, по умолчанию `~/.claude/projects`.
 - MCP: `get_workload` отдаёт `claude_*` целыми (None — не считалось), при `events=true` на один день — ещё `claude_repos_names` (`workload_day`). Сводка: ключ `claude` (7 дней, `prompts/evening/decisions/repos/switches`, без имён), `workload` и `workload_ahead` без `claude_*`; `workload` — свой лимит `WORKLOAD_CHARS` 5 000 (7 дней вместо 6 при `SNAPSHOT_CHARS` 4 000).
 - Справка — `coach-help/claude.md`; отчёт разведки — `docs/research-claude.md`.
+
+## Н19: срыв в момент (партия 1)
+- Миграция 0027: `slip_log(id, date, logged_at, text NOT NULL CHECK (length(trim(text)) > 0))`, индекс по `date`; отдельная таблица, как `focus_log`. Текст — свободные эмоции как есть, без силы и списка поводов.
+- `store/journal.py`: `add_slip`, `list_slip`. CLI (`cli/journal.py`): `coach slip "текст" [--at HH:MM]` (слова без кавычек склеиваются; `--at` — время сегодняшнего дня самочувствия, будущее — ошибка; дата — `wellbeing_day`), `coach log slip [--date D]`. Записи только добавляются.
+- MCP `get_slip_log(date_from, date_to)` (`tools.slip_log`): строки с `awake_h`, период ≤ 92 дней, `cap(newest=True)`; в snapshot срывы не входят. Выводы тренера — по просьбе, `coach-week.md` п. 3 и строка в итоге `coach-evening` (шаг 4); фраза «срыв: …» в `coach.md`. Партия 2: `stress_garmin`.

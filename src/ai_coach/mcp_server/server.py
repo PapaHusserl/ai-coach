@@ -153,6 +153,11 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "заставить себя), все 1-5, и текст; awake_h - часов от подъёма (null - подъёма нет). "
         "Пишет пользователь командой coach focus.",
     ),
+    "get_slip_log": (
+        tools.slip_log,
+        "Срывы по времени: text - свободный текст эмоций, как записал пользователь; awake_h - "
+        "часов от подъёма (null - подъёма нет). Пишет пользователь командой coach slip.",
+    ),
     "get_pvt_log": (
         tools.pvt_log,
         "Тесты реакции PVT-B (3 минуты) по времени: median_rt_ms, mean_rt_ms, slow10_ms (среднее "

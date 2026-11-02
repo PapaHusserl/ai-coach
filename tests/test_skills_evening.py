@@ -99,6 +99,15 @@ def test_who5_command_is_allowed() -> None:
     assert "Bash(uv run coach who5:*)" in allow()
 
 
+def test_evening_skill_reads_slip_log_without_new_questions() -> None:
+    text = EVENING.read_text()
+    allowed = next(line for line in text.splitlines() if line.startswith("allowed-tools:"))
+    assert "mcp__ai-coach__get_slip_log" in allowed
+    assert "get_slip_log" in text
+    assert "не спрашивай" in text
+    assert text.count("AskUserQuestion") == 1
+
+
 def test_screen_command_is_allowed() -> None:
     assert "Bash(uv run coach screen:*)" in allow()
 

@@ -48,6 +48,7 @@ from ai_coach.store.journal import (
     list_food,
     list_food_pending,
     list_pvt,
+    list_slip,
     list_weights,
     list_wellbeing,
     list_who5,
@@ -182,6 +183,13 @@ def focus_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
     """Дневные оценки (фокус, усталость, усилие 1-5) по времени и awake_h - часов от подъёма."""
     period(start, end)
     rows = with_awake(list_focus(conn, start, end), list_sleep_nights(conn, start, end))
+    return cap(rows, newest=True)
+
+
+def slip_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
+    """Срывы (свободный текст эмоций) по времени и awake_h - часов от подъёма."""
+    period(start, end)
+    rows = with_awake(list_slip(conn, start, end), list_sleep_nights(conn, start, end))
     return cap(rows, newest=True)
 
 

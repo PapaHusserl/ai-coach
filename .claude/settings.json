@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "mcp__ai-coach",
+      "Bash(uv run coach slip:*)",
       "Bash(cat .claude/agents/coach-help/claude.md)",
       "Bash(uv run coach sync:*)",
       "Bash(uv run coach screen:*)",

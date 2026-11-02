@@ -19,6 +19,7 @@ from ai_coach.cli.journal import (
     focus,
     food,
     log_app,
+    slip,
     weight,
     who5,
 )
@@ -78,6 +79,7 @@ app.add_typer(log_app, name="log")
 app.command()(weight)
 app.command()(food)
 app.command()(focus)
+app.command()(slip)
 app.command()(pvt)
 app.command()(who5)
 app.add_typer(pantry_app, name="pantry")

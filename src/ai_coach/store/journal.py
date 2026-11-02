@@ -179,6 +179,17 @@ def list_focus(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str,
     return fetch_all(conn, sql, (start, end))
 
 
+def add_slip(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
+    """values: date, logged_at, text (не пуст). Только добавление."""
+    return insert(conn, "slip_log", values)
+
+
+def list_slip(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Срывы с датой date start..end включительно, по времени."""
+    sql = "SELECT * FROM slip_log WHERE date BETWEEN ? AND ? ORDER BY logged_at, id"
+    return fetch_all(conn, sql, (start, end))
+
+
 def add_pvt(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     """values: date, started_at, duration_s, trials, false_starts, lapses, mean_rt_ms,
     median_rt_ms, slow10_ms, speed (могут быть None), rts (JSON). Только добавление."""

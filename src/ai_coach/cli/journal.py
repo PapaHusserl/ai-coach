@@ -2,7 +2,7 @@
 реакции, правка, удаление, просмотр."""
 
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, NoReturn
 
 import typer
@@ -11,8 +11,10 @@ from ai_coach.load.who5 import ITEM_MAX, ITEM_MIN, ITEMS_COUNT, who5_report, who
 from ai_coach.pvt import format_summary
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import (
+    EVENING_CUTOFF,
     add_focus,
     add_food,
+    add_slip,
     add_weight,
     add_who5,
     delete_food,
@@ -22,6 +24,7 @@ from ai_coach.store.journal import (
     list_focus,
     list_food,
     list_pvt,
+    list_slip,
     list_weights,
     list_who5,
     wellbeing_day,
@@ -165,6 +168,51 @@ def focus(
     finally:
         conn.close()
     typer.echo("Оценка записана.")
+
+
+def parse_slip_time(text: str | None) -> str:
+    """--at HH:MM: время сегодняшнего дня самочувствия (до 04:00 - ещё вчерашнего); None -
+    сейчас. Будущее - ошибка."""
+    if text is None:
+        return now()
+    current = datetime.now()
+    try:
+        clock = datetime.strptime(text.strip(), "%H:%M").time()
+    except ValueError:
+        fail(f"--at должен быть HH:MM, получено: {text!r}")
+    day = date.fromisoformat(wellbeing_day(current))
+    if clock < EVENING_CUTOFF:
+        day += timedelta(days=1)
+    moment = datetime.combine(day, clock)
+    if moment > current:
+        fail("--at в будущем.")
+    return moment.isoformat(sep=" ", timespec="seconds")
+
+
+def slip(
+    words: Annotated[list[str], typer.Argument(help="Что чувствуешь, как есть, без оценок")],
+    at: Annotated[
+        str | None, typer.Option("--at", help="Когда это было сегодня, HH:MM (по умолчанию сейчас)")
+    ] = None,
+) -> None:
+    """Срыв в момент: свободный текст эмоций (время — сейчас или --at HH:MM). Записи только
+    добавляются. До 04:00 запись идёт на вчера."""
+    text = " ".join(words).strip()
+    if not text:
+        fail("Текст пустой.")
+    moment = parse_slip_time(at)
+    values = {
+        "date": wellbeing_day(datetime.fromisoformat(moment)),
+        "logged_at": moment,
+        "text": text,
+    }
+    conn = open_db()
+    try:
+        with conn:
+            add_slip(conn, values)
+    finally:
+        conn.close()
+    typer.echo("Срыв записан.")
 
 
 def who5(
@@ -325,6 +373,26 @@ def log_focus(
     for row in rows:
         scores = f"{row['focus']}/{row['fatigue']}/{row['effort']}"
         typer.echo(f"{row['id']}  {row['logged_at']}  {scores}  {row['text'] or ''}".rstrip())
+
+
+@log_app.command("slip")
+def log_slip(
+    day: Annotated[
+        str | None, typer.Option("--date", help="День, YYYY-MM-DD (по умолчанию сегодня)")
+    ] = None,
+) -> None:
+    """Срывы за день: id, время, текст."""
+    day = log_day(day)
+    conn = open_db()
+    try:
+        rows = list_slip(conn, day, day)
+    finally:
+        conn.close()
+    if not rows:
+        typer.echo("Записей нет.")
+    for row in rows:
+        text = " ".join(row["text"].split())
+        typer.echo(f"{row['id']}  {row['logged_at']}  {text}")
 
 
 @log_app.command("pvt")
