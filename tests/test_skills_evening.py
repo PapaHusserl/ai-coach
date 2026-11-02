@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from text_limits import AGENT_LIMITS, EVENING_SKILL_LIMIT
+
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE = ROOT / ".claude"
 EVENING = CLAUDE / "skills" / "coach-evening" / "SKILL.md"
@@ -12,7 +14,7 @@ def allow() -> list[str]:
 
 def test_evening_skill_exists_and_is_short() -> None:
     assert EVENING.is_file()
-    assert len(EVENING.read_bytes()) <= 4096
+    assert len(EVENING.read_bytes()) <= EVENING_SKILL_LIMIT
 
 
 def test_evening_skill_has_front_matter() -> None:
@@ -80,7 +82,7 @@ def test_evening_skill_keeps_skip_when_unknown() -> None:
 
 
 def test_coach_md_within_limit_after_evening() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 16384
+    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_evening_skill_has_no_application_or_window_names() -> None:
@@ -133,4 +135,4 @@ def test_wellbeing_file_describes_overload_reaction() -> None:
 
 
 def test_coach_stays_within_limit_after_v23() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= 16384
+    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, rows, tool_names
+from text_limits import AGENT_LIMITS
 
 DAY = "2026-10-07"
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
@@ -67,4 +68,4 @@ def test_snapshot_has_no_pvt_keys(conn: sqlite3.Connection) -> None:
 def test_coach_md_allows_tool_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach.md"
     assert "mcp__ai-coach__get_pvt_log" in path.read_text()
-    assert len(path.read_bytes()) <= 16384
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]

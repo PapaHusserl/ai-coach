@@ -3,41 +3,25 @@
 import json
 from pathlib import Path
 
+from text_limits import AGENT_LIMITS
+
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE = ROOT / ".claude"
 AGENTS = CLAUDE / "agents"
 EVENING = CLAUDE / "skills" / "coach-evening" / "SKILL.md"
-LIMITS = {
-    "coach.md": 16384,
-    "coach-wellbeing.md": 11264,
-    "coach-nutrition.md": 6144,
-    "coach-onboarding.md": 6144,
-    "coach-week.md": 6144,
-    "coach-agenda.md": 6144,
-    "coach-day.md": 6144,
-    "coach-help.md": 6144,
-}
 
 
 def allow() -> list[str]:
     return json.loads((CLAUDE / "settings.json").read_text())["permissions"]["allow"]
 
 
-def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= 16384
-
-
-def test_wellbeing_within_limit() -> None:
-    assert len((AGENTS / "coach-wellbeing.md").read_bytes()) <= 11264
-
-
 def test_other_agent_files_within_their_limits() -> None:
-    for name, limit in LIMITS.items():
+    for name, limit in AGENT_LIMITS.items():
         assert len((AGENTS / name).read_bytes()) <= limit, name
 
 
 def test_every_agent_file_has_a_limit() -> None:
-    assert {p.name for p in AGENTS.glob("*.md")} <= set(LIMITS)
+    assert {p.name for p in AGENTS.glob("*.md")} <= set(AGENT_LIMITS)
 
 
 def test_evening_skill_asks_about_habits() -> None:

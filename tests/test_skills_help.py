@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 from mcp_fakes import tool_names
+from text_limits import AGENT_LIMITS, HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT
 
 from ai_coach import pvt
 from ai_coach.cli import main
@@ -19,8 +20,6 @@ CLAUDE = ROOT / ".claude"
 AGENTS = CLAUDE / "agents"
 HELP = AGENTS / "coach-help.md"
 TOPICS = AGENTS / "coach-help"
-INDEX_LIMIT = 6144
-TOPIC_LIMIT = 8192
 
 
 def topic_files() -> list[Path]:
@@ -36,7 +35,7 @@ def allow() -> list[str]:
 
 
 def test_index_within_limit() -> None:
-    assert len(HELP.read_bytes()) <= INDEX_LIMIT
+    assert len(HELP.read_bytes()) <= HELP_INDEX_LIMIT
 
 
 def test_topic_files_exist() -> None:
@@ -46,7 +45,7 @@ def test_topic_files_exist() -> None:
 def test_topic_files_within_limit_and_not_empty() -> None:
     for path in topic_files():
         size = len(path.read_bytes())
-        assert 0 < size <= TOPIC_LIMIT, path.name
+        assert 0 < size <= HELP_TOPIC_LIMIT, path.name
 
 
 def test_index_mentions_every_topic_file() -> None:
@@ -440,4 +439,4 @@ def test_agenda_note_has_focus_title_and_poles() -> None:
     assert "Фокус 1–5?" in text
     for pole in ("рассеян", "собран", "свеж", "выжат", "легко", "через силу"):
         assert pole in text, pole
-    assert len(path.read_bytes()) <= 6144
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-agenda.md"]

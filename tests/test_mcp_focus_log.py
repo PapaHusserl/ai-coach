@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, rows, tool_names
+from text_limits import AGENT_LIMITS
 
 from ai_coach.store.garmin_data import upsert_daily_metrics
 
@@ -96,4 +97,4 @@ def test_settings_allow_coach_focus() -> None:
 def test_coach_md_mentions_focus_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach.md"
     assert "focus" in path.read_text()
-    assert len(path.read_bytes()) <= 16384
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]

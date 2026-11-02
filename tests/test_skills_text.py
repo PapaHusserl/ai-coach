@@ -5,11 +5,10 @@ from pathlib import Path
 
 import pytest
 from mcp_fakes import tool_names
+from text_limits import EVENING_SKILL_LIMIT, SKILL_LIMIT
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 SKILLS = ROOT / "skills"
-MAX_BYTES = 3072
-EVENING_MAX_BYTES = 4096
 ALLOW = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
 
 
@@ -23,7 +22,7 @@ def extra_files(skill: str) -> list[Path]:
 
 @pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
 def test_skill_is_at_most_3072_bytes(path: Path) -> None:
-    limit = EVENING_MAX_BYTES if path.parent.name == "coach-evening" else MAX_BYTES
+    limit = EVENING_SKILL_LIMIT if path.parent.name == "coach-evening" else SKILL_LIMIT
     assert len(path.read_bytes()) <= limit
 
 
@@ -260,12 +259,6 @@ def test_meal_training_nutrition_has_no_mark_after_rule() -> None:
 
 
 # --- шаг 20: проактивность тренера ---
-
-COACH_MAX_BYTES = 16384
-
-
-def test_coach_is_at_most_16384_bytes() -> None:
-    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= COACH_MAX_BYTES
 
 
 def test_coach_nutrition_can_be_read_without_prompt() -> None:

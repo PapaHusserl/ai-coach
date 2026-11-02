@@ -187,3 +187,11 @@ updated: 2026-11-01
 
 Метрики Health Status импорта (RESPIRATION, SKIN_TEMP_C, SPO2) с личными границами лежат в `raw_json` и нигде
 не читаются — кандидат в признаки болезни (Н11 illness) для v2.9. Источник — docs/plan-n16.md «Побочные находки» 3.
+
+## 44. Запас в скилах и справке у края лимита
+status: idea
+priority: low
+updated: 2026-11-01
+
+У края лимита: скилы coach-food (запас 7 Б), coach-meal (45 Б), агент coach-agenda (32 Б), справка
+`coach-help/workload.md` (112 Б). Н18 (готовка) может тронуть coach-meal. Источник — docs/plan-n15.md «Развилки и риски».

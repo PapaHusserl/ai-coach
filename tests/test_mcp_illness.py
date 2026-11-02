@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, tool_names
+from text_limits import AGENT_LIMITS
 
 from ai_coach.load.illness import illness_report
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
@@ -104,7 +105,7 @@ def test_trained_yesterday_comes_from_load(conn: sqlite3.Connection) -> None:
 
 def test_coach_allows_tool_and_fits_limit() -> None:
     assert "mcp__ai-coach__get_illness" in COACH.read_text()
-    assert len(COACH.read_bytes()) <= 16384
+    assert len(COACH.read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_bad_date_is_rejected(conn: sqlite3.Connection) -> None:

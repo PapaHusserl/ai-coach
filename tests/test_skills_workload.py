@@ -1,13 +1,14 @@
 import json
 from pathlib import Path
 
+from text_limits import AGENT_LIMITS, SKILL_LIMIT
+
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
 
 
-def test_coach_wellbeing_exists_and_is_short() -> None:
+def test_coach_wellbeing_exists() -> None:
     assert WELLBEING.is_file()
-    assert len(WELLBEING.read_bytes()) <= 11264
 
 
 def test_coach_wellbeing_describes_illness_reaction() -> None:
@@ -45,31 +46,31 @@ def test_coach_md_offers_who5_and_fits_limit() -> None:
     text = path.read_text()
     assert "who5.due" in text
     assert "9е" in text
-    assert len(path.read_bytes()) <= 16384
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_recalc_mentions_who5_low_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-plan" / "recalc.md"
     assert "who5_low" in path.read_text()
-    assert len(path.read_bytes()) <= 3072
+    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_recovery_mentions_who5_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "who5" in path.read_text()
-    assert len(path.read_bytes()) <= 3072
+    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_coach_day_mentions_who5_low_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach-day.md"
     assert "who5_low" in path.read_text()
-    assert len(path.read_bytes()) <= 6144
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-day.md"]
 
 
 def test_coach_week_reads_who5_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach-week.md"
     assert "get_who5" in path.read_text()
-    assert len(path.read_bytes()) <= 6144
+    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-week.md"]
 
 
 def test_coach_md_reads_illness_signals() -> None:
@@ -79,13 +80,13 @@ def test_coach_md_reads_illness_signals() -> None:
 def test_recalc_handles_illness_risk_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-plan" / "recalc.md"
     assert "illness_risk" in path.read_text()
-    assert len(path.read_bytes()) <= 3072
+    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_recovery_mentions_illness_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "illness" in path.read_text()
-    assert len(path.read_bytes()) <= 3072
+    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_coach_wellbeing_mentions_workload_tool() -> None:
@@ -178,7 +179,7 @@ def test_coach_mentions_workload_tool_and_wellbeing_file() -> None:
 
 
 def test_coach_is_still_within_limit() -> None:
-    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= 16384
+    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_wellbeing_has_sleep_rule() -> None:
@@ -200,7 +201,7 @@ def test_coach_summary_points_to_sleep_signals() -> None:
 def test_recovery_has_caution_from_and_is_short() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "caution_from" in path.read_text()
-    assert len(path.read_bytes()) <= 3072
+    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_day_plan_role_mentions_sleep_signal() -> None:
