@@ -6,7 +6,7 @@
 
 - Шаг Н15 закрыт ✅ — [plan-n15.md](plan-n15.md): `coach.md` запас 915 Б, `coach-wellbeing.md` 1 040 Б,
   порядок WHO-5 в `coach-help/who5.md`, все лимиты текстов в `tests/text_limits.py`.
-- Итог тестя: смета 3,6–6,9 $ → факт 7,90 $.
+- Итог тестя: смета 3,6–6,9 $ → факт 7,90 $ (metrics.py на коммите: 8,38 $).
 - Закрыты BACKLOG 34, 39, 41; новый — BACKLOG 44 (скилы и справка у края лимита).
 
 ## Следующие 3 шага
@@ -45,5 +45,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n15.md](plan-n15.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие Н15). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: b195be3 (закрытие Н15). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-02-n15.md`.
