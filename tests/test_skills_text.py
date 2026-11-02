@@ -163,7 +163,7 @@ def test_agent_lists_all_red_flags() -> None:
 def test_agent_red_flag_cancels_workout_and_records_feel() -> None:
     text = agent_text()
     assert "cancel_draft_workout" in text
-    assert "на часах" in text
+    assert "uv run coach cancel" in text
     assert "uv run coach feel" in text
 
 

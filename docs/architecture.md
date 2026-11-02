@@ -7,7 +7,7 @@ Python 3.12+, uv; python-garminconnect ≥0.3; SQLite (stdlib sqlite3 + SQL-ми
 Не берём garmin_mcp / garmin-givemydata (лишняя авторизация); читаем их и athlete-management-system как образцы workout JSON. GarminDB — запасной вариант импорта.
 
 ## Разделение
-- CLI `coach`: sync, import <fit/zip>, weight, food, push <id> (подтверждение y/N), status. Всё, что пишет в Garmin.
+- CLI `coach`: sync, import <fit/zip>, weight, food, push <id> (подтверждение y/N), cancel <id> (draft/approved сразу, pushed после y/N со снятием из Garmin; статус cancelled, строка остаётся), status. Всё, что пишет в Garmin.
 - MCP-сервер (stdio): чтение метрик/истории/целей/плана/нагрузки; запись только черновиков (план, предложение фазы) и КБЖУ еды без КБЖУ — сразу окончательно (решение по шагу 8). Отправки на часы в MCP нет.
 - Скиллы Claude Code: /coach-morning, /coach-plan, /coach-food. Логика тренера — в промптах, цифры (CTL/ATL, прогрессия) — в Python.
 

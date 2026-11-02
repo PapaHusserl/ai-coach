@@ -76,7 +76,7 @@
 - Роль тренера собрана из файлов: ядро `.claude/agents/coach.md` (до 15 КБ) и подгружаемые по требованию `coach-wellbeing.md` (нагрузка, выгорание), `coach-nutrition.md` (спортпит, добавки, витамины, кладовая и рецепты), `coach-week.md` (недельный обзор), `coach-agenda.md` (календарь коуча), `coach-onboarding.md` (профиль); вечерний чек-ин — скилл `coach-evening`.
 
 ## MCP и скиллы тренера (Claude Code)
-- MCP-сервер (stdio) читает агрегаты из базы (без raw_json); списки отдаются как `{rows, truncated}`, до 60 строк и 20 000 символов, у рядов по датам остаются самые новые строки. Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (только draft -> cancelled), `propose_phase`. Инструментов отправки на часы и удаления нет, в Garmin сервер не ходит: утверждает и отправляет пользователь (`coach approve`, `coach push`).
+- MCP-сервер (stdio) читает агрегаты из базы (без raw_json); списки отдаются как `{rows, truncated}`, до 60 строк и 20 000 символов, у рядов по датам остаются самые новые строки. Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (только draft -> cancelled), `propose_phase`. Инструментов отправки на часы и удаления нет, в Garmin сервер не ходит: утверждает и отправляет пользователь (`coach approve`, `coach push`); отменяет утверждённую и отправленную тоже он (`coach cancel <id>`, у отправленной - после y/N, со снятием с календаря и удалением из Garmin).
 - Регистрация (один раз; путь к репо свой):
   `claude mcp add ai-coach -- uv run --project /путь/к/ai-coach python -m ai_coach.mcp_server`
   База — `$AI_COACH_DB` или `~/.local/share/ai-coach/coach.db`.

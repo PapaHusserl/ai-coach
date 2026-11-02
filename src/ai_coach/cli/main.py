@@ -1,5 +1,5 @@
 """Команды `coach`: sync (Garmin и нагрузка), screen (экран), claude (Claude Code), import,
-approve, push, link, status, weight, food, feel, profile, goal, pantry, shop, meal, recipe,
+approve, push, cancel, link, status, weight, food, feel, profile, goal, pantry, shop, meal, recipe,
 practice, habit, protocol, supplement, med, event, log, edit, delete."""
 
 from datetime import date, datetime, timedelta
@@ -43,6 +43,8 @@ from ai_coach.garmin import (
 from ai_coach.plan import (
     PlanError,
     approve,
+    cancel,
+    cancellable,
     garmin_json,
     has_old,
     pushable,
@@ -229,6 +231,37 @@ def push(workout_id: Annotated[int, typer.Argument(help="id тренировки
         if has_old(row):
             remove_old(client, row["garmin_workout_id"], row["garmin_schedule_id"])
         typer.echo("Отправлено. Синхронизируй часы.")
+    except (PlanError, GarminError) as e:
+        fail(str(e))
+    finally:
+        conn.close()
+
+
+SYNC_TAIL = {False: ".", True: " и удалена из Garmin. Синхронизируй часы."}
+
+
+@app.command("cancel")
+def cancel_(workout_id: Annotated[int, typer.Argument(help="id тренировки")]) -> None:
+    """Отменить тренировку (draft, approved или pushed). Отправленную после y/N снимает
+    с календаря Garmin и удаляет из Garmin."""
+    conn = open_db()
+    try:
+        row = cancellable(conn, workout_id)
+        typer.echo(f"{row['date']}  {row['sport']}  {row['name']}  [{row['status']}]")
+        in_garmin = has_old(row)
+        if in_garmin:
+            typer.echo(
+                "В Garmin: "
+                f"workoutId={row['garmin_workout_id']}, scheduleId={row['garmin_schedule_id']}; "
+                "после отмены её снимут с календаря и удалят"
+            )
+            if not typer.confirm("Отменить и удалить из Garmin?", default=False):
+                typer.echo("Ничего не отменено.")
+                return
+            remove_old(load_client(), row["garmin_workout_id"], row["garmin_schedule_id"])
+        cancel(conn, workout_id)
+        conn.commit()
+        typer.echo(f"Тренировка {workout_id} отменена{SYNC_TAIL[in_garmin]}")
     except (PlanError, GarminError) as e:
         fail(str(e))
     finally:

@@ -298,7 +298,7 @@ def test_start_topic() -> None:
 
 def test_training_topic() -> None:
     text = topic("training.md")
-    for needle in ("coach approve", "coach push", "coach link", "CTL", "ATL"):
+    for needle in ("coach approve", "coach push", "coach cancel", "coach link", "CTL", "ATL"):
         assert needle in text, needle
 
 

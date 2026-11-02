@@ -45,6 +45,20 @@ def pushable(conn: sqlite3.Connection, workout_id: int) -> dict[str, Any]:
     return row
 
 
+def cancellable(conn: sqlite3.Connection, workout_id: int) -> dict[str, Any]:
+    """Строка тренировки, которую можно отменить: draft, approved или pushed."""
+    row = _get(conn, workout_id)
+    if row["status"] == "cancelled":
+        raise PlanError(f"Тренировка {workout_id} уже отменена.")
+    return row
+
+
+def cancel(conn: sqlite3.Connection, workout_id: int) -> None:
+    """-> cancelled; id Garmin обнуляются (после снятия с Garmin их там нет)."""
+    values = {"status": "cancelled", "garmin_workout_id": None, "garmin_schedule_id": None}
+    update_planned_workout(conn, workout_id, values)
+
+
 def garmin_json(row: dict[str, Any]) -> dict[str, Any]:
     return build_workout(row["sport"], json.loads(row["workout_json"]))
 
@@ -63,14 +77,14 @@ def remove_old(client: Any, workout_id: int, schedule_id: int | None) -> None:
                 client.unschedule_workout(schedule_id)
     except GarminError as e:
         raise GarminError(
-            f"{e} Старая копия осталась в Garmin: workoutId={workout_id}, scheduleId={schedule_id}."
+            f"{e} Копия осталась в Garmin: workoutId={workout_id}, scheduleId={schedule_id}."
         ) from e
     try:
         with garmin_errors():
             client.delete_workout(workout_id)
     except GarminError as e:
         raise GarminError(
-            f"{e} Старая копия снята с календаря, но шаблон workoutId={workout_id} не удалён."
+            f"{e} Копия снята с календаря, но шаблон workoutId={workout_id} не удалён."
         ) from e
 
 
