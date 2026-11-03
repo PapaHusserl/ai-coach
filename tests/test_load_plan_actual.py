@@ -29,11 +29,10 @@ STRENGTH_SPEC = {
         },
     ],
 }
-# Шаги по build_strength: stepOrder 1 группа, 2 подход, 3 отдых (упражнение 1);
-# 4 группа, 5 подход, 6 отдых (упражнение 2). wktStepIndex = stepOrder - 1,
-# значит рабочие подходы упражнений — 1 и 4.
-BENCH_STEP = 1
-ROW_STEP = 4
+# Часы: подход 3i, отдых 3i+1, группа повторов шага не получает (activity 24937687695);
+# рабочие подходы упражнений — 0 и 3.
+BENCH_STEP = 0
+ROW_STEP = 3
 
 
 def plan(
@@ -253,6 +252,38 @@ def test_strength_done_when_all_exercises_have_active_sets(conn: sqlite3.Connect
     assert row["activity_id"] == act
 
 
+def test_strength_all_steps_done_is_done(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "strength", spec=STRENGTH_SPEC)
+    act = activity(conn, 1, "2026-03-10 07:00:00", "strength_training")
+    active_set(conn, act, 0, 0)
+    rest_set(conn, act, 1, 1)
+    active_set(conn, act, 2, 3)
+    rest_set(conn, act, 3, 4)
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
+    [row] = rows(conn)
+    assert row["kind"] == "done"
+    assert row["details_json"] is None
+
+
+def test_strength_live_shape_is_done(conn: sqlite3.Connection) -> None:
+    exercises = [
+        {"category": "ROW", "exercise": f"EX_{n}", "sets": 3, "reps": 8, "rest_seconds": 90}
+        for n in range(5)
+    ]
+    plan(conn, "2026-03-10", "strength", spec={"name": "Силовая", "exercises": exercises})
+    act = activity(conn, 1, "2026-03-10 07:00:00", "strength_training")
+    index = 0
+    for n in range(5):
+        for _ in range(3):
+            active_set(conn, act, index, 3 * n)
+            rest_set(conn, act, index + 1, 3 * n + 1)
+            index += 2
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
+    [row] = rows(conn)
+    assert row["kind"] == "done"
+    assert row["details_json"] is None
+
+
 def test_strength_with_missed_exercise_is_different_with_details(
     conn: sqlite3.Connection,
 ) -> None:
@@ -265,6 +296,17 @@ def test_strength_with_missed_exercise_is_different_with_details(
     assert row["planned_id"] == planned
     assert row["activity_id"] == act
     assert json.loads(row["details_json"])["missing_exercises"] == ["BARBELL_ROW"]
+
+
+def test_strength_details_keep_non_ascii_exercise_names_unescaped(
+    conn: sqlite3.Connection,
+) -> None:
+    spec = {"name": "Силовая", "exercises": [{**STRENGTH_SPEC["exercises"][0], "exercise": "Жим"}]}
+    plan(conn, "2026-03-10", "strength", spec=spec)
+    activity(conn, 1, "2026-03-10 07:00:00", "strength_training")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")
+    [row] = rows(conn)
+    assert row["details_json"] == '{"missing_exercises": ["Жим"]}'
 
 
 def test_strength_rest_sets_do_not_count_as_done(conn: sqlite3.Connection) -> None:

@@ -18,14 +18,14 @@ def _same_type(planned: dict[str, Any], activity: dict[str, Any]) -> bool:
 def _missing_exercises(
     conn: sqlite3.Connection, planned: dict[str, Any], activity: dict[str, Any]
 ) -> list[str]:
-    """Упражнение i ↔ ACTIVE-подход с wktStepIndex = 3i + 1 (допущение, проверить на часах)."""
+    """Упражнение i ↔ ACTIVE-подход с wktStepIndex = 3i (часы: подход 3i, отдых 3i+1)."""
     done_steps = {
         s["wkt_step_index"]
         for s in list_strength_sets(conn, activity["activity_id"])
         if s["set_type"] == "ACTIVE"
     }
     exercises = json.loads(planned["workout_json"])["exercises"]
-    return [e["exercise"] for i, e in enumerate(exercises) if 3 * i + 1 not in done_steps]
+    return [e["exercise"] for i, e in enumerate(exercises) if 3 * i not in done_steps]
 
 
 def _pair(
