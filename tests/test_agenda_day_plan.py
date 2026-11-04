@@ -335,16 +335,13 @@ def test_day_end_1930_skips_dinner_with_cooking_as_outside() -> None:
     assert [b["start_at"][11:16] for b in blocks if b["title"] == "Готовка"] == ["10:30"]
 
 
-def test_tasks_stand_first_in_list_order() -> None:
+def test_tasks_follow_meals_in_list_order() -> None:
     tasks = [Task("A", 60, "work"), Task("B", 30, "personal")]
     blocks, _ = plan(tasks=tasks)
     first, second = named(blocks, "A"), named(blocks, "B")
-    assert (first["kind"], first["start_at"][11:16], first["end_at"][11:16]) == (
-        "task",
-        "10:00",
-        "11:00",
-    )
-    assert second["start_at"] >= first["end_at"]
+    assert first["kind"] == "task"
+    assert first["start_at"][11:16] >= "12:00"
+    assert second["end_at"] <= first["start_at"] or second["start_at"] >= first["end_at"]
     assert (first["category"], second["category"]) == ("work", "personal")
     focus = [b for b in blocks if b["kind"] == "focus"]
     assert focus and all(b["start_at"] >= second["end_at"] for b in focus)
@@ -1306,9 +1303,42 @@ def test_focus_break_kept_when_busy_gap_is_shorter_than_break() -> None:
     assert starts[:2] == ["12:00", "13:45"]
 
 
-def test_task_is_placed_before_breakfast() -> None:
+def test_task_does_not_shift_breakfast() -> None:
     blocks, _ = plan(tasks=[Task("Долгая", 90, "work")])
-    assert (named(blocks, "Долгая")["start_at"][11:16]) == "10:00"
     cook = [b for b in blocks if b["title"] == "Готовка"][0]
-    assert (cook["start_at"][11:16], cook["end_at"][11:16]) == ("11:30", "12:00")
-    assert named(blocks, "Завтрак")["start_at"][11:16] == "12:00"
+    assert (cook["start_at"][11:16], cook["end_at"][11:16]) == ("10:30", "11:00")
+    assert named(blocks, "Завтрак")["start_at"][11:16] == "11:00"
+    task = named(blocks, "Долгая")
+    assert task["start_at"][11:16] >= "12:00"
+
+
+def test_hour_task_stays_out_of_breakfast_hour() -> None:
+    blocks, _ = plan(tasks=[Task("Час", 60, "work")])
+    assert named(blocks, "Завтрак")["start_at"][11:16] == "11:00"
+    task = named(blocks, "Час")
+    assert task["end_at"][11:16] <= "10:30" or task["start_at"][11:16] >= "12:00"
+
+
+def test_early_breakfast_keeps_time_and_task_goes_after(conn: sqlite3.Connection) -> None:
+    drafts = make(
+        conn,
+        day_start="08:00",
+        breakfast_at="08:30",
+        tasks=[{"title": "Т", "minutes": 60, "category": "work"}],
+    )["drafts"]
+    by_title = {d["title"]: d for d in drafts}
+    cooks = [d["start_at"] for d in drafts if d["title"] == "Готовка"]
+    assert cooks[0] == f"{MON}T08:00"
+    assert (by_title["Завтрак"]["start_at"], by_title["Завтрак"]["end_at"]) == (
+        f"{MON}T08:30",
+        f"{MON}T09:30",
+    )
+    assert by_title["Т"]["start_at"] >= by_title["Завтрак"]["end_at"]
+
+
+def test_snack_not_flush_with_shifted_breakfast(conn: sqlite3.Connection) -> None:
+    drafts = make(conn, breakfast_at="14:15")["drafts"]
+    by_title = {d["title"]: d for d in drafts}
+    assert by_title["Завтрак"]["start_at"] == f"{MON}T14:15"
+    assert by_title["Перекус"]["start_at"] >= by_title["Завтрак"]["end_at"]
+    assert by_title["Перекус"]["start_at"] != by_title["Завтрак"]["end_at"]

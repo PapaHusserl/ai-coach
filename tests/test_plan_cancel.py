@@ -58,6 +58,28 @@ def test_cancel_pushed_with_y_removes_from_garmin(isolated: Path, client: PushCl
     assert client.calls == [("unschedule_workout", 22), ("delete_workout", 11)]
 
 
+@pytest.mark.parametrize("flag", ["--yes", "-y"])
+def test_cancel_pushed_with_yes_removes_without_stdin(
+    isolated: Path, client: PushClient, flag: str
+) -> None:
+    wid = pushed(isolated)
+    result = runner.invoke(main.app, ["cancel", str(wid), flag], input="")
+    assert result.exit_code == 0
+    assert "Aborted" not in result.output
+    assert client.calls == [("unschedule_workout", 22), ("delete_workout", 11)]
+    assert status_of(isolated, wid) == "cancelled"
+
+
+def test_cancel_pushed_without_yes_and_empty_stdin_aborts(
+    isolated: Path, client: PushClient
+) -> None:
+    wid = pushed(isolated)
+    result = runner.invoke(main.app, ["cancel", str(wid)], input="")
+    assert "Aborted" in result.output
+    assert client.calls == []
+    assert status_of(isolated, wid) == "pushed"
+
+
 def test_cancel_pushed_clears_ids_keeps_pushed_at(isolated: Path, client: PushClient) -> None:
     wid = pushed(isolated, "2026-03-10T10:00:00")
     runner.invoke(main.app, ["cancel", str(wid)], input="y\n")

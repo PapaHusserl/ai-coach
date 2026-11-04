@@ -183,6 +183,32 @@ def test_first_push_deletes_nothing(isolated: Path, client: PushClient) -> None:
 # повторный push
 
 
+@pytest.mark.parametrize("flag", ["--yes", "-y"])
+def test_push_with_yes_goes_without_stdin(isolated: Path, client: PushClient, flag: str) -> None:
+    wid = workout(isolated, "approved", date="2026-03-12")
+    result = runner.invoke(main.app, ["push", str(wid), flag], input="")
+    assert result.exit_code == 0
+    assert "Aborted" not in result.output
+    assert client.names() == ["upload_workout", "schedule_workout"]
+    assert status_of(isolated, wid) == "pushed"
+
+
+def test_push_without_yes_and_empty_stdin_aborts(isolated: Path, client: PushClient) -> None:
+    wid = workout(isolated, "approved")
+    result = runner.invoke(main.app, ["push", str(wid)], input="")
+    assert "Aborted" in result.output
+    assert client.calls == []
+
+
+def test_repush_with_yes_replaces_old_without_stdin(isolated: Path, client: PushClient) -> None:
+    wid = workout(isolated, "pushed", garmin_workout_id=11, garmin_schedule_id=22)
+    result = runner.invoke(main.app, ["push", str(wid), "--yes"], input="")
+    assert result.exit_code == 0
+    assert ("unschedule_workout", 22) in client.calls
+    assert ("delete_workout", 11) in client.calls
+    assert "upload_workout" in client.names()
+
+
 def test_repush_without_first_y_changes_nothing(isolated: Path, client: PushClient) -> None:
     wid = workout(isolated, "pushed", garmin_workout_id=11, garmin_schedule_id=22)
     runner.invoke(main.app, ["push", str(wid)], input="n\n")

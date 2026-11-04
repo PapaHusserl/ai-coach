@@ -3,8 +3,8 @@
 
 Занятое: события календаря дня (не отменённые, не отклонённые, не all-day) и события тренера
 (draft, written), кроме checkin. Порядок укладки: тренировка (время назвал пользователь) ->
-задачи до ужина -> готовка и завтрак (одним отрезком), перекус, отдых после него, готовка и
-ужин (занято - ближайшее окно после, не позже чем через MEAL_SHIFT_MIN, иначе skipped) ->
+готовка и завтрак (одним отрезком), перекус, отдых после него, готовка и ужин (занято -
+ближайшее окно после, не позже чем через MEAL_SHIFT_MIN, иначе skipped) -> задачи до ужина ->
 задачи, не влезшие до ужина -> фокус (не в сб/вс, не позже FOCUS_UNTIL;
 при сигнале сна - sleep_limits). Блоки не пересекаются;
 окна короче MIN_SLOT пусты для задач и фокуса. Рамка дня - до полуночи следующего дня. Сюда в
@@ -203,8 +203,8 @@ def plan_day(
     if training is not None:
         layout.training(training)
     dinner = datetime.combine(window[0].date(), frame.dinner)
-    later = layout.tasks((window[0], min(dinner, window[1])), tasks)
     layout.meals(frame)
+    later = layout.tasks((window[0], min(dinner, window[1])), tasks)
     for task in layout.tasks(window, later):
         layout.skipped.append(f"{task.title}: {task.minutes} мин не влезают в день")
     if not weekend:

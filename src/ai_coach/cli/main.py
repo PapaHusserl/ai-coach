@@ -207,15 +207,19 @@ def link(
 
 
 @app.command()
-def push(workout_id: Annotated[int, typer.Argument(help="id тренировки")]) -> None:
-    """Отправить утверждённую тренировку в Garmin и запланировать на дату (спросит y/N).
-    Повторный push заменяет только свою прежнюю копию — после отдельного y/N."""
+def push(
+    workout_id: Annotated[int, typer.Argument(help="id тренировки")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Без вопросов y/N")] = False,
+) -> None:
+    """Отправить утверждённую тренировку в Garmin и запланировать на дату (спросит y/N,
+    --yes — без вопросов). Повторный push заменяет только свою прежнюю копию — после
+    отдельного y/N; --yes пропускает и его."""
     conn = open_db()
     try:
         row = pushable(conn, workout_id)
         typer.echo(f"Дата: {row['date']}")
         typer.echo(describe_workout(garmin_json(row)))
-        if not typer.confirm("Отправить в Garmin?", default=False):
+        if not yes and not typer.confirm("Отправить в Garmin?", default=False):
             typer.echo("Ничего не отправлено.")
             return
         client = load_client()
@@ -225,7 +229,7 @@ def push(workout_id: Annotated[int, typer.Argument(help="id тренировки
                 "и удалят: "
                 f"workoutId={row['garmin_workout_id']}, scheduleId={row['garmin_schedule_id']}"
             )
-            if not typer.confirm("Отправить новую и удалить старую?", default=False):
+            if not yes and not typer.confirm("Отправить новую и удалить старую?", default=False):
                 typer.echo("Ничего не отправлено и не удалено.")
                 return
         send(conn, client, row)
@@ -243,9 +247,12 @@ SYNC_TAIL = {False: ".", True: " и удалена из Garmin. Синхрони
 
 
 @app.command("cancel")
-def cancel_(workout_id: Annotated[int, typer.Argument(help="id тренировки")]) -> None:
-    """Отменить тренировку (draft, approved или pushed). Отправленную после y/N снимает
-    с календаря Garmin и удаляет из Garmin."""
+def cancel_(
+    workout_id: Annotated[int, typer.Argument(help="id тренировки")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Без вопроса y/N")] = False,
+) -> None:
+    """Отменить тренировку (draft, approved или pushed). Отправленную после y/N (--yes —
+    без вопроса) снимает с календаря Garmin и удаляет из Garmin."""
     conn = open_db()
     try:
         row = cancellable(conn, workout_id)
@@ -257,7 +264,7 @@ def cancel_(workout_id: Annotated[int, typer.Argument(help="id трениров�
                 f"workoutId={row['garmin_workout_id']}, scheduleId={row['garmin_schedule_id']}; "
                 "после отмены её снимут с календаря и удалят"
             )
-            if not typer.confirm("Отменить и удалить из Garmin?", default=False):
+            if not yes and not typer.confirm("Отменить и удалить из Garmin?", default=False):
                 typer.echo("Ничего не отменено.")
                 return
             remove_old(load_client(), row["garmin_workout_id"], row["garmin_schedule_id"])
