@@ -191,3 +191,7 @@ kaban-test.md:model: opus; papa-kaban.md:model: fable; kaban-dekart.md:model: fa
 - `day_plan.py` докстринг модуля — новый порядок укладки (еда раньше задач).
 - `cli/main.py` докстринг `push` — `--yes` пропускает и второй y/N при повторном push.
 - `test_agenda_day_plan.py::test_task_does_not_shift_breakfast` — убрана лишняя проверка.
+
+Партия 1, mutmut (окно Влада 00:59): `x_plan_day` 37/39, выжили 13 и 20 (`window[0]`→`window[1]`). Доеба добавил
+`test_task_before_dinner_time_takes_gap_across_it_before_longer_deferred_one`; повтор mutmut (окно 01:01) —
+39/39 killed. `push`/`cancel_` mutmut не мутирует (в results их нет) — покрыты обычными тестами.

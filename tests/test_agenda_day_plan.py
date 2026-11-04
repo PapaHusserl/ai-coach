@@ -375,6 +375,15 @@ def test_dinner_keeps_1930_when_task_does_not_fit_in_daytime() -> None:
     assert named(blocks, "Долго")["start_at"][11:16] == "20:30"
 
 
+def test_task_before_dinner_time_takes_gap_across_it_before_longer_deferred_one() -> None:
+    busy = [span(MON, "10:00", "19:00"), span(MON, "20:00", "24:00")]
+    tasks = [Task("Длинная", 60, "work"), Task("Короткая", 30, "work")]
+    blocks, skipped = plan(busy=busy, tasks=tasks)
+    assert named(blocks, "Короткая")["start_at"][11:16] == "19:00"
+    assert [b for b in blocks if b["title"] == "Длинная"] == []
+    assert any(line.startswith("Длинная") for line in skipped)
+
+
 def test_breakfast_moves_to_nearest_window_after_meeting() -> None:
     blocks, _ = plan(busy=[span(MON, "11:00", "12:00")])
     cook = [b for b in blocks if b["title"] == "Готовка"][0]
