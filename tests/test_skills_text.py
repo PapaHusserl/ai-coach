@@ -378,6 +378,18 @@ def test_coach_4a_keeps_meal_plan_today_without_first_run_note() -> None:
     assert "(первый запуск за день)" not in item
 
 
+def test_meal_skill_allows_get_food_and_get_pantry() -> None:
+    head = (SKILLS / "coach-meal" / "SKILL.md").read_text().split("---")[1]
+    allowed = next(line for line in head.splitlines() if line.startswith("allowed-tools:"))
+    assert "mcp__ai-coach__get_food," in allowed
+    assert "mcp__ai-coach__get_pantry" in allowed
+
+
+def test_food_skill_allows_get_pantry() -> None:
+    head = (SKILLS / "coach-food" / "SKILL.md").read_text().split("---")[1]
+    assert "mcp__ai-coach__get_pantry" in head
+
+
 def test_server_describes_first_run_today_in_snapshot() -> None:
     text = (ROOT.parent / "src" / "ai_coach" / "mcp_server" / "server.py").read_text()
     assert "first_run_today (" in text

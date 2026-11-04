@@ -128,6 +128,51 @@ def test_day_file_offers_cancelling_cooking_block_by_event_cancel() -> None:
     assert "`uv run coach event cancel <id>` блоков «Готовка»" in text
 
 
+def test_day_file_puts_meals_before_tasks() -> None:
+    text = day_text()
+    assert "готовка и завтрак, перекус, отдых после перекуса, готовка и ужин, задачи, фокус" in text
+
+
+def test_day_step_two_asks_morning_routine() -> None:
+    step = next(line for line in day_text().splitlines() if line.startswith("2. Задачи"))
+    assert "распорядок утра" in step
+    assert "`day_start`" in step
+    assert "`breakfast_at`" in step
+
+
+def test_recalc_window_shows_substance_of_changes() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    assert "с сутью изменений" in text
+
+
+def test_meal_skill_reads_pantry_first_and_avoids_recent_food() -> None:
+    text = (ROOT / "skills" / "coach-meal" / "SKILL.md").read_text()
+    step = next(line for line in text.splitlines() if line.startswith("1. "))
+    assert "Сначала `get_pantry`" in step
+    assert "1-2 дня" in step
+    assert "не повторяй" in step
+
+
+def test_day_file_puts_late_tasks_after_dinner_and_evening_not_free() -> None:
+    text = day_text()
+    assert "не влезшие до ужина задачи - после ужина" in text
+    assert "вечер после ужина свободен" not in text.lower()
+
+
+def test_day_file_asks_confirmation_with_plan_summary() -> None:
+    assert "краткий план" in day_text()
+
+
+def test_coach_runs_push_and_cancel_with_yes_after_user_yes() -> None:
+    assert "coach push <id> --yes` / `uv run coach cancel <id> --yes`" in coach_text()
+
+
+def test_help_training_topic_mentions_yes_flag() -> None:
+    text = (AGENTS / "coach-help" / "training.md").read_text()
+    assert "coach push <id> --yes" in text
+    assert "--yes" in text.split("Отменить")[1]
+
+
 def test_help_calendar_topic_mentions_cooking() -> None:
     assert "готовк" in (AGENTS / "coach-help" / "calendar.md").read_text()
 
