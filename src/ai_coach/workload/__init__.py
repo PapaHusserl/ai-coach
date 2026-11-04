@@ -11,7 +11,7 @@ from ai_coach.workload.config import (
 from ai_coach.workload.grooming import GroomingError, read_grooming
 from ai_coach.workload.screen import AwReader, ScreenError, ScreenReader, read_screen
 from ai_coach.workload.service import AHEAD_DAYS, workload_day, workload_series
-from ai_coach.workload.todo import TodoError, read_todo
+from ai_coach.workload.todo import TodoError, add_item, edit_item, move_item, read_todo
 
 __all__ = [
     "AHEAD_DAYS",
@@ -26,8 +26,11 @@ __all__ = [
     "TodoError",
     "WorkloadConfig",
     "WorkloadConfigError",
+    "add_item",
     "default_config",
+    "edit_item",
     "load_config",
+    "move_item",
     "read_claude",
     "read_grooming",
     "read_screen",

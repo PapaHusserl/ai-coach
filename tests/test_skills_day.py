@@ -92,12 +92,12 @@ def test_evening_skill_within_limit() -> None:
     assert len(EVENING.read_bytes()) <= EVENING_SKILL_LIMIT
 
 
-def test_todo_list_is_allowed() -> None:
-    assert "Bash(uv run coach todo list:*)" in ALLOW
+def test_todo_commands_are_allowed() -> None:
+    assert "Bash(uv run coach todo:*)" in ALLOW
 
 
-def test_todo_add_is_not_allowed() -> None:
-    assert not [entry for entry in ALLOW if "coach todo" in entry and "list" not in entry]
+def test_todo_has_no_narrower_allow_entries() -> None:
+    assert [entry for entry in ALLOW if "coach todo" in entry] == ["Bash(uv run coach todo:*)"]
 
 
 def test_help_calendar_topic_has_day_plan() -> None:
@@ -112,8 +112,14 @@ def test_help_toc_calendar_row_mentions_day_plan() -> None:
     assert any("план дня" in row for row in rows)
 
 
-def test_help_workload_topic_has_todo_list() -> None:
-    assert "coach todo list" in (AGENTS / "coach-help" / "workload.md").read_text()
+def test_help_todo_topic_has_commands() -> None:
+    text = (AGENTS / "coach-help" / "todo.md").read_text()
+    for command in ["list", "add", "start", "done", "drop", "reopen", "edit"]:
+        assert f"coach todo {command}" in text
+
+
+def test_help_workload_topic_points_to_todo_topic() -> None:
+    assert "coach-help/todo.md" in (AGENTS / "coach-help" / "workload.md").read_text()
 
 
 def test_day_file_offers_cancelling_cooking_block_by_event_cancel() -> None:
