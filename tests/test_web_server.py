@@ -2,19 +2,30 @@
 
 import http.client
 import json
+import socket
 import threading
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any, NamedTuple
 from urllib.parse import quote
 
 import pytest
+from workload_fakes import coach_event
 
-from ai_coach.web.server import make_server
+from ai_coach.store.agenda import add_event
+from ai_coach.store.db import open_db
+from ai_coach.web import server as server_module
+from ai_coach.web.server import lan_address, make_server
 
 
 @pytest.fixture
-def port(tmp_path: Path) -> Iterator[int]:
-    server = make_server("127.0.0.1", 0, tmp_path / "coach.db")
+def db_path(tmp_path: Path) -> Path:
+    return tmp_path / "coach.db"
+
+
+@pytest.fixture
+def port(db_path: Path) -> Iterator[int]:
+    server = make_server("127.0.0.1", 0, db_path)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server.server_address[1]
@@ -107,6 +118,182 @@ def test_static_script_content_type(port: int) -> None:
         assert response.getheader("Content-Type") == "text/javascript; charset=utf-8"
     finally:
         conn.close()
+
+
+class Reply(NamedTuple):
+    headers: list[tuple[str, str]]
+    body: bytes
+
+    def header(self, name: str) -> str | None:
+        return next((v for k, v in self.headers if k.lower() == name.lower()), None)
+
+
+def fetch(port: int, path: str, method: str = "GET") -> Reply:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request(method, path)
+        response = conn.getresponse()
+        return Reply(response.getheaders(), response.read())
+    finally:
+        conn.close()
+
+
+def test_not_found_is_plain_text_with_message(port: int) -> None:
+    reply = fetch(port, "/nope")
+    assert reply.header("Content-Type") == "text/plain; charset=utf-8"
+    assert reply.body.decode() == "Не найдено."
+
+
+def test_static_not_found_is_plain_text_with_message(port: int) -> None:
+    reply = fetch(port, "/static/nope.js")
+    assert reply.header("Content-Type") == "text/plain; charset=utf-8"
+    assert reply.body.decode() == "Не найдено."
+
+
+def test_method_not_allowed_message(port: int) -> None:
+    reply = fetch(port, "/api/day", "POST")
+    assert reply.header("Content-Type") == "text/plain; charset=utf-8"
+    assert reply.body.decode() == "Только GET."
+
+
+def test_bad_date_message(port: int) -> None:
+    reply = fetch(port, "/api/day?date=" + quote("мусор"))
+    assert reply.body.decode() == "date: нужна дата YYYY-MM-DD."
+
+
+def test_header_names_canonical_case_and_length(port: int) -> None:
+    reply = fetch(port, "/api/day?date=2026-11-07")
+    names = [k for k, _ in reply.headers]
+    assert "Content-Type" in names
+    assert "Content-Length" in names
+    assert reply.header("Content-Length") == str(len(reply.body))
+
+
+def test_api_day_content_type_json(port: int) -> None:
+    reply = fetch(port, "/api/day?date=2026-11-07")
+    assert reply.header("Content-Type") == "application/json; charset=utf-8"
+
+
+def test_api_day_keeps_cyrillic_unescaped(port: int, db_path: Path) -> None:
+    conn = open_db(db_path)
+    add_event(
+        conn,
+        coach_event(
+            date="2026-11-07",
+            start_at="2026-11-07T09:00:00",
+            end_at="2026-11-07T10:00:00",
+            title="Пробежка",
+        ),
+    )
+    conn.commit()
+    conn.close()
+    raw = fetch(port, "/api/day?date=2026-11-07").body
+    assert "Пробежка".encode() in raw
+    assert b"\\u" not in raw
+
+
+def test_root_is_html_content_type(port: int) -> None:
+    reply = fetch(port, "/")
+    assert reply.header("Content-Type") == "text/html; charset=utf-8"
+
+
+def test_static_trailing_slash_is_404(port: int) -> None:
+    status, _ = request(port, "/static/pult.js/")
+    assert status == 404
+
+
+class _Calls:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.packages: list[str] = []
+        self.parts: list[tuple[str, ...]] = []
+
+    def files(self, package: str) -> "_Calls":
+        self.packages.append(package)
+        return self
+
+    def joinpath(self, *parts: str) -> Path:
+        self.parts.append(parts)
+        return self.root.joinpath(*parts)
+
+
+@pytest.fixture
+def fake_static(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Calls:
+    root = tmp_path / "pkg"
+    (root / "static").mkdir(parents=True)
+    calls = _Calls(root)
+    monkeypatch.setattr(server_module.resources, "files", calls.files)
+    return calls
+
+
+def test_static_lookup_in_package_static_dir(port: int, fake_static: _Calls) -> None:
+    (fake_static.root / "static" / "index.html").write_text("<p>x</p>")
+    status, body = request(port, "/")
+    assert status == 200
+    assert body == b"<p>x</p>"
+    assert fake_static.packages == ["ai_coach.web"]
+    assert fake_static.parts == [("static", "index.html")]
+
+
+def test_static_unknown_suffix_is_octet_stream(port: int, fake_static: _Calls) -> None:
+    (fake_static.root / "static" / "data.bin").write_bytes(b"\x00\x01")
+    reply = fetch(port, "/static/data.bin")
+    assert reply.header("Content-Type") == "application/octet-stream; charset=utf-8"
+    assert reply.body == b"\x00\x01"
+
+
+def test_static_dotfile_is_404_even_if_exists(port: int, fake_static: _Calls) -> None:
+    (fake_static.root / "static" / ".secret").write_text("x")
+    status, _ = request(port, "/static/.secret")
+    assert status == 404
+
+
+class _FakeSocket:
+    created: list[tuple[Any, ...]] = []
+    connected: list[Any] = []
+    closed = 0
+    fail = False
+
+    def __init__(self, *args: Any) -> None:
+        type(self).created.append(args)
+
+    def connect(self, address: Any) -> None:
+        type(self).connected.append(address)
+        if type(self).fail:
+            raise OSError("нет сети")
+
+    def getsockname(self) -> tuple[str, int]:
+        return ("192.168.1.5", 54321)
+
+    def close(self) -> None:
+        type(self).closed += 1
+
+
+@pytest.fixture
+def fake_socket(monkeypatch: pytest.MonkeyPatch) -> type[_FakeSocket]:
+    _FakeSocket.created = []
+    _FakeSocket.connected = []
+    _FakeSocket.closed = 0
+    _FakeSocket.fail = False
+    monkeypatch.setattr(server_module.socket, "socket", _FakeSocket)
+    return _FakeSocket
+
+
+def test_lan_address_returns_host_part(fake_socket: type[_FakeSocket]) -> None:
+    assert lan_address() == "192.168.1.5"
+    assert fake_socket.closed == 1
+
+
+def test_lan_address_probes_udp_without_sending(fake_socket: type[_FakeSocket]) -> None:
+    lan_address()
+    assert fake_socket.created == [(socket.AF_INET, socket.SOCK_DGRAM)]
+    assert fake_socket.connected == [("10.255.255.255", 1)]
+
+
+def test_lan_address_no_network_is_none_and_closes(fake_socket: type[_FakeSocket]) -> None:
+    fake_socket.fail = True
+    assert lan_address() is None
+    assert fake_socket.closed == 1
 
 
 def test_static_css_content_type(port: int) -> None:

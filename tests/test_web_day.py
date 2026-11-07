@@ -146,6 +146,25 @@ def test_meeting_from_previous_evening_clipped_to_midnight(conn: sqlite3.Connect
     assert [(m["start_at"], m["end_at"]) for m in found] == [(f"{D}T00:00:00", f"{D}T01:00:00")]
 
 
+def test_meeting_ending_tomorrow_clipped_to_next_midnight(conn: sqlite3.Connection) -> None:
+    meeting(conn, "23:00", "02:00", end_day="2026-11-08")
+    found = view(conn, "23:30")["meetings"]
+    assert [(m["start_at"], m["end_at"]) for m in found] == [
+        (f"{D}T23:00:00", "2026-11-08T00:00:00")
+    ]
+
+
+def test_meeting_started_two_days_ago_not_listed(conn: sqlite3.Connection) -> None:
+    meeting(conn, "22:00", "01:00", day="2026-11-05", end_day=D)
+    assert view(conn, "00:30")["meetings"] == []
+
+
+def test_result_has_date_and_now(conn: sqlite3.Connection) -> None:
+    result = view(conn, "12:00")
+    assert result["date"] == D
+    assert result["now"] == f"{D}T12:00:00"
+
+
 def test_meeting_fully_yesterday_hidden(conn: sqlite3.Connection) -> None:
     meeting(conn, "10:00", "11:00", day="2026-11-06")
     assert view(conn, "10:30")["meetings"] == []
