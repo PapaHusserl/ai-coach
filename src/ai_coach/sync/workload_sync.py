@@ -57,13 +57,15 @@ def stored_events(
 
 def own_events(
     raw: list[dict[str, Any]], config: WorkloadConfig, conn: sqlite3.Connection, stamp: str
-) -> tuple[list[dict[str, Any]], int, set[str]]:
+) -> tuple[list[dict[str, Any]], int, set[str], list[dict[str, Any]]]:
     """События календаря коуча: свои (записанные тренером, по uid) с категорией из coach_events -
     в базу, если категория есть; чужие (добавлены руками) пропускаются. Возвращает строки для
-    базы, число чужих и uid всех своих."""
+    базы, число чужих, uid всех своих и переносы: у неповторяющегося своего события время в
+    календаре другое - id, start_at, end_at, date, old_date, workout_id."""
     rows: list[dict[str, Any]] = []
     foreign = 0
     seen: set[str] = set()
+    moves: list[dict[str, Any]] = []
     for event in raw:
         if config.category(event["calendar"]) != "coach":
             continue
@@ -72,13 +74,26 @@ def own_events(
             foreign += 1
             continue
         seen.add(event["uid"])
+        if found["repeat"] is None and (
+            event["start_at"] != found["start_at"] or event["end_at"] != found["end_at"]
+        ):
+            moves.append(
+                {
+                    "id": found["id"],
+                    "start_at": event["start_at"],
+                    "end_at": event["end_at"],
+                    "date": event["start_at"][:10],
+                    "old_date": found["date"],
+                    "workout_id": found["workout_id"],
+                }
+            )
         if found["category"] is not None:
             row: dict[str, Any] = {"raw_json": {}, **event, "date": event["start_at"][:10]}
             demand = config.demand(found["category"], event.get("title"))
             rows.append(
                 {**row, "category": found["category"], "demand": demand, "synced_at": stamp}
             )
-    return rows, foreign, seen
+    return rows, foreign, seen, moves
 
 
 def vanished(conn: sqlite3.Connection, first: date, last: date, seen: set[str]) -> list[int]:
@@ -98,16 +113,24 @@ def coach_part(
     conn: sqlite3.Connection,
     stamp: str,
     window: tuple[date, date],
-) -> tuple[list[dict[str, Any]], list[int], list[str]]:
-    """Календарь коуча: строки своих событий для базы, id пропавших и замечания для итога."""
-    mine, foreign, seen = own_events(raw, config, conn, stamp)
+) -> tuple[list[dict[str, Any]], list[int], list[dict[str, Any]], list[str]]:
+    """Календарь коуча: строки своих событий для базы, id пропавших, переносы и замечания для
+    итога."""
+    mine, foreign, seen, moves = own_events(raw, config, conn, stamp)
     gone = vanished(conn, window[0], window[1], seen)
     notes: list[str] = []
     if foreign:
         notes.append(f"чужих событий в календаре коуча: {foreign}")
     if gone:
         notes.append(f"пропало из календаря коуча: {len(gone)}")
-    return mine, gone, notes
+    if moves:
+        notes.append(f"перенесено в календаре: {len(moves)}")
+    for move in moves:
+        if move["workout_id"] is not None and move["date"] != move["old_date"]:
+            notes.append(
+                f"тренировка {move['workout_id']} перенесена в календаре, на часах - старая дата"
+            )
+    return mine, gone, moves, notes
 
 
 def read_calendar(
@@ -116,15 +139,16 @@ def read_calendar(
     conn: sqlite3.Connection,
     stamp: str,
     window: tuple[date, date],
-) -> tuple[list[dict[str, Any]], list[int], list[str]]:
-    """Читает календарь: события для базы, id пропавших событий коуча и замечания для итога."""
+) -> tuple[list[dict[str, Any]], list[int], list[dict[str, Any]], list[str]]:
+    """Читает календарь: события для базы, id пропавших событий коуча, переносы и замечания
+    для итога."""
     raw = (reader or CalendarReader()).read(window[0], window[1])
     events, unknown = stored_events(raw, config, stamp)
     notes = [f"неразмеченные календари: {', '.join(unknown)}"] if unknown else []
     if not config.coach_calendar:
-        return events, [], notes
-    mine, gone, coach_notes = coach_part(raw, config, conn, stamp, window)
-    return events + mine, gone, notes + coach_notes
+        return events, [], [], notes
+    mine, gone, moves, coach_notes = coach_part(raw, config, conn, stamp, window)
+    return events + mine, gone, moves, notes + coach_notes
 
 
 def resolve_config(config: WorkloadConfig | None, errors: list[str]) -> WorkloadConfig:
@@ -209,10 +233,10 @@ def sync_workload(
     errors: list[str] = []
     notes: list[str] = []
     config = resolve_config(config, errors)
-    events, gone = None, []
+    events, gone, moves = None, [], []
     if config.has_calendar:
         try:
-            events, gone, found = read_calendar(reader, config, conn, started, (first, last))
+            events, gone, moves, found = read_calendar(reader, config, conn, started, (first, last))
             notes += found
         except CalendarError as e:
             errors.append(f"календарь: {e}")
@@ -224,6 +248,9 @@ def sync_workload(
     with conn:
         if events is not None:
             replace_calendar_window(conn, first.isoformat(), last.isoformat(), events)
+        for move in moves:
+            values = {k: move[k] for k in ("start_at", "end_at", "date")}
+            update_event(conn, move["id"], values)
         for event_id in gone:
             removed = {"status": "removed", "removed_at": started, "removed_by": "calendar"}
             update_event(conn, event_id, removed)

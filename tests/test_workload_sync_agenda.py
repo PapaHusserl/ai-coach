@@ -2,7 +2,7 @@
 
 import sqlite3
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -16,6 +16,7 @@ from workload_fakes import (
     write_todo,
 )
 
+from ai_coach.agenda.slots import busy_spans
 from ai_coach.store.agenda import add_event, get_event
 from ai_coach.store.workload import list_calendar_events
 from ai_coach.sync.workload_sync import sync_workload
@@ -59,6 +60,15 @@ def coach_raw(uid: str = "c1", **fields: object) -> dict[str, object]:
         "end_at": f"{DAY}T12:00:00",
     }
     return raw_event(uid=uid, **(base | fields))
+
+
+def add_workout(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO planned_workouts (id, date, sport, name, workout_json)"
+        " VALUES (7, ?, 'run', 'Бег', '{}')",
+        (DAY,),
+    )
+    conn.commit()
 
 
 def status_of(conn: sqlite3.Connection, event_id: int) -> str:
@@ -269,3 +279,116 @@ def test_without_coach_calendar_coach_events_are_not_touched(
     no_coach = replace(config, coach_calendar=None)
     run(conn, no_coach, FakeCalendar([]))
     assert status_of(conn, event_id) == "written"
+
+
+def test_moved_written_event_gets_new_time(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    event_id = own(conn)
+    moved = coach_raw(start_at=f"{DAY}T14:00:00", end_at=f"{DAY}T15:00:00")
+    message = run(conn, config, FakeCalendar([moved]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["start_at"], row["end_at"], row["date"]) == (
+        f"{DAY}T14:00:00",
+        f"{DAY}T15:00:00",
+        DAY,
+    )
+    assert row["status"] == "written"
+    assert "перенесено в календаре: 1" in message
+
+
+def test_move_to_another_day_changes_date(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
+    event_id = own(conn)
+    new_day = "2026-10-11"
+    moved = coach_raw(start_at=f"{new_day}T10:00:00", end_at=f"{new_day}T12:00:00")
+    run(conn, config, FakeCalendar([moved]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["date"] == new_day
+    assert row["start_at"] == f"{new_day}T10:00:00"
+
+
+def test_moved_event_gives_single_busy_span(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    own(conn)
+    moved = coach_raw(start_at=f"{DAY}T14:00:00", end_at=f"{DAY}T15:00:00")
+    run(conn, config, FakeCalendar([moved]))
+    spans = busy_spans(conn, date.fromisoformat(DAY))
+    # событие видно и как строка календаря, и как строка тренера: оба отрезка - новые, старого нет
+    assert set(spans) == {(datetime(2026, 10, 10, 14), datetime(2026, 10, 10, 15))}
+
+
+def test_unmoved_event_is_not_reported(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
+    own(conn)
+    message = run(conn, config, FakeCalendar([coach_raw()]))
+    assert "перенесено" not in message
+
+
+def test_move_of_workout_event_to_other_day_warns(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    add_workout(conn)
+    own(conn, workout_id=7)
+    new_day = "2026-10-11"
+    moved = coach_raw(start_at=f"{new_day}T10:00:00", end_at=f"{new_day}T12:00:00")
+    message = run(conn, config, FakeCalendar([moved]))
+    assert "тренировка 7 перенесена в календаре, на часах - старая дата" in message
+
+
+def test_move_of_workout_event_within_same_day_does_not_warn(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    add_workout(conn)
+    own(conn, workout_id=7)
+    moved = coach_raw(start_at=f"{DAY}T14:00:00", end_at=f"{DAY}T15:00:00")
+    message = run(conn, config, FakeCalendar([moved]))
+    assert "перенесено в календаре: 1" in message
+    assert "тренировка 7" not in message
+
+
+def test_moved_repeating_event_is_not_changed(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    event_id = own(
+        conn, "r1", kind="checkin", category=None, repeat="daily",
+        start_at=f"{DAY}T21:00:00", end_at=f"{DAY}T21:15:00",
+    )  # fmt: skip
+    before = get_event(conn, event_id)
+    shifted = coach_raw("r1", start_at=f"{DAY}T22:00:00", end_at=f"{DAY}T22:15:00")
+    message = run(conn, config, FakeCalendar([shifted]))
+    assert get_event(conn, event_id) == before
+    assert "перенесено" not in message
+
+
+def test_all_day_event_in_calendar_is_not_a_move(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    fields = {"all_day": 1, "start_at": f"{DAY}T00:00:00", "end_at": f"{DAY}T23:59:59"}
+    own(conn, **fields)
+    raw = coach_raw(all_day=True, start_at=f"{DAY}T00:00:00", end_at=f"{DAY}T23:59:59")
+    message = run(conn, config, FakeCalendar([raw]))
+    assert "перенесено" not in message
+
+
+def test_all_day_event_shifted_to_next_day_is_a_move(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    fields = {"all_day": 1, "start_at": f"{DAY}T00:00:00", "end_at": f"{DAY}T23:59:59"}
+    event_id = own(conn, **fields)
+    raw = coach_raw(all_day=True, start_at="2026-10-11T00:00:00", end_at="2026-10-11T23:59:59")
+    run(conn, config, FakeCalendar([raw]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["date"] == "2026-10-11"
+
+
+def test_move_outside_sync_window_marks_removed_by_calendar(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    event_id = own(conn)
+    run(conn, config, FakeCalendar([]))  # событие перенесено за окно: читатель его не видит
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["status"], row["removed_by"]) == ("removed", "calendar")
