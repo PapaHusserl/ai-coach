@@ -1,19 +1,24 @@
-"""HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=. Только читает
-базу, на каждый запрос своё соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
+"""HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=; пишет в базу
+только POST /api/mark (отметки пункта, Origin = Host, Р1 = 2 П2), на каждый запрос своё
+соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
 import socket
 from datetime import date, datetime
+from email.message import Message
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
+from io import BufferedIOBase
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from ai_coach.store.db import open_db
 from ai_coach.web.day import day_view
+from ai_coach.web.marks import MarkError, NoEvent, save_mark
 
+MAX_BODY = 64 * 1024
 STATIC_PREFIX = "/static/"
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
 
@@ -28,6 +33,46 @@ def lan_address() -> str | None:
         return None
     finally:
         probe.close()
+
+
+def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
+    """Ответ-отказ до чтения тела: не тот путь, чужой Origin, нет или слишком большое тело."""
+    origin = headers.get("Origin")
+    length = headers.get("Content-Length", "")
+    if urlsplit(path).path != "/api/mark":
+        return HTTPStatus.NOT_FOUND, "Не найдено."
+    if origin is None or urlsplit(origin).netloc != headers.get("Host"):
+        return HTTPStatus.FORBIDDEN, "Запись только со страницы пульта."
+    if not (length.isascii() and length.isdigit()):
+        return HTTPStatus.BAD_REQUEST, "Нужно тело запроса."
+    if int(length) > MAX_BODY:
+        return HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Тело слишком большое."
+    return None
+
+
+def mark_reply(
+    db: str | Path | None, path: str, headers: Message, rfile: BufferedIOBase
+) -> tuple[int, str]:
+    """POST /api/mark: (статус, тело ответа). Пишет отметку пункта в базу."""
+    refusal = _refusal(path, headers)
+    if refusal:
+        return refusal
+    try:
+        payload = json.loads(rfile.read(int(headers["Content-Length"])))
+    except ValueError:
+        payload = None
+    if not isinstance(payload, dict):
+        return HTTPStatus.BAD_REQUEST, "Нужен JSON-объект."
+    conn = open_db(db)
+    try:
+        with conn:
+            mark_id = save_mark(conn, cast(dict[str, Any], payload), datetime.now())
+    except MarkError as error:
+        status = HTTPStatus.NOT_FOUND if isinstance(error, NoEvent) else HTTPStatus.BAD_REQUEST
+        return status, str(error)
+    finally:
+        conn.close()
+    return HTTPStatus.OK, json.dumps({"id": mark_id})
 
 
 def make_server(host: str, port: int, db: str | Path | None = None) -> ThreadingHTTPServer:
@@ -85,6 +130,10 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
         def refuse(self) -> None:
             self.text(HTTPStatus.METHOD_NOT_ALLOWED, "Только GET.")
 
-        do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
+        def do_POST(self) -> None:
+            status, body = mark_reply(db, self.path, self.headers, self.rfile)
+            self.send(status, body.encode(), "application/json" if status == 200 else "text/plain")
+
+        do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
 
     return ThreadingHTTPServer((host, port), Handler)

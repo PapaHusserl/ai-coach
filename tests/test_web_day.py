@@ -5,8 +5,11 @@ from typing import Any
 from workload_fakes import coach_event
 
 from ai_coach.store.agenda import add_event
+from ai_coach.store.journal import add_slip, add_wellbeing
 from ai_coach.store.workload import replace_calendar_window
-from ai_coach.web.day import day_view, moved, on_day
+from ai_coach.web.day import day_view
+from ai_coach.web.marks import save_mark
+from ai_coach.web.repeat import moved, on_day
 
 DAY = date(2026, 11, 7)
 D = "2026-11-07"
@@ -55,6 +58,10 @@ def _existing(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
     """Прежние встречи дня, чтобы замена окна их не стёрла."""
     rows = conn.execute("SELECT * FROM calendar_events WHERE date = ?", (day,)).fetchall()
     return [{k: r[k] for k in r.keys() if k != "id"} for r in rows]  # noqa: SIM118
+
+
+def mark(event_id: int, kind: str, **fields: Any) -> dict[str, Any]:
+    return {"event_id": event_id, "date": D, "mark": kind, **fields}
 
 
 def view(conn: sqlite3.Connection, now: str) -> dict[str, Any]:
@@ -130,8 +137,131 @@ def test_item_fields_whitelist(conn: sqlite3.Connection) -> None:
         "status",
         "note",
         "repeat",
+        "marks",
+        "due",
     }
     assert row["note"] == "заметка"
+
+
+def by_id(result: dict[str, Any], event_id: int) -> dict[str, Any]:
+    return next(r for r in result["items"] if r["id"] == event_id)
+
+
+def test_due_for_past_unmarked_task_only(conn: sqlite3.Connection) -> None:
+    unmarked = item(conn, "09:00", "10:00")
+    rated = item(conn, "10:00", "11:00")
+    future = item(conn, "16:00", "17:00")
+    save_mark(conn, mark(rated, "rating", focus=4, fatigue=2, effort=3), at("10:30"))
+    conn.commit()
+    result = view(conn, "15:00")
+    assert by_id(result, unmarked)["due"] is True
+    assert by_id(result, rated)["due"] is False
+    assert by_id(result, future)["due"] is False
+
+
+def test_practice_done_zero_is_not_due(conn: sqlite3.Connection) -> None:
+    practice = item(conn, "12:00", "12:15", kind="practice")
+    save_mark(conn, mark(practice, "done", done=0), at("12:05"))
+    conn.commit()
+    row = by_id(view(conn, "15:00"), practice)
+    assert row["due"] is False
+    assert row["marks"]["done"]["done"] == 0
+
+
+def test_checkin_due_follows_evening_done_even_without_event_id(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "20:00", "20:15", kind="checkin")
+    assert by_id(view(conn, "21:00"), checkin)["due"] is True
+    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 20:30:00", "score": 3, "mood": 3})
+    conn.commit()
+    assert by_id(view(conn, "21:00"), checkin)["due"] is False
+
+
+def test_marks_hold_only_own_item_and_day(conn: sqlite3.Connection) -> None:
+    mine = item(conn, "09:00", "10:00")
+    other = item(conn, "10:00", "11:00")
+    save_mark(conn, mark(mine, "slip", text="бесит"), at("09:30"))
+    save_mark(conn, mark(other, "feel", score=4), at("10:30"))
+    add_slip(
+        conn,
+        {
+            "date": "2026-11-06",
+            "logged_at": "2026-11-06 09:30:00",
+            "text": "вчера",
+            "event_id": mine,
+        },
+    )
+    conn.commit()
+    result = view(conn, "12:00")
+    assert [s["text"] for s in by_id(result, mine)["marks"]["slips"]] == ["бесит"]
+    assert by_id(result, mine)["marks"]["feel"] == []
+    assert by_id(result, other)["marks"]["feel"][0]["score"] == 4
+
+
+def test_past_unmarked_rest_and_practice_are_due(conn: sqlite3.Connection) -> None:
+    rest = item(conn, "09:00", "09:30", kind="rest")
+    practice = item(conn, "10:00", "10:30", kind="practice")
+    result = view(conn, "15:00")
+    assert by_id(result, rest)["due"] is True
+    assert by_id(result, practice)["due"] is True
+    assert by_id(result, rest)["marks"]["done"] is None
+
+
+def test_done_one_on_rest_is_not_due(conn: sqlite3.Connection) -> None:
+    rest = item(conn, "09:00", "09:30", kind="rest")
+    save_mark(conn, mark(rest, "done", done=1), at("09:10"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), rest)["due"] is False
+
+
+def test_past_unrated_focus_is_due(conn: sqlite3.Connection) -> None:
+    focus = item(conn, "09:00", "10:00", kind="focus")
+    assert by_id(view(conn, "15:00"), focus)["due"] is True
+
+
+def test_feel_and_slip_do_not_fill_a_task(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "10:00")
+    save_mark(conn, mark(task, "feel", score=4), at("09:30"))
+    save_mark(conn, mark(task, "slip", text="сорвался"), at("09:40"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), task)["due"] is True
+
+
+def test_past_unfilled_checkin_is_due_only_when_past(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "20:00", "20:15", kind="checkin")
+    assert by_id(view(conn, "20:05"), checkin)["due"] is False
+
+
+def test_kinds_without_window_are_never_due_and_have_empty_marks(
+    conn: sqlite3.Connection,
+) -> None:
+    ids = [item(conn, "06:00", "07:00", kind=k) for k in ("sleep", "meal", "training")]
+    result = view(conn, "15:00")
+    for event_id in ids:
+        row = by_id(result, event_id)
+        assert row["due"] is False
+        assert row["marks"] == {"ratings": [], "feel": [], "slips": [], "done": None}
+
+
+def test_marks_carry_fields_and_order_by_time(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "11:00")
+    save_mark(conn, mark(task, "rating", focus=4, fatigue=2, effort=3, text="ок"), at("09:30"))
+    save_mark(conn, mark(task, "rating", focus=1, fatigue=5, effort=5), at("10:30"))
+    save_mark(conn, mark(task, "feel", score=2, text="устал"), at("10:00"))
+    conn.commit()
+    marks = by_id(view(conn, "12:00"), task)["marks"]
+    first, second = marks["ratings"]
+    assert (first["focus"], first["fatigue"], first["effort"], first["text"]) == (4, 2, 3, "ок")
+    assert first["logged_at"] == f"{D} 09:30:00"
+    assert second["focus"] == 1
+    assert (marks["feel"][0]["score"], marks["feel"][0]["text"]) == (2, "устал")
+    assert marks["feel"][0]["logged_at"] == f"{D} 10:00:00"
+
+
+def test_meetings_have_no_marks(conn: sqlite3.Connection) -> None:
+    meeting(conn, "09:00", "10:00")
+    row = view(conn, "12:00")["meetings"][0]
+    assert "marks" not in row
+    assert "due" not in row
 
 
 def test_cancelled_and_declined_meetings_hidden(conn: sqlite3.Connection) -> None:

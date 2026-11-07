@@ -4,10 +4,17 @@ import sqlite3
 from datetime import date, datetime
 from typing import Any
 
-from ai_coach.store.agenda import ACTIVE, get_event, mark_done, unmark_done
-from ai_coach.store.journal import add_focus, add_slip, add_wellbeing
+from ai_coach.store.agenda import ACTIVE, get_event, list_done, mark_done, unmark_done
+from ai_coach.store.journal import (
+    add_focus,
+    add_slip,
+    add_wellbeing,
+    list_focus,
+    list_slip,
+    list_wellbeing,
+)
 from ai_coach.store.workload import upsert_counter
-from ai_coach.web.day import moved, on_day
+from ai_coach.web.repeat import moved, on_day
 
 ALLOWED = {
     "task": ("rating", "feel", "slip"),
@@ -134,3 +141,42 @@ def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) 
     if mark == "slip":
         return add_slip(conn, {**base, "text": _text(payload, required=True)})
     return _checkin(conn, payload, base)
+
+
+def empty_marks() -> dict[str, Any]:
+    return {"ratings": [], "feel": [], "slips": [], "done": None}
+
+
+def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any]]:
+    """Отметки дня по пунктам: event_id -> ratings, feel, slips (по времени), done (None - нет)."""
+    found: dict[int, dict[str, Any]] = {}
+
+    def of(event_id: int) -> dict[str, Any]:
+        return found.setdefault(event_id, empty_marks())
+
+    for r in list_focus(conn, day, day):
+        if r["event_id"] is not None:
+            keys = ("focus", "fatigue", "effort", "text", "logged_at")
+            of(r["event_id"])["ratings"].append({k: r[k] for k in keys})
+    for r in list_wellbeing(conn, day, day):
+        if r["event_id"] is not None:
+            keys = ("score", "text", "mood", "stress", "logged_at")
+            of(r["event_id"])["feel"].append({k: r[k] for k in keys})
+    for r in list_slip(conn, day, day):
+        if r["event_id"] is not None:
+            of(r["event_id"])["slips"].append({k: r[k] for k in ("text", "logged_at")})
+    for r in list_done(conn, day, day):
+        of(r["event_id"])["done"] = {"done": r["done"], "logged_at": r["logged_at"]}
+    return found
+
+
+def due(kind: str, marks: dict[str, Any], evening: bool, past: bool) -> bool:
+    """Прошедший заполняемый пункт без отметки (красный): task/focus - нет оценки, practice/rest -
+    нет «сделал/пропустил», checkin - чек-ин вечера за день не сделан."""
+    if not past:
+        return False
+    if kind in ("task", "focus"):
+        return not marks["ratings"]
+    if kind in ("practice", "rest"):
+        return marks["done"] is None
+    return kind == "checkin" and not evening

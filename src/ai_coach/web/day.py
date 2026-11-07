@@ -6,43 +6,32 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from ai_coach.agenda.service import agenda_rows
+from ai_coach.store.journal import evening_done
 from ai_coach.store.workload import list_calendar_events
+from ai_coach.web.marks import due, empty_marks, marks_for_day
+from ai_coach.web.repeat import moved, on_day
 from ai_coach.workload.service import (
     _clip,  # pyright: ignore[reportPrivateUsage]
     _counted,  # pyright: ignore[reportPrivateUsage]
 )
 
 ITEM_FIELDS = ("id", "kind", "title", "start_at", "end_at", "all_day", "status", "note")
-BIWEEKLY_DAYS = 14
 SECONDS_IN_MINUTE = 60
 
 
-def on_day(row: dict[str, Any], day: date) -> bool:
-    """Повтор, начатый раньше, выпадает на day: daily - каждый день, weekly - в тот же день
-    недели, biweekly - через две недели."""
-    if row["repeat"] is None or row["date"] >= day.isoformat():
-        return True
-    gap = (day - date.fromisoformat(row["date"])).days
-    if row["repeat"] == "daily":
-        return True
-    return gap % (BIWEEKLY_DAYS if row["repeat"] == "biweekly" else 7) == 0
-
-
-def moved(row: dict[str, Any], day: date) -> dict[str, Any]:
-    """Повтор, начатый раньше day, - то же время суток на day."""
-    if row["repeat"] is None or row["date"] >= day.isoformat():
-        return row
-    start = datetime.fromisoformat(row["start_at"])
-    shift = timedelta(days=(day - start.date()).days)
-    end = datetime.fromisoformat(row["end_at"])
-    values = {"start_at": (start + shift).isoformat(), "end_at": (end + shift).isoformat()}
-    return {**row, **values}
-
-
-def _items(conn: sqlite3.Connection, day: date) -> list[dict[str, Any]]:
+def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str, Any]]:
+    """Пункты тренера дня; у каждого marks (отметки пункта за день) и due (красный)."""
     rows = [r for r in agenda_rows(conn, day.isoformat(), day.isoformat()) if on_day(r, day)]
     rows = sorted((moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
-    return [{k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]} for r in rows]
+    marks = marks_for_day(conn, day.isoformat())
+    evening = evening_done(conn, day.isoformat())
+    items: list[dict[str, Any]] = []
+    for r in rows:
+        mine = marks.get(r["id"], empty_marks())
+        past = _moment(r, "end_at") <= now
+        item = {k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]}
+        items.append(item | {"marks": mine, "due": due(r["kind"], mine, evening, past)})
+    return items
 
 
 def _meetings(conn: sqlite3.Connection, day: date) -> list[dict[str, Any]]:
@@ -74,7 +63,7 @@ def day_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, An
     """День day на момент now: items (тренер), meetings (встречи), current (идущие сейчас),
     elapsed_min и left_min по рамке от самого раннего начала до самого позднего конца
     (all_day в рамку не входят, повтор своего дня входит)."""
-    items = _items(conn, day)
+    items = _items(conn, day, now)
     meetings = _meetings(conn, day)
     current = [
         (row["start_at"], source, row["id"])

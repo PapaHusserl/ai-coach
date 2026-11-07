@@ -5,6 +5,7 @@ import json
 import socket
 import threading
 from collections.abc import Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 from urllib.parse import quote
@@ -79,10 +80,149 @@ def test_unknown_path_is_404(port: int) -> None:
     assert status == 404
 
 
-@pytest.mark.parametrize("method", ["POST", "PUT", "DELETE", "PATCH"])
+@pytest.mark.parametrize("method", ["PUT", "DELETE", "PATCH"])
 def test_non_get_is_405(port: int, method: str) -> None:
     status, _ = request(port, "/api/day", method)
     assert status == 405
+
+
+def post(
+    port: int,
+    body: bytes | dict[str, Any],
+    path: str = "/api/mark",
+    origin: str | None = "same",
+    length: int | None = None,
+) -> tuple[int, bytes]:
+    """POST; origin "same" - Origin = Host сервера, None - без Origin."""
+    raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+    headers = {"Content-Length": str(len(raw) if length is None else length)}
+    if origin is not None:
+        headers["Origin"] = f"http://127.0.0.1:{port}" if origin == "same" else origin
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("POST", path, body=raw, headers=headers)
+        response = conn.getresponse()
+        return response.status, response.read()
+    finally:
+        conn.close()
+
+
+def add_task(db_path: Path, kind: str = "task") -> int:
+    now = datetime.now()
+    values = coach_event(
+        kind=kind,
+        date=now.date().isoformat(),
+        start_at=(now - timedelta(hours=1)).isoformat(timespec="seconds"),
+        end_at=(now + timedelta(hours=1)).isoformat(timespec="seconds"),
+    )
+    conn = open_db(db_path)
+    try:
+        event_id = add_event(conn, values)
+        conn.commit()
+    finally:
+        conn.close()
+    return event_id
+
+
+def mark_body(event_id: int, **fields: Any) -> dict[str, Any]:
+    return {"event_id": event_id, "date": datetime.now().date().isoformat()} | fields
+
+
+def test_post_mark_writes_and_answers_id(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    body = mark_body(event_id, mark="rating", focus=4, fatigue=2, effort=3)
+    status, answer = post(port, body)
+    assert status == 200
+    conn = open_db(db_path)
+    try:
+        [row] = conn.execute("SELECT * FROM focus_log").fetchall()
+    finally:
+        conn.close()
+    assert json.loads(answer) == {"id": row["id"]}
+    assert (row["event_id"], row["focus"]) == (event_id, 4)
+
+
+def test_post_ok_is_json_and_error_is_plain_text(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    types = []
+    for body in (mark_body(event_id, mark="feel", score=3), mark_body(event_id, mark="slip")):
+        raw = json.dumps(body).encode()
+        headers = {"Content-Length": str(len(raw)), "Origin": f"http://127.0.0.1:{port}"}
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request("POST", "/api/mark", body=raw, headers=headers)
+            types.append(conn.getresponse().getheader("Content-Type"))
+        finally:
+            conn.close()
+    assert types == ["application/json; charset=utf-8", "text/plain; charset=utf-8"]
+
+
+def test_post_done_answers_null_id(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "practice")
+    status, answer = post(port, mark_body(event_id, mark="done", done=1))
+    assert (status, json.loads(answer)) == (200, {"id": None})
+    conn = open_db(db_path)
+    try:
+        assert conn.execute("SELECT done FROM done_log").fetchone()["done"] == 1
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("origin", [None, "http://evil.example", "http://127.0.0.1:1"])
+def test_post_without_own_origin_is_403_and_writes_nothing(
+    port: int, db_path: Path, origin: str | None
+) -> None:
+    event_id = add_task(db_path)
+    body = mark_body(event_id, mark="feel", score=3)
+    status, _ = post(port, body, origin=origin)
+    assert status == 403
+    conn = open_db(db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM wellbeing_log").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("body", [b"not json", b"[1]", b"\xff"])
+def test_post_bad_body_is_400(port: int, body: bytes) -> None:
+    assert post(port, body)[0] == 400
+
+
+def test_post_without_length_is_400(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.putrequest("POST", "/api/mark")
+        conn.putheader("Origin", f"http://127.0.0.1:{port}")
+        conn.endheaders()
+        assert conn.getresponse().status == 400
+    finally:
+        conn.close()
+
+
+def test_post_body_over_limit_is_413(port: int) -> None:
+    status, _ = post(port, b"{}", length=64 * 1024 + 1)
+    assert status == 413
+
+
+def test_post_body_at_limit_is_read(port: int) -> None:
+    body = b"{" + b" " * (64 * 1024 - 2) + b"}"
+    assert post(port, body)[0] == 404
+
+
+def test_post_other_path_is_404(port: int) -> None:
+    assert post(port, {}, path="/api/day")[0] == 404
+
+
+def test_post_mark_error_is_400_with_text(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    status, answer = post(port, mark_body(event_id, mark="slip", text=""))
+    assert status == 400
+    assert answer.decode() == "Текст не может быть пустым."
+
+
+def test_post_missing_event_is_404(port: int) -> None:
+    status, _ = post(port, mark_body(999, mark="feel", score=3))
+    assert status == 404
 
 
 def test_head_is_501_with_empty_body(port: int) -> None:
@@ -151,7 +291,7 @@ def test_static_not_found_is_plain_text_with_message(port: int) -> None:
 
 
 def test_method_not_allowed_message(port: int) -> None:
-    reply = fetch(port, "/api/day", "POST")
+    reply = fetch(port, "/api/day", "PUT")
     assert reply.header("Content-Type") == "text/plain; charset=utf-8"
     assert reply.body.decode() == "Только GET."
 
