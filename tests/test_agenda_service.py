@@ -568,6 +568,144 @@ def test_commit_error_after_move_reports_uid(conn: sqlite3.Connection) -> None:
     assert len(writer.moved) == 1
 
 
+def test_unknown_kind_message_names_kind(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match=r"kind должен быть из .*meeting"):
+        check(conn, kind="meeting")
+
+
+def test_empty_title_message(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^Название события пустое"):
+        check(conn, title="  ")
+
+
+def test_bad_start_message_names_start_at(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^start_at: нужно YYYY-MM-DDTHH:MM"):
+        check(conn, start_at="завтра")
+
+
+def test_bad_end_message_names_end_at(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^end_at: нужно YYYY-MM-DDTHH:MM"):
+        check(conn, start_at="2026-10-12T10:00:00", end_at="завтра")
+
+
+def test_start_after_end_message(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^Начало события должно быть раньше конца"):
+        check(conn, start_at="2026-10-12T11:00:00", end_at="2026-10-12T10:00:00")
+
+
+def test_over_24_hours_message(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^Событие не длиннее 24 часов"):
+        check(conn, start_at="2026-10-12T10:00:00", end_at="2026-10-13T10:01:00")
+
+
+def test_day_out_of_range_message(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^День начала от 30 дней назад до 14 дней вперёд"):
+        check(conn, **at("2026-10-26"))
+
+
+def test_alarm_is_kept(conn: sqlite3.Connection) -> None:
+    assert check(conn, alarm_min=15)["alarm_min"] == 15
+
+
+def test_alarm_without_value_is_none(conn: sqlite3.Connection) -> None:
+    assert check(conn)["alarm_min"] is None
+
+
+@pytest.mark.parametrize("alarm", [0, 1440])
+def test_alarm_bounds_are_ok(conn: sqlite3.Connection, alarm: int) -> None:
+    assert check(conn, alarm_min=alarm)["alarm_min"] == alarm
+
+
+@pytest.mark.parametrize("alarm", [-1, 1441])
+def test_alarm_out_of_bounds_message(conn: sqlite3.Connection, alarm: int) -> None:
+    with pytest.raises(AgendaError, match=rf"^alarm_min от 0 до 1440 минут, получено: {alarm}"):
+        check(conn, alarm_min=alarm)
+
+
+def test_bad_repeat_message(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="^repeat только .*daily.*weekly.*biweekly.*checkin"):
+        check(conn, repeat="daily")
+
+
+def test_repeat_clash_message_has_clock_without_seconds(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, **at("2026-10-10", "11:00:00", "11:15:00"))
+    with pytest.raises(AgendaError, match=r"на 11:00 уже есть"):
+        check(conn, **CHECKIN, **at("2026-10-12", "11:00:00", "11:15:00"))
+
+
+def test_note_is_stripped(conn: sqlite3.Connection) -> None:
+    assert check(conn, note="  заметка ")["note"] == "заметка"
+
+
+@pytest.mark.parametrize("note", [None, "", "   "])
+def test_empty_note_is_none(conn: sqlite3.Connection, note: str | None) -> None:
+    assert check(conn, note=note)["note"] is None
+
+
+def test_missing_note_is_none(conn: sqlite3.Connection) -> None:
+    assert check(conn)["note"] is None
+
+
+def test_all_day_flag_becomes_one(conn: sqlite3.Connection) -> None:
+    values = draft(conn, **at("2026-10-12")) | {"all_day": True}
+    assert validate_draft(conn, values, today=TODAY)["all_day"] == 1
+    assert check(conn)["all_day"] == 0
+
+
+def test_title_is_stripped_and_returned(conn: sqlite3.Connection) -> None:
+    assert check(conn, title="  Созвон ")["title"] == "Созвон"
+
+
+def test_existing_practice_is_kept_in_result(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO practice (id, name, kind, created_at, updated_at) "
+        "VALUES (1, 'Синтетика', 'pause', '2026-10-01', '2026-10-01')"
+    )
+    result = check(conn, kind="practice", category=None, practice_id=1)
+    assert result["practice_id"] == 1
+
+
+def test_move_draft_keeps_link_to_workout(conn: sqlite3.Connection) -> None:
+    spec = {"date": "2026-10-12", "sport": "run", "name": "Бег", "workout_json": {}}
+    workout = add_planned_workout(conn, spec)
+    event_id = stored(conn, kind="training", category=None, workout_id=workout)
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["workout_id"] == workout
+
+
+def test_move_event_keeps_link_to_workout(conn: sqlite3.Connection) -> None:
+    spec = {"date": "2026-10-12", "sport": "run", "name": "Бег", "workout_json": {}}
+    workout = add_planned_workout(conn, spec)
+    fields = {"kind": "training", "category": None, "workout_id": workout}
+    event_id = stored(conn, status="written", calendar_uid="u1", **fields)
+    writer = FakeCalendarWriter()
+    move_event(conn, event_id, NEW_START, writer, TODAY)
+    assert len(writer.moved) == 1
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["workout_id"] == workout
+
+
+def test_move_draft_checks_range_against_given_today(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    result = move_draft(conn, event_id, "2026-09-11T10:00", TODAY)
+    assert result["date"] == "2026-09-11"
+
+
+def test_move_event_checks_range_against_given_today(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u1")
+    result = move_event(conn, event_id, "2026-09-11T10:00", FakeCalendarWriter(), TODAY)
+    assert result["date"] == "2026-09-11"
+
+
+def test_move_draft_of_non_draft_message(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u1")
+    with pytest.raises(AgendaError, match=rf"^Это не черновик: событие {event_id} — written"):
+        move_draft(conn, event_id, NEW_START, TODAY)
+
+
 def test_commit_error_after_remove_reports_uid(conn: sqlite3.Connection) -> None:
     event_id = stored(conn, status="written", calendar_uid="u7")
     with pytest.raises(AgendaError, match="u7"):

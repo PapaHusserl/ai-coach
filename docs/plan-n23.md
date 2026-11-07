@@ -238,6 +238,13 @@
 - Полный прогон после d018d59 (cov 97,09%): красный `test_store_migration_0019.py::test_repeat_weekly_is_rejected` —
   0028 разрешила weekly («Суть» п.2, партия 3). Доеба: тест → `test_unknown_repeat_is_rejected` (monthly); других проверок запрета
   weekly/biweekly у событий нет (grep).
+- mutmut Н23 (окно Влада 18:40; own_events, validate_draft, move_event, move_draft): выжило 55. Доеба: +31 тест
+  (35 прогонов) в test_agenda_service.py и test_workload_sync_agenda.py, эквивалентных нет. Мама: 5 тестов с `^…$`
+  и один с видом Python-списка — хрупко; слабая проверка `workout_id`. Исправил доеба: без `$` и финальной
+  пунктуации (якорь `^` оставлен — без него выживают мутанты 17, 40), repeat — `.*daily.*weekly.*biweekly`,
+  `workout_id` проверяется. Мутанты — не подтверждены до повтора mutmut.
+  Свекровь (повтор): `test_move_draft_keeps_link_to_workout` — тоже `workout_id`; добавил доеба.
+  Повтор mutmut (окно Влада 19:27): выживших 0 по own_events, validate_draft, move_event, move_draft — подтверждено.
 
 ## Смета (кабан-тесть, режим 1)
 

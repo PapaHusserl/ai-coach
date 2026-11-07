@@ -384,6 +384,59 @@ def test_all_day_event_shifted_to_next_day_is_a_move(
     assert row["date"] == "2026-10-11"
 
 
+def test_one_foreign_event_is_counted_in_notes(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    message = run(conn, config, FakeCalendar([coach_raw(uid="by-hand")]))
+    assert "чужих событий в календаре коуча: 1" in message
+
+
+def test_two_foreign_events_are_counted_in_notes(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    raws = [coach_raw(uid="h1"), coach_raw(uid="h2")]
+    message = run(conn, config, FakeCalendar(raws))
+    assert "чужих событий в календаре коуча: 2" in message
+
+
+def test_no_foreign_events_gives_no_note(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
+    own(conn)
+    message = run(conn, config, FakeCalendar([coach_raw()]))
+    assert "чужих" not in message
+
+
+def test_own_event_after_other_calendar_event_is_stored(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    own(conn)
+    run(conn, config, FakeCalendar([raw_event(uid="w"), coach_raw()]))
+    assert sorted(e["uid"] for e in list_calendar_events(conn, *ALL)) == ["c1", "w"]
+
+
+def test_own_event_after_foreign_event_is_stored(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    own(conn)
+    run(conn, config, FakeCalendar([coach_raw(uid="by-hand"), coach_raw()]))
+    assert [e["uid"] for e in list_calendar_events(conn, *ALL)] == ["c1"]
+
+
+def test_only_start_changed_is_a_move(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
+    event_id = own(conn)
+    run(conn, config, FakeCalendar([coach_raw(start_at=f"{DAY}T09:00:00")]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["start_at"], row["end_at"]) == (f"{DAY}T09:00:00", f"{DAY}T12:00:00")
+
+
+def test_only_end_changed_is_a_move(conn: sqlite3.Connection, config: WorkloadConfig) -> None:
+    event_id = own(conn)
+    run(conn, config, FakeCalendar([coach_raw(end_at=f"{DAY}T13:00:00")]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["start_at"], row["end_at"]) == (f"{DAY}T10:00:00", f"{DAY}T13:00:00")
+
+
 def test_move_outside_sync_window_marks_removed_by_calendar(
     conn: sqlite3.Connection, config: WorkloadConfig
 ) -> None:
