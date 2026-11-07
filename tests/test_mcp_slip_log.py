@@ -24,6 +24,13 @@ def test_tool_exists(conn: sqlite3.Connection) -> None:
     assert "get_slip_log" in tool_names(conn)
 
 
+@pytest.mark.parametrize("name", ["get_slip_log", "get_focus_log", "get_wellbeing"])
+def test_description_mentions_event_id(name: str) -> None:
+    from ai_coach.mcp_server.server import TOOLS
+
+    assert "event_id" in TOOLS[name][1]
+
+
 def test_empty_period(conn: sqlite3.Connection) -> None:
     assert call(conn, "get_slip_log", start=DAY, end=DAY) == {"rows": [], "truncated": False}
 

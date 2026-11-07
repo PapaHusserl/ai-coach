@@ -15,7 +15,7 @@ def test_schema_version_is_at_least_27(conn: sqlite3.Connection) -> None:
 
 def test_slip_log_has_expected_columns(conn: sqlite3.Connection) -> None:
     found = [r[1] for r in conn.execute("PRAGMA table_info(slip_log)").fetchall()]
-    assert found == ["id", "date", "logged_at", "text"]
+    assert found == ["id", "date", "logged_at", "text", "event_id"]
 
 
 def test_slip_log_has_date_index(conn: sqlite3.Connection) -> None:

@@ -3,9 +3,27 @@
 import sqlite3
 from typing import Any
 
-from ai_coach.store.db import fetch_all, fetch_one, insert, update
+from ai_coach.store.db import fetch_all, fetch_one, insert, update, upsert
 
 ACTIVE = ("draft", "written")
+
+
+def mark_done(conn: sqlite3.Connection, event_id: int, day: str, done: int, logged_at: str) -> None:
+    """Отметка пункта за день: повтор заменяет прежнюю (done 1 - сделал, 0 - пропустил)."""
+    values = {"event_id": event_id, "date": day, "done": done, "logged_at": logged_at}
+    upsert(conn, "done_log", ["event_id", "date"], values)
+
+
+def unmark_done(conn: sqlite3.Connection, event_id: int, day: str) -> bool:
+    """Снять отметку пункта за день (другие дни не трогает). False - отметки нет."""
+    sql = "DELETE FROM done_log WHERE event_id = ? AND date = ?"
+    return conn.execute(sql, (event_id, day)).rowcount > 0
+
+
+def list_done(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Отметки пунктов с датой start..end включительно, по дате и времени."""
+    sql = "SELECT * FROM done_log WHERE date BETWEEN ? AND ? ORDER BY date, logged_at, id"
+    return fetch_all(conn, sql, (start, end))
 
 
 def add_event(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

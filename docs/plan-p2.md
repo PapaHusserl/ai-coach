@@ -1,0 +1,359 @@
+# П2. Веб-пульт: окна пункта, отметки к пункту, дозаполнение (BACKLOG 49, часть 2 из 4)
+
+## Суть
+
+Второй шаг пульта (разрез — docs/plan-roadmap-r2.md «Разрез пульта»; П1 — docs/plan-p1.md). У пункта плана на
+главной открывается окно по его типу, и из окна пишется в базу то же, что пишут команды тренера: задача и фокус-блок
+— оценка «фокус · усталость · усилие» (как `coach focus`), самочувствие (как `coach feel 4 "текст"`), срыв (как
+`coach slip`); практика и отдых — «сделал / пропустил» (новое) плюс самочувствие и срыв; чек-ин — анкета вечернего
+чек-ина (как `coach feel ... --mood --stress --work ...`). Каждая отметка привязана к пункту (`event_id`) и дню
+пункта (`date`). Прошедший пункт без отметки — красным; его можно дозаполнить. Окно остаётся открытым и показывает
+историю отметок пункта (Р9 = 2); у шкал — полюса словами из `wellbeing.md` (Р7 = 2). Еда и тренировки — П3, правка
+плана — П4. `load/*` не трогается: окно данных v2.9 цело (новая колонка `event_id` в логах на `list_*` не влияет —
+строки dict, `SELECT *`).
+
+**Правило:** было «пульт в базу не пишет» (`web/server.py:1–2` докстринг «Только читает базу»,
+`server.py:88 do_POST = do_PUT = … = refuse`) → станет «пульт пишет отметки пункта только через `POST /api/mark`
+(Origin = Host, Р1 = 2) и только теми же store-функциями, что команды: `add_focus`, `add_wellbeing` +
+`upsert_counter`, `add_slip` (`store/journal.py:170, :157`, `store/workload.py:84`) и новой `mark_done`; каждая
+отметка несёт `event_id` и `date` пункта; агрегаты и сигналы (`load/*`, `review/*`) не меняются».
+**Поведение:** у существующих команд не меняется. Новое: `coach log focus|slip`, MCP `get_focus_log`,
+`get_slip_log` и список самочувствия (`mcp_server/tools.py:181–195`) показывают и записи из пульта; в строках MCP
+появляется ключ `event_id` (NULL у записей из CLI) — тренеру, не пользователю.
+**Вне репо:** нет. Новых команд CLI нет — строк allow не нужно. Ручная проверка с телефона — за Владом.
+
+## Решения
+
+Влад, 2026-11-08, окнами (кто решил: Влад):
+- Р1 = 2 — запись защищена проверкой `Origin` = `Host` у POST (невидимо; соседи по Wi-Fi писать могут — риск назван).
+- Р2 = 1 — task и focus: «Оценка», «Самочувствие», «Срыв»; practice и rest: «Сделал», «Самочувствие», «Срыв»;
+  checkin — анкета; sleep, meal, training, встречи — без окна.
+- Р3 = 1 — красное гасят: оценка у task/focus; «сделал» или «пропустил» у practice/rest; у checkin —
+  `evening_done(day)` (любая запись с настроением/стрессом за день, в т. ч. из сессии `тренер`). Самочувствие и срыв
+  пункт не «заполняют».
+- Р4 = 1 — `date` = день пункта; `logged_at = min(now, end_at)`: у идущего — сейчас, у прошедшего — конец пункта.
+- Р5 = 1 — будущий пункт: окно открывается, запись запрещена («ещё не началось»).
+- Р6 = 1 — анкета чек-ина как `coach feel` вечером (самочувствие обязательно, остальное по желанию), без привычек.
+- Р7 = 2 — у шкал названия, кнопки 1–5 и полюса словами из `coach-help/wellbeing.md:11, :17, :32`; не по
+  рекомендации.
+- Р8 = 1 — «Сделал» / «Пропустил» и «снять отметку» (как `habit done`, `--no`, `undo`).
+- Р9 = 2 — после записи окно остаётся открытым, показывает историю отметок пункта; не по рекомендации.
+Решения П1 (Р1–Р11, Влад, 2026-11-07, docs/plan-p1.md «Решения») действуют: stdlib, `0.0.0.0`, без пароля на
+чтение, встречи серым без окон.
+
+## Что уже есть (разведка)
+
+- Запись сегодня живёт в CLI, не в сервисе: `cli/journal.py:146 focus`, `:192 slip`, `cli/main.py:338 feel` —
+  проверяют шкалы `check_scores` (`journal.py:50`, `typer.Exit`), считают `date = wellbeing_day(now)`
+  (`store/journal.py:149`), зовут `add_focus` / `add_slip` / `add_wellbeing` + `upsert_counter` для часов
+  (`main.py:385–387`). Общий слой для пульта и CLI — store-функции и `wellbeing_day`; проверки 1–5 дублирует схема
+  (`CHECK (… BETWEEN 1 AND 5)` в 0006, 0016, 0021, 0022; `slip_log.text` не пуст в 0027) — пульт опирается на неё и
+  на свою короткую проверку, CLI не трогает.
+- MCP записывать самочувствие не умеет (инструкция сервера: только черновики и КБЖУ) — прецедента записи по сети нет.
+- Прецедент отметки «сделал» за день — привычки: `habit_log` (0017: `UNIQUE (date, habit_id)`, `done 0/1`,
+  `logged_at`), `store/habits.py:38 mark_habit` (upsert), `:51 unmark_habit`, `habits_on`; CLI `coach habit done
+  [--no]` / `undo` (`cli/habits.py:98–117`). Отметка пункта копирует эту форму.
+- Привязка без внешнего ключа — прецедент `coach_events.workout_id/practice_id` (0019: «связь без внешнего ключа:
+  живость проверяет service», `agenda/service.py:76 _links`). Колонка `event_id` в логах — так же.
+- Пункт дня в пульте — `web/day.py:42 _items` из `agenda_rows` + `_on_day` (`:20`, повторы по дням) + `_moved`
+  (`:31`); у повтора `id` — id серии, день — день просмотра. Отметка повтора = (`event_id` серии, `date` дня).
+- Виды пунктов: `agenda/service.py:26 KINDS = training, practice, rest, sleep, checkin, task, focus, meal`;
+  `focus` — 90-минутные блоки плана дня (`day_plan.py:184`), `rest` — «Прогулка / отдых» (`:170`), `practice` —
+  с `practice_id`. Статусы живых — `store/agenda.py:8 ACTIVE = draft, written`; `get_event` (`:17`).
+- «Чек-ин сделан» уже определён: `store/journal.py:225 evening_done(day)` — запись с mood или stress; сводка
+  `evening_done_today` (`mcp_server/snapshot.py:217`), скил `coach-evening` шаг 1.
+- «Основная запись дня — последняя» по `logged_at`: `list_wellbeing` ORDER BY logged_at (`journal.py:166`),
+  `load/deviations.py:14 main_wellbeing`. Отсюда правило времени при дозаполнении (Р4 = 1).
+- Полюса шкал словами — `coach-help/wellbeing.md:11` (самочувствие, настроение, стресс), `:17` (фокус, усталость,
+  усилие), `:32` (мысли, погружение, помехи, ценность); тест `tests/test_skills_help.py:101
+  test_wellbeing_topic_has_scale_poles` держит их список — для Р7 = 2 тот же список проверяет `marks.js`.
+- Сервер: `server.py:50 do_GET`, `:61 api_day`, `:85 refuse` для POST; тесты сервера — `tests/test_web_server.py`
+  (фикстура `port`, `request(port, path, method)`), `tests/test_web_day.py` (`item()`, `at()`), JS — `node --test`
+  (`Makefile:35`). vulture уже игнорирует `do_*` (`pyproject.toml:68`).
+- Точные списки колонок в тестах миграций: `tests/test_store_migration_0021.py:22` (focus_log, `==`),
+  `tests/test_store_migration_0027.py:17` (slip_log, `==`) — ломаются от `event_id`, правятся в партии 1;
+  0006 и 0022 — подмножество, целы.
+- Справка: `coach-help/day-plan.md` 4578 Б (лимит 8192, `tests/text_limits.py`), раздел «Пульт» строка 19 «Окон
+  пункта, записи … пока нет»; `coach-help.md` 4490 Б (лимит 6144); `wellbeing.md` 8169 Б — места нет, не трогать.
+- Прототип (артефакт claude.ai из BACKLOG 49) здесь не открывался — окна описаны по тексту пункта 49 и решениям
+  Р2–Р9.
+
+## Файлы
+
+| Файл | Что | Объём (ожидание, не проверено) |
+|---|---|---|
+| `src/ai_coach/store/migrations/0029_event_marks.sql` | новая: `ALTER TABLE focus_log / wellbeing_log / slip_log ADD COLUMN event_id INTEGER`; `CREATE TABLE done_log (id, event_id NOT NULL, date NOT NULL, done 0/1, logged_at NOT NULL, UNIQUE (event_id, date))`, индекс по date | ~15 |
+| `src/ai_coach/store/agenda.py` | новые `mark_done(conn, event_id, day, done, logged_at)` (upsert, как `mark_habit`), `unmark_done`, `list_done(conn, start, end)` | ~25 |
+| `src/ai_coach/web/marks.py` | новый: `MarkError(ValueError)`, `ALLOWED` (вид пункта → отметки, Р2 = 1), `save_mark(conn, payload, now) -> int \| None` — проверка пункта (живой, на этот день, вид допускает отметку, не будущий — Р5 = 1), шкал 1–5, часов 0–24, текста; `date`/`logged_at` по Р4 = 1; запись store-функциями; `marks_for_day(conn, day) -> dict[event_id, marks]` и `due(kind, marks, evening_done, past)` (Р3 = 1) | ~130 |
+| `src/ai_coach/web/day.py` | `_items`/`day_view`: у пункта `marks` (ratings, feel, slips, done) и `due` (прошёл, заполняемый, не заполнен) | ~35 |
+| `src/ai_coach/web/server.py` | `do_POST`: только `/api/mark` (иначе 404/405), тело по `Content-Length` ≤ 64 КиБ (413), JSON (400), Origin = Host (403, Р1 = 2), `MarkError` → 400 текст, нет пункта → 404, ответ `{"id": …}`; докстринг | ~50 |
+| `src/ai_coach/web/static/marks.js` | новый: `FIELDS` (шкалы: имя, подпись, полюса 1 и 5 словами — Р7 = 2), чистые `tabsFor(kind)`, `isPast(row, now)`, `markSummary(marks)`, `historyRows(marks)` (все отметки пункта по времени: время, вкладка, суть), `buildPayload(tab, form)`; `<dialog>`: вкладки по Р2 = 1, формы из `FIELDS`, история отметок, POST, после ответа — `load()` и перерисовка открытого окна (Р9 = 2), ошибка в окне, «Закрыть» | ~230 |
+| `src/ai_coach/web/static/pult.js`, `index.html`, `pult.css` | строка пункта кликабельна (если `tabsFor` не пуст), класс `due` красным, краткая отметка серым; `render` перерисовывает открытое окно по `data-event`/`data-day`; разметка `<dialog>`; стили кнопок 1–5 под палец, полюса мелким серым по краям ряда | ~100 |
+| `tests/test_store_migration_0029.py` | новый: колонки, UNIQUE, CHECK done | ~40 |
+| `tests/test_store_migration_0021.py:22`, `tests/test_store_migration_0027.py:17` | + `event_id` в ожидаемых колонках (регресс области, партия 1) | 2 |
+| `tests/test_web_marks.py` | новый: `save_mark` по видам отметок и ошибкам, `marks_for_day`, `due` | ~170 |
+| `tests/test_web_day.py`, `tests/test_web_server.py` | + `marks`/`due` в `day_view`; + POST: успех, 400/403/404/405/413, что записалось — `list_focus`/`list_slip`/`list_wellbeing`/`list_done` | ~150 |
+| `tests/web/marks.test.mjs` | новый: чистые функции `marks.js`, в т. ч. `historyRows` и наличие полюсов у каждой шкалы `FIELDS` | ~70 |
+| `.claude/agents/coach-help/day-plan.md` (раздел «Пульт»), `.claude/agents/coach-help.md:23`, `tests/test_skills_help.py` | Справка: окна по типу, что и куда пишется, красное и дозаполнение, время записи, будущие пункты, чек-ин, история в окне, защита записи; иглы; тест: полюса из `test_wellbeing_topic_has_scale_poles` есть и в `marks.js` (Р7 = 2) | ~30 |
+
+Итого ~1050 строк с тестами (ожидание, не проверено; Р7 = 2 — +~35 в `marks.js` и тестах, Р9 = 2 — +~40) — четыре
+партии, каждая < 400.
+
+## Партии
+
+1. **Схема и запись** — `0029_event_marks.sql`, `store/agenda.py` (`mark_done`, `unmark_done`, `list_done`),
+   `web/marks.py` (`ALLOWED`, `save_mark`, без `marks_for_day`), `tests/test_store_migration_0029.py`, правки
+   0021/0027, `tests/test_web_marks.py`. На выходе: `save_mark(conn, {"event_id", "date", "mark": "rating", …}, now)`
+   кладёт строку в `focus_log` с `event_id`; `coach log focus --date <день>` её показывает; pytest зелёный.
+   ~320 строк. `save_mark` до партии 2 — в `make dead` (нет потребителя): допустимо, как `day_view` в П1 (plan-p1
+   «Правки по ревью», партия 1); в whitelist не добавлять.
+2. **Данные дня и сервер** — `web/marks.py: marks_for_day, due`, `web/day.py` (`marks`, `due` у пункта),
+   `web/server.py: do_POST` с Origin = Host, тесты `test_web_day.py`, `test_web_server.py`. На выходе: `curl -X POST
+   -H 'Origin: http://127.0.0.1:8765' -d '{…}' http://127.0.0.1:8765/api/mark` → `{"id": N}`; без Origin → 403;
+   `GET /api/day` отдаёт `marks` и `due`. ~265 строк.
+3. **Окна задачи, практики, отдыха** — `static/marks.js` (`FIELDS` с полюсами, вкладки «Оценка», «Самочувствие»,
+   «Срыв», «Сделал», история, перерисовка открытого окна), правки `pult.js`/`index.html`/`pult.css`,
+   `tests/web/marks.test.mjs`. Анкета чек-ина — партия 4 (вкладка checkin в `tabsFor` уже есть, окно показывает
+   «в следующей партии» — или кабан делает анкету сразу, если влезает в объём). На выходе: на Mac и телефоне клик по
+   задаче открывает окно, оценка 4 2 3 записывается, окно остаётся и показывает запись в истории; прошедший
+   незаполненный пункт — красным; будущий — «ещё не началось»; у кнопок 1–5 полюса словами. ~300 строк.
+4. **Анкета чек-ина и справка** — `marks.js`: форма checkin (самочувствие, текст, настроение, стресс, часы работа /
+   хобби / отдых, мысли, погружение да/нет, помехи, ценность; полюса из `wellbeing.md:11, :32`), тест JS на
+   `buildPayload("checkin", …)` (пустые поля не уходят, часы — число), Справка + иглы + тест полюсов в
+   `test_skills_help.py`. На выходе: чек-ин из пульта → `evening_done` → скил `coach-evening` говорит «чек-ин
+   сделан». ~160 строк.
+
+Критерий сдачи партий — как в П1 после аудита (plan-p1 «Правки по ревью», партия 1): зелёные `make lint types cov
+player-test`; `make dead` зелёный (кроме `save_mark` до партии 2); `make smells` — не больше, чем на HEAD до партии,
+и 0 в файлах партии, пока открыт BACKLOG 58.
+
+## Справка (правило AGENTS.md)
+
+- `coach-help/day-plan.md`, раздел «Пульт: план дня в браузере»: строку 19 заменить; добавить, что у пункта
+  открывается окно по типу и что пишется (та же база, что `coach focus` / `coach feel` / `coach slip`; видно в
+  `coach log focus|slip`, тренер видит в сводке и `get_focus_log`), «сделал / пропустил» у практики и отдыха,
+  красное — прошедший пункт без отметки, дозаполнение и время записи (конец пункта у прошедшего), будущие пункты
+  («ещё не началось»), чек-ин из пульта = чек-ин вечера (`evening_done`), окно остаётся открытым с историей
+  отметок, полюса шкал — те же, что в `wellbeing.md`, запись защищена только от чужих сайтов — в пульт пишет любой в
+  сети. Ожидание: +1,7 КБ → ~6,3 КБ < 8192.
+- `coach-help.md:23` — слова «запись отметок» в строке темы; `wellbeing.md` не трогать (8169 Б из 8192) — ссылка
+  из `day-plan.md` на неё.
+- `tests/test_skills_help.py` — иглы: в `day-plan.md` есть «окно», «сделал», «дозаполн», «истори», «coach web»;
+  новый тест: каждый полюс из списка `test_wellbeing_topic_has_scale_poles` есть в `src/ai_coach/web/static/marks.js`
+  (один источник правды — справка; расхождение падает тестом).
+- Скилы и агенты (`coach-evening`, `coach-day`) не меняются: пульт — путь без агента; `evening_done_today` уже
+  скажет скилу, что чек-ин сделан из пульта.
+
+## API и модель (внутреннее)
+
+- `GET /api/day` — у каждого элемента `items[]` добавляются `marks` =
+  `{"ratings": [{focus, fatigue, effort, text, logged_at}], "feel": [{score, text, mood, stress, logged_at}],
+  "slips": [{text, logged_at}], "done": null | {done, logged_at}}` — только записи с `event_id == id` и
+  `date == день`, и `due` (bool). У встреч ничего не меняется. Поле `fillable` не нужно: JS знает вкладки по `kind`
+  (`tabsFor`). История в окне (Р9 = 2) строится из тех же `marks` — отдельного запроса нет.
+- `POST /api/mark`, JSON: `event_id`, `date` (день просмотра), `mark` ∈ `rating | feel | slip | done | checkin`,
+  поля по виду: rating — `focus, fatigue, effort, text?`; feel — `score, text?`; slip — `text`; done —
+  `done: 1 | 0 | null` (null — снять, как `habit undo`); checkin — `score, text?, mood?, stress?, work?, hobby?,
+  rest?, thoughts?, flow?, hindrance?, valuable?` (часы → `upsert_counter` с `source: "manual"`, как
+  `feel`, `main.py:385–387`). Ответ 200 `{"id": N}` (`done`/снятие — `{"id": null}`), ошибки — текст.
+- `save_mark`: пункт — `get_event`, статус в `ACTIVE`, `_on_day(row, date)` (повтор — в свой день), вид пункта
+  допускает `mark` (`ALLOWED`), будущий (`start_at > now`) — `MarkError` (Р5 = 1); шкалы 1–5, часы 0–24,
+  текст непустой у slip; `date` = день пункта; `logged_at = min(now, end_at)` (Р4 = 1).
+- `due(kind, marks, evening, past)`: `past` и вид заполняемый и не заполнен; заполнен: task/focus — есть ratings;
+  practice/rest — `done` не null; checkin — `evening_done(conn, day)` (Р3 = 1). Самочувствие и срыв пункт не
+  «заполняют».
+- Окно (Р9 = 2): `<dialog data-event data-day>`; `render(view)` после каждого `load()` (и по таймеру раз в минуту)
+  находит открытое окно и перерисовывает его историю и `due` по свежему `view` — форма ввода при этом не
+  сбрасывается (перерисовывается только блок истории и подпись).
+
+## Тесты
+
+- Миграция: `PRAGMA table_info` — `event_id` в трёх логах, `done_log` с UNIQUE (второй insert на тот же
+  (event_id, date) — `IntegrityError`), `done` вне 0/1 — ошибка. Ожидание, не проверено.
+- `save_mark` rating для task 10:00–11:30, now 10:30 → строка `focus_log`: `event_id`, `date` = день,
+  `logged_at` = now (Р4 = 1); now 15:00 (прошёл) → `logged_at` = `11:30:00`; `coach log focus --date` показывает
+  обе. Повторная rating — вторая строка (записи только добавляются, как CLI).
+- feel 4 "текст" → `wellbeing_log` с `event_id`, mood/stress NULL; дозаполненный feel утром не становится
+  «основной записью дня» при вечернем чек-ине позже (`main_wellbeing` берёт последнюю по `logged_at`).
+- slip с пустым текстом → `MarkError`; slip для `rest` — записан (Р2 = 1); rating для `rest` → `MarkError`.
+- done 1 у practice → `done_log`; done 0 — та же строка (upsert); `done: null` → строки нет; done у task →
+  `MarkError` («у задачи нет отметки „сделал“»).
+- checkin: `score, mood, stress, work=6` → `wellbeing_log` + `day_counters(work_hours, manual)`; `evening_done(day)`
+  → True; `thoughts=6` → `MarkError`; `work=25` → `MarkError`; checkin у task → `MarkError`.
+- Пункт cancelled/removed → `MarkError` 404-класса; `date` не день пункта (weekly-чек-ин не в свой день) →
+  `MarkError`; `start_at > now` → `MarkError` «ещё не начался» (Р5 = 1); для meal/training/sleep → `MarkError`
+  («окно в П3»).
+- `day_view`: три пункта, now 15:00: task 09–10 без оценки → `due` true; task 10–11 с rating → `due` false;
+  task 16–17 → false (будущий); practice 12–12:15 с done 0 → false; checkin 20:00 при `evening_done` через
+  `add_wellbeing` без `event_id` → false (Р3 = 1); `marks` у пункта только его записи (чужие `event_id` и другие
+  дни не попадают); встречи без `marks`.
+- Сервер: POST `/api/mark` с Origin = Host → 200 `{"id"}` и строка в базе; без Origin или чужой → 403
+  (Р1 = 2); не JSON → 400; тело > 64 КиБ → 413; POST `/api/day` → 404; PUT/DELETE/PATCH → 405 как прежде;
+  `MarkError` → 400 с текстом ошибки; пункта нет → 404. Все существующие тесты сервера П1 — без изменений.
+- JS (`node --test`): `tabsFor("task")` → `["rating", "feel", "slip"]`, `tabsFor("rest")` → `["done", "feel",
+  "slip"]`, `tabsFor("meal")` → `[]`; `isPast` по `end_at <= now`; `markSummary({ratings:[{focus:4,fatigue:2,
+  effort:3}]})` → `"4/2/3"`, done 1 → `"сделал"`, 0 → `"пропустил"`; `historyRows` — все отметки пункта по
+  `logged_at`, у каждой время `HH:MM`, вкладка и суть (Р9 = 2); у каждой шкалы `FIELDS` непустые полюса 1 и 5
+  (Р7 = 2); `buildPayload("rating", …)` даёт числа, не строки; `buildPayload("checkin", …)` не отправляет пустые
+  поля.
+- Python: полюса из `test_wellbeing_topic_has_scale_poles` есть в `marks.js` (Р7 = 2).
+- mutmut: `ai_coach.web.marks.*` — TESTS `tests/test_web_marks.py` (новый); `ai_coach.web.day.*` —
+  `tests/test_web_day.py`; `ai_coach.web.server.*` — `tests/test_web_server.py`; `ai_coach.store.agenda.*`
+  (`mark_done`, `unmark_done`, `list_done` — новые) — `tests/test_web_marks.py` + файлы по `grep -l store.agenda
+  tests/` (`MOD` в Makefile берёт изменённые модули сам). Ожидание времени — как П1: 20–35 мин на прогон.
+- Руками (Влад): `uv run coach web` на Mac и с телефона — клик по задаче, оценка 4 2 3 → окно осталось, в истории
+  строка с временем, у строки пункта «4/2/3»; `uv run coach log focus` показывает запись с временем пункта;
+  вчерашний день стрелкой — прошедшие пункты без отметки красные, дозаполнить один; чек-ин из пульта → в сессии
+  `тренер` вечером скил говорит «чек-ин сделан».
+
+## Развилки
+
+Р1–Р9 решены (см. «Решения», Влад, 2026-11-08, этот файл). Открытых развилок нет.
+
+Риски:
+- **Запись без пароля в сети (Р1 = 2).** Origin = Host отсекает запись с чужого сайта в браузере Влада (CSRF,
+  DNS-rebinding); любой в той же Wi-Fi может писать отметки curl'ом (мусор в `focus_log`/`wellbeing_log` влияет на
+  сигналы). HTTP без TLS. Справка пишет одной строкой. Ключ в адресе — предложение на будущее, не в плане.
+- **`event_id` в MCP.** `get_focus_log`, `get_slip_log`, список самочувствия отдают `SELECT *` — у строк новый ключ;
+  описания инструментов (`mcp_server/server.py:151–160`) перечисляют поля — кабан проверяет и дописывает
+  `event_id`, если перечень там есть. Пользователю не видно.
+- **Дозаполнение меняет сигналы задним числом.** `load/*` читают `wellbeing_log` по `date` — дозаполненное
+  самочувствие вчерашнего дня войдёт в `get_deviations`/`get_overload` вчера. Это цель шага, не баг; окно v2.9
+  (с 2026-11-10) — пороги калибруются на том, что Влад записал, включая дозаполненное.
+- **Полюса в двух местах (Р7 = 2).** Слова в `marks.js` и в `wellbeing.md` — тест в `test_skills_help.py` ловит
+  расхождение по списку полюсов; правка справки без правки JS падает тестом (намеренно).
+- **Открытое окно и автообновление (Р9 = 2).** `load()` раз в минуту перерисовывает страницу; окно должно пережить
+  перерисовку, не теряя набранного, — перерисовывается только история (тест руками: набрать оценку, дождаться
+  минуты, кнопки не сброшены). `node --test` DOM не проверяет — риск доебе и Владу.
+- **Пункт после полуночи.** `date` отметки — день пункта (день просмотра), а у CLI — `wellbeing_day` (до 04:00 —
+  вчера). Расходятся только у пунктов 00:00–04:00; в П2 таких видов нет (sleep без окна). Записано в умолчаниях.
+- **Повторы.** У weekly-чек-ина `event_id` один на серию, отметка различается `date` — `due` и `marks` считаются по
+  дню; `save_mark` отвергает день не серии (`_on_day`).
+- **Текущая проверка `make check`** красная от BACKLOG 58 — критерий партий как в П1 («Партии»).
+- **Прототип не сверен** — окна по тексту BACKLOG 49 и решениям Р2–Р9; расхождение с прототипом — новая развилка,
+  не правка «по памяти» кабана.
+- **Размер `pult.js`.** Окна — отдельный модуль `marks.js` (~230 строк), чтобы не раздувать `pult.js` (qlty по
+  файлу); если qlty ругается на `marks.js`, `FIELDS` выносится в `fields.js`. `MOD` mutmut JS не считает — JS
+  держат только `node --test`.
+- Сервер многопоточный (`ThreadingHTTPServer`) — две записи одновременно → у SQLite своя блокировка, соединение на
+  запрос с `with conn` (коммит), как у CLI; долгих транзакций нет (ожидание, не проверено).
+
+## Умолчания (внутреннее)
+
+- Таблица `done_log` (а не колонка в `coach_events`): у повторов одна строка на серию, у `agenda_rows` пять
+  потребителей — состояние «сделал» в строке события расползлось бы в `coach event list` и MCP `get_agenda`.
+  Имя — по образцу `habit_log`/`slip_log`.
+- `event_id` — колонка в трёх логах, не отдельная таблица связей: один `ALTER TABLE` на лог, `SELECT *` и
+  `list_*` целы; без внешнего ключа, как `workout_id`/`practice_id`.
+- Проверки шкал и часов в `web/marks.py` своей короткой функцией (`_score(name, value)` 1–5, `_hours` 0–24) —
+  `check_scores` из `cli/journal.py` зовёт `typer.Exit`, в HTTP не годится; CLI не рефакторится (поведение не
+  меняется). Константа 24 повторяет `cli/main.py MAX_HOURS` — пометить комментарием.
+- `ALLOWED = {"task": (rating, feel, slip), "focus": (rating, feel, slip), "practice": (done, feel, slip),
+  "rest": (done, feel, slip), "checkin": (checkin,)}` (Р2 = 1); порядок кортежа — порядок вкладок в окне.
+- Один маршрут `POST /api/mark` с полем `mark`, не пять маршрутов: один `do_POST`, одна проверка тела и Origin.
+- Origin = Host (Р1 = 2): у POST обязателен заголовок `Origin`, его хост и порт равны заголовку `Host`; иначе 403
+  «Запись только со страницы пульта.». Браузер шлёт `Origin` у `fetch` с POST всегда; тестам — передавать.
+- `date` отметки — день просмотра (день пункта), `logged_at = min(now, end_at)` (Р4 = 1) в формате
+  `isoformat(sep=" ", timespec="seconds")`, как `cli/journal.py:60 now()`.
+- Ошибки: `MarkError` → 400 с текстом по-русски (как `api_day` «date: нужна дата»); нет пункта → 404; вид пункта
+  без такой отметки → 400. Тексты ошибок пользователь увидит в окне — кабан берёт формулировки из CLI
+  (`cli/journal.py`, `agenda/service.py`), новые — короткие, в том же стиле.
+- Логика «заполнен/красный» — в Python (`due`), JS только рисует: как в П1 («Умолчания»).
+- Окно — нативный `<dialog>` (iOS Safari 15.4+), без зависимостей (Р1 = 1 П1); кнопки 1–5 — `<button>` с
+  `aria-pressed`; поля формы — из таблицы `FIELDS` в `marks.js` (имя, подпись, полюс 1, полюс 5 — слова из
+  `wellbeing.md`, Р7 = 2); полюса — мелким серым слева и справа от ряда кнопок.
+- История в окне (Р9 = 2) — список `historyRows(marks)`: «HH:MM · Оценка 4/2/3», «HH:MM · Самочувствие 4 — текст»,
+  «HH:MM · Срыв — текст», «HH:MM · Сделал / Пропустил»; текст обрезается CSS, не JS. Кнопка «Закрыть» и Esc.
+- После успешного POST — `load()` всего дня (одно место истины), окно перерисовывает историю из нового `view`,
+  набранное в форме сбрасывается только у вкладки, которую отправили.
+- Тесты JS — `tests/web/marks.test.mjs` рядом с `pult.test.mjs`, тот же глоб `player-test`.
+- Миграция 0029 — `ALTER TABLE … ADD COLUMN` (как 0025), без пересоздания таблиц.
+- `due` чек-ина зовёт `evening_done(conn, day)` — один запрос на день, не на пункт (Р3 = 1).
+
+## Открытые вопросы
+
+Нет — Р1–Р9 закрыты Владом 2026-11-08 («Решения»).
+
+- Тексты ошибок окна (`web/marks.py`) — видимое пользователю, окно Владу до партии 3 (папа, разбор партии 1).
+
+## Правки по ревью
+
+Партия 1 — отступления кабана, решил папа (2026-11-08):
+- `NoEvent(MarkError)` для 404 — принято; в партии 2 `except NoEvent` раньше `except MarkError`.
+- Приватные `_on_day`/`_moved` с `pyright: ignore` — вернуть: переименовать в `on_day`/`moved` в `web/day.py`;
+  в mutmut партии 2 — `ai_coach.web.day:on_day`, `:moved`.
+- Новые тексты ошибок — приняты в коде; сами тексты — окно Владу до партии 3 (строка «Ошибки…» в «Умолчаниях»
+  неверна — видимое).
+- Первые тесты партии написал кабан — оставить; доеба сверяет со сценариями и дописывает. Партия ~426 строк
+  против ~320 (за счёт тестов) — не резать.
+- Описания MCP (`mcp_server/server.py`: самочувствие, `get_focus_log`, `get_slip_log`) — дописать `event_id`
+  в партии 1 (регресс области).
+
+Партия 1 — ревью мамы, аудит свекрови (2026-11-08), исправил кабан:
+- `web/marks.py:_checkin` — `flow` строго `type(flow) is int`, как `done`; тест `{"flow": True}` (мама).
+- CLI-тест выхода партии `test_coach_log_focus_shows_rating_from_pult`: `save_mark` → `coach log focus --date`
+  (мама; свекровь «решить» — закрыт этим тестом).
+- Красная проверка доебы пересчитана: 39 из 39 def красные на HEAD-worktree (было «31 из 31» — счёт неверен).
+
+ОВ/ДГ (правило 11 папы) — вне msa, не применяется.
+
+## Открыто: стенд / аналитик
+
+- Руками не проверено (за Владом после партий 3–4): окна на Mac и телефоне, красные пункты вчера, окно переживает
+  автообновление раз в минуту, чек-ин из пульта и реакция скила `coach-evening` («чек-ин сделан»).
+
+## Смета (кабан-тесть, режим 1)
+
+**Что проверено:** план П2 по решениям Влада 2026-11-08 («Суть», «Решения», «Партии», «Тесты», «Файлы»); база — факт
+П1 (docs/plan-p1.md «Итог», та же сессия и стек), масштаб 1,0×: П2 ~1050 строк («Файлы») против churn П1 код+тесты
+~1050; партий 4 против 3. Цены — тариф metrics.py от 2026-10-25
+(https://platform.claude.com/docs/en/about-claude/pricing, в этом запуске не сверял); fable — цена Opus.
+
+Платного вне LLM нет: stdlib, без хостинга, БД — локальный SQLite. Р7 = 2 и Р9 = 2 — +~75 строк, ~+0,5 $.
+
+| Статья | Сейчас ($/шаг) | Допущения | Дешевле | Экономия | Что теряем |
+|---|---|---|---|---|---|
+| Декарт (fable) | 17,4 | 4 партии + 1 сводный = 5 вызовов × 3,47 $ (последний факт, plan-sh9.md:241) | 1 сводный вызов на шаг | ~13,9 $ | разбор по партиям: огрехи партии 1 всплывут только в конце |
+| Оркестратор (opus) | 9–11 | П1 8,88 $ / 23M, +1 партия | /compact сразу после коммита партии; отчёты субагентов — файлами (уже так) | 1–2 $ | ничего, если agents.md ведётся |
+| Папа (fable) | 3,5–4,5 | уже 3,08 $ (план + переписка по решениям) + отступления и закрытие | меньше «отступлений»: развилки закрыты, объём партий в плане | ~0,5 $ | нет |
+| Ревью/аудит (opus) | 4,0–5,6 | П1 × 1,0–1,4 (4 партии) | — (не трогаем) | — | — |
+
+| Партия | Время |
+|---|---|
+| 0. План папы + окна Р1–Р9 Владу | факт ~70 мин интервала (в т. ч. ожидание Влада), работа 11,7 мин |
+| 1. Схема и запись (~320 строк) | 15–25 мин + ревью |
+| 2. Данные дня и сервер (~265) | 15–20 мин + ревью |
+| 3. Окна задачи, практики, отдыха (~300) | 15–25 мин + ревью |
+| 4. Анкета чек-ина и справка (~160) | 10–15 мин + ревью |
+| cov + mutmut (marks, day, server, store.agenda) | 45–70 мин фоновых (П1: 50 мин на 2 модуля) |
+| Декарт ×5 + тесть р.3 + закрытие | 15–25 мин |
+| **Цепочка (с партии 1)** | 130–210 мин (П1 факт 114) |
+
+| Роль | Модель | Токены | $ (тариф metrics.py 2026-10-25) |
+|---|---|---|---|
+| orchestrator | opus | 23–28M | 9,0–11,0 |
+| papa-kaban | fable | 2,9–3,6M | 3,5–4,5 |
+| kaban | sonnet | 3,8–4,6M | 1,5–1,9 |
+| kaban-doeba | sonnet | 3,7–4,4M | 1,3–1,6 |
+| mama-kaban | opus | 2,1–2,9M | 2,0–2,8 |
+| kaban-svekrov | opus | 2,2–2,9M | 2,0–2,8 |
+| kaban-test (р.1 + р.3) | opus | 0,8M | 1,1 |
+| kaban-dekart (5 вызовов) | fable | 19,6M (3,91M × 5, plan-sh9.md:241) | 17,4 |
+| **итого** | | 58–67M | **38–43** |
+
+Уже прошло: 3,08 $ (papa-kaban adac33afc210d90b8, 2 сегмента, metrics.py по сессии 949a2b8c); нижняя граница
+38 $ ≥ 3,08. С одним сводным Декартом — 24–29 $.
+
+Модели — `grep -H '^model:'`:
+```
+/Users/vladislavahtamov/.claude/agents/kaban-test.md:model: opus
+/Users/vladislavahtamov/.claude/agents/kaban.md:model: sonnet
+/Users/vladislavahtamov/.claude/agents/kaban-doeba.md:model: sonnet
+/Users/vladislavahtamov/.claude/agents/mama-kaban.md:model: opus
+/Users/vladislavahtamov/.claude/agents/kaban-svekrov.md:model: opus
+/Users/vladislavahtamov/.claude/agents/kaban-dekart.md:model: fable
+/Users/vladislavahtamov/.claude/agents/papa-kaban.md:model: fable
+```
+
+Вердикт: ок по бабкам; партии 320/265/300/160 < 400 строк. Главная статья — Декарт (~40 %); число вызовов
+выбирает Влад.

@@ -6,7 +6,7 @@ from workload_fakes import coach_event
 
 from ai_coach.store.agenda import add_event
 from ai_coach.store.workload import replace_calendar_window
-from ai_coach.web.day import day_view
+from ai_coach.web.day import day_view, moved, on_day
 
 DAY = date(2026, 11, 7)
 D = "2026-11-07"
@@ -259,6 +259,38 @@ def test_repeat_on_its_day_moved_current_and_extends_frame(conn: sqlite3.Connect
     assert result["items"][1]["start_at"] == f"{D}T20:00:00"
     assert {"source": "item", "id": cid} in result["current"]
     assert (result["elapsed_min"], result["left_min"]) == (665, 10)
+
+
+def repeat_row(repeat: str | None, since: str = "2026-10-31") -> dict[str, Any]:
+    return {
+        "repeat": repeat,
+        "date": since,
+        "start_at": f"{since}T20:00:00",
+        "end_at": f"{since}T20:15:00",
+    }
+
+
+def test_on_day_without_repeat_or_on_start_day_defers_to_query() -> None:
+    assert on_day(repeat_row(None), date(2026, 11, 7))
+    assert on_day(repeat_row("weekly"), date(2026, 10, 31))
+    assert on_day(repeat_row("weekly"), date(2026, 10, 30))
+
+
+def test_on_day_by_repeat_kind() -> None:
+    assert on_day(repeat_row("weekly"), date(2026, 11, 7))
+    assert not on_day(repeat_row("weekly"), date(2026, 11, 8))
+    assert on_day(repeat_row("biweekly"), date(2026, 11, 14))
+    assert not on_day(repeat_row("biweekly"), date(2026, 11, 7))
+
+
+def test_moved_shifts_dates_keeping_time_of_day() -> None:
+    row = moved(repeat_row("weekly"), date(2026, 11, 7))
+    assert (row["start_at"], row["end_at"]) == ("2026-11-07T20:00:00", "2026-11-07T20:15:00")
+
+
+def test_moved_leaves_non_repeating_row() -> None:
+    row = repeat_row(None)
+    assert moved(row, date(2026, 11, 7)) == row
 
 
 def test_repeat_on_other_day_does_not_extend_frame(conn: sqlite3.Connection) -> None:

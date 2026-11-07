@@ -20,7 +20,7 @@ def test_schema_version_is_at_least_21(conn: sqlite3.Connection) -> None:
 
 def test_focus_log_has_expected_columns(conn: sqlite3.Connection) -> None:
     found = {r[1] for r in conn.execute("PRAGMA table_info(focus_log)").fetchall()}
-    assert found == {"id", "date", "logged_at", "focus", "fatigue", "effort", "text"}
+    assert found == {"id", "date", "logged_at", "focus", "fatigue", "effort", "text", "event_id"}
 
 
 @pytest.mark.parametrize("column", ["focus", "fatigue", "effort"])

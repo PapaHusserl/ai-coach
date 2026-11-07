@@ -17,7 +17,7 @@ BIWEEKLY_DAYS = 14
 SECONDS_IN_MINUTE = 60
 
 
-def _on_day(row: dict[str, Any], day: date) -> bool:
+def on_day(row: dict[str, Any], day: date) -> bool:
     """Повтор, начатый раньше, выпадает на day: daily - каждый день, weekly - в тот же день
     недели, biweekly - через две недели."""
     if row["repeat"] is None or row["date"] >= day.isoformat():
@@ -28,7 +28,7 @@ def _on_day(row: dict[str, Any], day: date) -> bool:
     return gap % (BIWEEKLY_DAYS if row["repeat"] == "biweekly" else 7) == 0
 
 
-def _moved(row: dict[str, Any], day: date) -> dict[str, Any]:
+def moved(row: dict[str, Any], day: date) -> dict[str, Any]:
     """Повтор, начатый раньше day, - то же время суток на day."""
     if row["repeat"] is None or row["date"] >= day.isoformat():
         return row
@@ -40,8 +40,8 @@ def _moved(row: dict[str, Any], day: date) -> dict[str, Any]:
 
 
 def _items(conn: sqlite3.Connection, day: date) -> list[dict[str, Any]]:
-    rows = [r for r in agenda_rows(conn, day.isoformat(), day.isoformat()) if _on_day(r, day)]
-    rows = sorted((_moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
+    rows = [r for r in agenda_rows(conn, day.isoformat(), day.isoformat()) if on_day(r, day)]
+    rows = sorted((moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
     return [{k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]} for r in rows]
 
 
