@@ -132,15 +132,22 @@ def login() -> None:
 
 
 @app.command()
-def sync(days: Annotated[int, typer.Option(help="За сколько последних дней")] = 7) -> None:
+def sync(
+    days: Annotated[int, typer.Option(help="За сколько последних дней")] = 7,
+    calendar: Annotated[
+        bool, typer.Option("--calendar", help="Только нагрузка (календарь, туду, груминг, экран)")
+    ] = False,
+) -> None:
     """Загрузить метрики, активности и подходы силовой из Garmin и нагрузку (календарь, туду,
-    груминг) в базу. Ошибка Garmin нагрузку не прерывает, код выхода остаётся 1."""
+    груминг) в базу. Ошибка Garmin нагрузку не прерывает, код выхода остаётся 1. С --calendar
+    Garmin пропускается."""
     conn = open_db()
     failed = False
     try:
         try:
-            client = load_client()
-            typer.echo(run_sync(conn, client, days, pause=0.5))
+            if not calendar:
+                client = load_client()
+                typer.echo(run_sync(conn, client, days, pause=0.5))
         except GarminError as e:
             typer.echo(str(e), err=True)
             failed = True

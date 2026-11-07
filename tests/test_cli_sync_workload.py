@@ -70,6 +70,54 @@ def test_sync_also_imports_workload(isolated: Path, monkeypatch: pytest.MonkeyPa
     assert kinds == {"todo_open", "todo_closed", "grooming_done", "grooming_pending"}
 
 
+def no_garmin(*a: object, **k: object) -> None:
+    raise AssertionError("Garmin-клиент не должен вызываться")
+
+
+def test_sync_calendar_does_not_load_garmin_client(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(main, "load_client", no_garmin)
+    use_calendar(monkeypatch, FakeCalendar([event_today()]))
+    result = runner.invoke(main.app, ["sync", "--calendar"])
+    assert result.exit_code == 0
+    assert rows(isolated, "SELECT COUNT(*) FROM daily_metrics")[0][0] == 0
+
+
+def test_sync_calendar_imports_workload(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", no_garmin)
+    use_calendar(monkeypatch, FakeCalendar([event_today()]))
+    runner.invoke(main.app, ["sync", "--calendar"])
+    assert rows(isolated, "SELECT uid FROM calendar_events") == [("w",)]
+    assert rows(isolated, "SELECT COUNT(*) FROM day_counters")[0][0] > 0
+
+
+def test_sync_calendar_logs_only_workload(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", no_garmin)
+    use_calendar(monkeypatch, FakeCalendar())
+    runner.invoke(main.app, ["sync", "--calendar"])
+    assert [(r["kind"], r["status"]) for r in sync_log(isolated)] == [("workload", "ok")]
+
+
+def test_sync_calendar_without_tokens_exits_0(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(main, "load_client", no_garmin)
+    use_calendar(monkeypatch, FakeCalendar())
+    result = runner.invoke(main.app, ["sync", "--calendar"])
+    assert result.exit_code == 0
+    assert "coach login" not in result.output
+
+
+def test_sync_without_flag_still_calls_garmin(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    runner.invoke(main.app, ["sync", "--days", "2"])
+    assert rows(isolated, "SELECT COUNT(*) FROM daily_metrics")[0][0] == 2
+
+
 def test_sync_logs_both_sync_and_workload(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
     use_calendar(monkeypatch, FakeCalendar())
