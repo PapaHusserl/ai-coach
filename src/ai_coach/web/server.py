@@ -16,7 +16,6 @@ from ai_coach.web.day import day_view
 
 STATIC_PREFIX = "/static/"
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
-STUB = "<!doctype html><meta charset=utf-8><title>Пульт</title><p>Пульт: /api/day</p>"
 
 
 def lan_address() -> str | None:
@@ -51,7 +50,7 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
         def do_GET(self) -> None:
             parts = urlsplit(self.path)
             if parts.path == "/":
-                self.send(HTTPStatus.OK, STUB.encode(), "text/html")
+                self.static("index.html")
             elif parts.path == "/api/day":
                 self.api_day(parse_qs(parts.query))
             elif parts.path.startswith(STATIC_PREFIX):

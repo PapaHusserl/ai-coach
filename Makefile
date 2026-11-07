@@ -34,7 +34,7 @@ cov:
 # JS-тесты плеера (нужен node >= 18).
 player-test:
 	@command -v node >/dev/null 2>&1 || { echo "player-test: не найден node — установите Node.js (brew install node)"; exit 1; }
-	node --test "tests/player/*.test.mjs"
+	node --test "tests/player/*.test.mjs" "tests/web/*.test.mjs"
 
 # Мутации: запускать фоном вне агента. Отчёт — reports/mutmut.txt.
 mutate:

@@ -83,3 +83,38 @@ def test_head_is_501_with_empty_body(port: int) -> None:
 def test_root_is_html_without_credentials(port: int) -> None:
     status, _ = request(port, "/")
     assert status == 200
+
+
+def test_root_serves_index_page(port: int) -> None:
+    _, body = request(port, "/")
+    page = body.decode()
+    assert 'id="rows"' in page
+    assert "/static/pult.js" in page
+
+
+def test_static_serves_real_script(port: int) -> None:
+    status, body = request(port, "/static/pult.js")
+    assert status == 200
+    assert b"formatClock" in body
+
+
+def test_static_script_content_type(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("GET", "/static/pult.js")
+        response = conn.getresponse()
+        response.read()
+        assert response.getheader("Content-Type") == "text/javascript; charset=utf-8"
+    finally:
+        conn.close()
+
+
+def test_static_css_content_type(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("GET", "/static/pult.css")
+        response = conn.getresponse()
+        response.read()
+        assert response.getheader("Content-Type") == "text/css; charset=utf-8"
+    finally:
+        conn.close()

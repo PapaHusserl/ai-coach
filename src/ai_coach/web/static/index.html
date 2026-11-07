@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Пульт</title>
+	<link rel="stylesheet" href="/static/pult.css">
+</head>
+<body>
+	<header>
+		<button id="prev" aria-label="Предыдущий день">‹</button>
+		<h1><span id="date"></span> <span id="now" class="now"></span></h1>
+		<button id="next" aria-label="Следующий день">›</button>
+	</header>
+	<div class="bar"><div id="fill" class="fill"></div></div>
+	<p id="bar-label" class="bar-label"></p>
+	<p id="error" class="error" hidden></p>
+	<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
+	<ul id="rows" class="rows"></ul>
+	<noscript><p class="error">Нужен включённый JavaScript.</p></noscript>
+	<script type="module" src="/static/pult.js"></script>
+</body>
+</html>
