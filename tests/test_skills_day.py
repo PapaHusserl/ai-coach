@@ -100,16 +100,16 @@ def test_todo_has_no_narrower_allow_entries() -> None:
     assert [entry for entry in ALLOW if "coach todo" in entry] == ["Bash(uv run coach todo:*)"]
 
 
-def test_help_calendar_topic_has_day_plan() -> None:
-    text = (AGENTS / "coach-help" / "calendar.md").read_text()
+def test_help_day_plan_topic_has_day_plan() -> None:
+    text = (AGENTS / "coach-help" / "day-plan.md").read_text()
     assert "## План дня" in text
     assert "create_day_plan" in text
 
 
-def test_help_toc_calendar_row_mentions_day_plan() -> None:
-    rows = [r for r in (AGENTS / "coach-help.md").read_text().splitlines() if "calendar.md" in r]
+def test_help_toc_day_plan_row() -> None:
+    rows = [r for r in (AGENTS / "coach-help.md").read_text().splitlines() if "day-plan.md" in r]
     assert rows
-    assert any("план дня" in row for row in rows)
+    assert any("спланируй день" in row for row in rows)
 
 
 def test_help_todo_topic_has_commands() -> None:
@@ -174,7 +174,7 @@ def test_help_training_topic_mentions_yes_flag() -> None:
 
 
 def test_help_calendar_topic_mentions_cooking() -> None:
-    assert "готовк" in (AGENTS / "coach-help" / "calendar.md").read_text()
+    assert "готовк" in (AGENTS / "coach-help" / "day-plan.md").read_text()
 
 
 def test_readme_mentions_cooking() -> None:

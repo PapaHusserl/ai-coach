@@ -6,7 +6,7 @@ AGENT_LIMITS = {
     "coach-nutrition.md": 6144,
     "coach-onboarding.md": 6144,
     "coach-week.md": 6144,
-    "coach-agenda.md": 6144,
+    "coach-agenda.md": 8192,
     "coach-day.md": 6144,
     "coach-help.md": 6144,
 }

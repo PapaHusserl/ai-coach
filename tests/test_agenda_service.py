@@ -153,9 +153,9 @@ def test_checkin_daily_is_ok(conn: sqlite3.Connection) -> None:
     assert result["repeat"] == "daily"
 
 
-def test_repeat_weekly_is_error(conn: sqlite3.Connection) -> None:
+def test_repeat_monthly_is_error(conn: sqlite3.Connection) -> None:
     with pytest.raises(AgendaError):
-        check(conn, kind="checkin", category=None, repeat="weekly")
+        check(conn, kind="checkin", category=None, repeat="monthly")
 
 
 def test_repeat_on_task_is_error(conn: sqlite3.Connection) -> None:
@@ -190,6 +190,62 @@ def test_third_repeating_checkin_at_taken_time_is_error(conn: sqlite3.Connection
     stored(conn, **CHECKIN, **at("2026-10-10", "15:00:00", "15:15:00"))
     with pytest.raises(AgendaError, match="15:00"):
         check(conn, **CHECKIN, **at("2026-10-12", "15:00:00", "15:15:00"))
+
+
+SAT, NEXT_SAT, MON = "2026-10-10", "2026-10-17", "2026-10-12"
+CLASHES = [
+    ("daily", SAT, "weekly", MON),
+    ("daily", SAT, "biweekly", MON),
+    ("weekly", SAT, "daily", MON),
+    ("biweekly", SAT, "daily", MON),
+    ("weekly", SAT, "weekly", NEXT_SAT),
+    ("weekly", SAT, "biweekly", NEXT_SAT),
+    ("biweekly", SAT, "weekly", NEXT_SAT),
+    ("biweekly", SAT, "biweekly", NEXT_SAT),
+    ("daily", SAT, "daily", MON),
+]
+NO_CLASHES = [
+    ("weekly", SAT, "weekly", MON),
+    ("weekly", SAT, "biweekly", MON),
+    ("biweekly", SAT, "weekly", MON),
+    ("biweekly", SAT, "biweekly", MON),
+]
+
+
+@pytest.mark.parametrize(("old", "old_day", "new", "new_day"), CLASHES)
+def test_repeating_checkins_that_share_days_are_error(
+    conn: sqlite3.Connection, old: str, old_day: str, new: str, new_day: str
+) -> None:
+    fields = {"kind": "checkin", "category": None}
+    stored(conn, **fields, repeat=old, **at(old_day, "11:00:00", "11:15:00"))
+    with pytest.raises(AgendaError, match="11:00"):
+        check(conn, **fields, repeat=new, **at(new_day, "11:00:00", "11:15:00"))
+
+
+@pytest.mark.parametrize(("old", "old_day", "new", "new_day"), NO_CLASHES)
+def test_weekly_checkins_on_other_weekdays_are_ok(
+    conn: sqlite3.Connection, old: str, old_day: str, new: str, new_day: str
+) -> None:
+    fields = {"kind": "checkin", "category": None}
+    stored(conn, **fields, repeat=old, **at(old_day, "11:00:00", "11:15:00"))
+    result = check(conn, **fields, repeat=new, **at(new_day, "11:00:00", "11:15:00"))
+    assert result["repeat"] == new
+
+
+@pytest.mark.parametrize("repeat", ["weekly", "biweekly"])
+def test_weekly_repeat_on_checkin_is_ok(conn: sqlite3.Connection, repeat: str) -> None:
+    assert check(conn, kind="checkin", category=None, repeat=repeat)["repeat"] == repeat
+
+
+@pytest.mark.parametrize("repeat", ["weekly", "biweekly"])
+def test_weekly_repeat_on_task_is_error(conn: sqlite3.Connection, repeat: str) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, repeat=repeat)
+
+
+def test_weekly_checkin_at_other_time_than_daily_is_ok(conn: sqlite3.Connection) -> None:
+    stored(conn, **CHECKIN, **at(SAT, "11:00:00", "11:15:00"))
+    check(conn, kind="checkin", category=None, repeat="weekly", **at(SAT, "12:00:00", "12:15:00"))
 
 
 @pytest.mark.parametrize("status", ["cancelled", "removed"])

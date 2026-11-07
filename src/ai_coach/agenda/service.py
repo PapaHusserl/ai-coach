@@ -25,7 +25,7 @@ from ai_coach.workload.config import CATEGORIES
 
 KINDS = ("training", "practice", "rest", "sleep", "checkin", "task", "focus", "meal")
 REST_KINDS = ("rest", "sleep")
-REPEATS = ("daily",)
+REPEATS = ("daily", "weekly", "biweekly")
 PAST_DAYS = 30
 AHEAD_DAYS = 14
 MAX_HOURS = 24
@@ -80,15 +80,25 @@ def _links(conn: sqlite3.Connection, workout_id: Any, practice_id: Any) -> None:
         raise AgendaError(f"Практики {practice_id} нет.")
 
 
+def _clash(repeat: str, start: datetime, row: dict[str, Any]) -> bool:
+    """Повтор row занимает то же время суток и пересекается по дням: daily - с любым, weekly и
+    biweekly - с daily и с тем же днём недели."""
+    if row["start_at"][11:16] != start.isoformat(timespec="seconds")[11:16]:
+        return False
+    if repeat == "daily" or row["repeat"] == "daily":
+        return True
+    return datetime.fromisoformat(row["start_at"]).weekday() == start.weekday()
+
+
 def validate_draft(
     conn: sqlite3.Connection, values: dict[str, Any], today: date | None = None
 ) -> dict[str, Any]:
     """Проверенные значения черновика для add_event (без status, created_at). values: kind, title,
     start_at, end_at (местное время ISO); не обязательно all_day, note, category, alarm_min,
     repeat, workout_id, practice_id. Начало раньше конца, событие не длиннее MAX_HOURS, день
-    начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat только daily у checkin и не два
-    активных на одно время суток; тренировка и практика живы; категория по умолчанию только у
-    rest и sleep (rest)."""
+    начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat (daily, weekly, biweekly) только у
+    checkin и не два активных на одно время суток с пересечением по дням; тренировка и практика
+    живы; категория по умолчанию только у rest и sleep (rest)."""
     today = today or date.today()
     kind = values["kind"]
     if kind not in KINDS:
@@ -112,7 +122,7 @@ def validate_draft(
         if repeat not in REPEATS or kind != "checkin":
             raise AgendaError(f"repeat только {list(REPEATS)} и только у checkin.")
         clock = start.isoformat(timespec="seconds")[11:16]
-        if any(row["start_at"][11:16] == clock for row in active_repeats(conn)):
+        if any(_clash(repeat, start, row) for row in active_repeats(conn)):
             raise AgendaError(
                 f"Повторяющийся чек-ин на {clock} уже есть (черновик или в календаре)."
             )

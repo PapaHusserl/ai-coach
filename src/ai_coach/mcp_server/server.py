@@ -376,8 +376,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(день начала от 30 дней назад до 14 вперёд, не длиннее 24 часов). category "
         "(work / personal / hobby / rest) - как событие считается в нагрузке: у rest и sleep по "
         "умолчанию rest, у task обязательна, у training / practice / checkin не задаётся. "
-        "alarm_min - за сколько минут напомнить; repeat=daily - только у checkin, не два на "
-        "одно время суток; "
+        "alarm_min - за сколько минут напомнить; repeat=daily / weekly / biweekly - только у "
+        "checkin, не два на одно время суток с пересечением по дням; "
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
         "all_day - на весь день. Ответ: draft_id. В календарь кладёт пользователь командой "
         "coach event write.",

@@ -67,11 +67,14 @@ class CalendarWriter:
             if event["alarm_min"] is not None:
                 offset = -event["alarm_min"] * SECONDS_IN_MINUTE
                 item.addAlarm_(event_kit.EKAlarm.alarmWithRelativeOffset_(offset))
-            if event["repeat"] == "daily":
+            if event["repeat"]:
+                frequency, interval = {
+                    "daily": (event_kit.EKRecurrenceFrequencyDaily, 1),
+                    "weekly": (event_kit.EKRecurrenceFrequencyWeekly, 1),
+                    "biweekly": (event_kit.EKRecurrenceFrequencyWeekly, 2),
+                }[event["repeat"]]
                 rule = event_kit.EKRecurrenceRule.alloc()
-                rule = rule.initRecurrenceWithFrequency_interval_end_(
-                    event_kit.EKRecurrenceFrequencyDaily, 1, None
-                )
+                rule = rule.initRecurrenceWithFrequency_interval_end_(frequency, interval, None)
                 item.addRecurrenceRule_(rule)
             span = event_kit.EKSpanFutureEvents if event["repeat"] else event_kit.EKSpanThisEvent
             ok, error = store.saveEvent_span_commit_error_(item, span, True, None)
