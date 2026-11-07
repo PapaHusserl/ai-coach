@@ -146,9 +146,9 @@ updated: 2026-11-03
 docs/plan-n19.md «Тренер как помеха», Р10.
 
 ## 49. Веб-пульт тренера
-status: idea
+status: started
 priority: medium
-updated: 2026-11-04
+updated: 2026-11-07
 
 Влад, 2026-11-04: веб-морда, чтобы смотреть и обновлять данные тренера без агента. Прототип (артефакт, данные на
 04.11 зашиты): https://claude.ai/artifact/BgNnFnbaWDqsy2ASMwvuCE. Что принял Влад по прототипу:
