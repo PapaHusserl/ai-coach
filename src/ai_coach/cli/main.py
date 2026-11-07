@@ -33,6 +33,7 @@ from ai_coach.cli.review import review_app
 from ai_coach.cli.sport_nutrition import protocol_app, supplement_app
 from ai_coach.cli.supplement_log import supplement_log, supplement_take, supplement_untake
 from ai_coach.cli.todo import todo_app
+from ai_coach.cli.web import web
 from ai_coach.garmin import (
     TOKEN_NAME,
     GarminAuthError,
@@ -82,6 +83,7 @@ app.command()(focus)
 app.command()(slip)
 app.command()(pvt)
 app.command()(who5)
+app.command("web")(web)
 app.add_typer(pantry_app, name="pantry")
 app.add_typer(meal_app, name="meal")
 app.add_typer(recipe_app, name="recipe")
