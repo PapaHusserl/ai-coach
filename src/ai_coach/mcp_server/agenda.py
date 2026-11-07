@@ -9,10 +9,12 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft
+from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft, move_draft
 from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
+from ai_coach.agenda.service import shifted
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import cap, parse_day, period
+from ai_coach.store.agenda import get_event
 
 
 def create_draft_event(
@@ -97,6 +99,22 @@ def cancel_draft_event(conn: sqlite3.Connection, event_id: int) -> dict[str, Any
     except AgendaError as e:
         raise ToolError(str(e)) from None
     return {"cancelled_id": event_id}
+
+
+def move_draft_event(conn: sqlite3.Connection, event_id: int, start_at: str) -> dict[str, Any]:
+    """Перенос события на новое начало (длительность та же). Черновик (draft) двигается сразу:
+    ответ start_at, end_at, date. Записанное в календарь (written) MCP не трогает: ответ -
+    command (готовая команда coach event move, её выполняет пользователь; время сначала
+    проверяется, в базу не пишет). Повторяющееся не двигается."""
+    row = get_event(conn, event_id)
+    try:
+        if row is not None and row["status"] == "written":
+            shifted(conn, row, start_at, None)
+            return {"command": f"uv run coach event move {event_id} {start_at}"}
+        with conn:
+            return move_draft(conn, event_id, start_at)
+    except AgendaError as e:
+        raise ToolError(str(e)) from None
 
 
 def agenda(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:

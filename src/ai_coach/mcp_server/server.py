@@ -28,7 +28,8 @@ INSTRUCTIONS = (
     f"Списки — не больше {MAX_ROWS} строк и {MAX_CHARS} символов: ответ {{rows, truncated}}, "
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
-    "create_draft_event, create_day_plan, cancel_draft_event — только draft, propose_phase) и "
+    "create_draft_event, create_day_plan, cancel_draft_event — только draft, move_draft_event — "
+    "двигает только draft, propose_phase) и "
     "КБЖУ записи еды, "
     "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition), и группы "
     "старым записям без групп (save_food_groups). "
@@ -399,6 +400,13 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "cancel_draft_event": (
         agenda.cancel_draft_event,
         "Отменить черновик события календаря по id (только draft; записанные в календарь нельзя).",
+    ),
+    "move_draft_event": (
+        agenda.move_draft_event,
+        "Перенести событие календаря на новое начало start_at (YYYY-MM-DDTHH:MM, длительность та "
+        "же). Черновик (draft) двигается сразу. Записанное в календарь (written) не трогает: "
+        "ответ command - готовая команда coach event move, покажи её пользователю, выполняет он. "
+        "Повторяющееся не двигается: снять и поставить заново.",
     ),
     "propose_phase": (tools.propose_phase, "Предложить фазу (proposed); принимает пользователь."),
 }

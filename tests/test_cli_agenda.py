@@ -1,6 +1,7 @@
 """coach event list/write/remove/cancel: запись тренера в календарь коуча (шаг v2.6)."""
 
 import sqlite3
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from ai_coach.cli import agenda as agenda_cli
 from ai_coach.cli import main
 from ai_coach.store.agenda import add_event, get_event
 from ai_coach.store.db import open_db
+from ai_coach.workload.calendar_eventkit import CalendarError
 
 runner = CliRunner()
 
@@ -263,3 +265,73 @@ def test_commit_error_for_one_id_does_not_stop_next(
     assert result.exit_code == 1
     assert state(isolated, first)["status"] == "draft"
     assert state(isolated, second)["status"] == "written"
+
+
+SOON = date.today() + timedelta(days=1)
+OLD_TIME = {"start_at": f"{SOON}T10:00:00", "end_at": f"{SOON}T12:00:00", "date": str(SOON)}
+NEW_DAY = date.today() + timedelta(days=2)
+NEW_TIME = f"{NEW_DAY}T15:30"
+
+
+def test_move_draft_needs_no_calendar(isolated: Path) -> None:
+    event_id = seed(isolated, **OLD_TIME)
+    result = run("move", str(event_id), NEW_TIME)
+    assert result.exit_code == 0, result.output
+    row = state(isolated, event_id)
+    assert (row["start_at"], row["end_at"], row["date"]) == (
+        f"{NEW_DAY}T15:30:00",
+        f"{NEW_DAY}T17:30:00",
+        str(NEW_DAY),
+    )
+    assert row["status"] == "draft"
+
+
+def test_move_written_event_goes_through_writer(isolated: Path, writer: FakeCalendarWriter) -> None:
+    event_id = seed(isolated, status="written", calendar_uid="u1", **OLD_TIME)
+    result = run("move", str(event_id), NEW_TIME)
+    assert result.exit_code == 0, result.output
+    assert writer.moved == [("u1", f"{NEW_DAY}T15:30:00", f"{NEW_DAY}T17:30:00")]
+    row = state(isolated, event_id)
+    assert (row["status"], row["start_at"]) == ("written", f"{NEW_DAY}T15:30:00")
+
+
+def test_move_written_writer_error_exits_1_and_keeps_row(
+    isolated: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = write_config(tmp_path / "coach.toml", '[coach]\ncalendar = "Coach"\n')
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
+    broken = FakeCalendarWriter(error=CalendarError("нет доступа"))
+    monkeypatch.setattr(agenda_cli, "CalendarWriter", lambda *a, **k: broken)
+    event_id = seed(isolated, status="written", calendar_uid="u1", **OLD_TIME)
+    result = run("move", str(event_id), NEW_TIME)
+    assert result.exit_code == 1
+    assert state(isolated, event_id)["start_at"] == OLD_TIME["start_at"]
+
+
+@pytest.mark.parametrize("status", ["cancelled", "removed"])
+def test_move_inactive_event_exits_1(
+    isolated: Path, writer: FakeCalendarWriter, status: str
+) -> None:
+    event_id = seed(isolated, status=status, calendar_uid="u1", **OLD_TIME)
+    result = run("move", str(event_id), NEW_TIME)
+    assert result.exit_code == 1
+    assert writer.moved == []
+
+
+def test_move_unknown_id_exits_1(isolated: Path) -> None:
+    assert run("move", "999", NEW_TIME).exit_code == 1
+
+
+def test_move_bad_time_exits_1_and_keeps_draft(isolated: Path) -> None:
+    event_id = seed(isolated, **OLD_TIME)
+    result = run("move", str(event_id), "завтра")
+    assert result.exit_code == 1
+    assert state(isolated, event_id)["start_at"] == OLD_TIME["start_at"]
+
+
+def test_move_repeating_checkin_exits_1(isolated: Path) -> None:
+    fields = {"kind": "checkin", "category": None, "repeat": "daily"}
+    event_id = seed(isolated, **fields, **OLD_TIME)
+    result = run("move", str(event_id), NEW_TIME)
+    assert result.exit_code == 1
+    assert state(isolated, event_id)["start_at"] == OLD_TIME["start_at"]

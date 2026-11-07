@@ -86,6 +86,27 @@ class CalendarWriter:
         except Exception as e:
             raise CalendarError(f"событие не записано: {type(e).__name__}") from None
 
+    def move(self, uid: str, start_at: str, end_at: str) -> None:
+        """Переносит неповторяющееся событие календаря коуча по eventIdentifier на новое время."""
+        event_kit, foundation, store, calendar = self._open()
+        try:
+            item = store.eventWithIdentifier_(uid)
+            if item is None:
+                raise CalendarError("события нет в календаре.")
+            if str(item.calendar().calendarIdentifier()) != str(calendar.calendarIdentifier()):
+                raise CalendarError("событие не в календаре коуча, не трогаю.")
+            item.setStartDate_(_ns_date(foundation, datetime.fromisoformat(start_at)))
+            item.setEndDate_(_ns_date(foundation, datetime.fromisoformat(end_at)))
+            ok, error = store.saveEvent_span_commit_error_(
+                item, event_kit.EKSpanThisEvent, True, None
+            )
+            if not ok:
+                raise CalendarError(f"календарь не перенёс событие: {str(error)[:120]}")
+        except CalendarError:
+            raise
+        except Exception as e:
+            raise CalendarError(f"событие не перенесено: {type(e).__name__}") from None
+
     def remove(self, uid: str, future: bool = False) -> None:
         """Снимает событие по eventIdentifier, только если оно в календаре коуча; future -
         и все будущие вхождения (повторяющееся)."""

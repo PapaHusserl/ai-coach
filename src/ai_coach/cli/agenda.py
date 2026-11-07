@@ -1,4 +1,5 @@
-"""Команда `coach event`: события тренера в календаре (список, запись, снятие, отмена черновика)."""
+"""Команда `coach event`: события тренера в календаре (список, запись, перенос, снятие, отмена
+черновика)."""
 
 import sqlite3
 from datetime import date, timedelta
@@ -6,10 +7,19 @@ from typing import Annotated, Any
 
 import typer
 
-from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, remove_event, write_event
+from ai_coach.agenda import (
+    AgendaError,
+    agenda_rows,
+    cancel_event,
+    move_draft,
+    move_event,
+    remove_event,
+    write_event,
+)
 from ai_coach.agenda.calendar_write import CalendarWriter
 from ai_coach.agenda.service import AHEAD_DAYS, PAST_DAYS
 from ai_coach.cli.journal import check_date, fail
+from ai_coach.store.agenda import get_event
 from ai_coach.store.db import open_db
 from ai_coach.workload import CalendarError, WorkloadConfigError, load_config
 
@@ -100,6 +110,28 @@ def event_remove(ids: Annotated[list[int], typer.Argument(help=IDS_HELP)]) -> No
         typer.echo(f"Событие {event_id} снято из календаря.")
 
     each(ids, action)
+
+
+@event_app.command("move")
+def event_move(
+    event_id: Annotated[int, typer.Argument(help="id события")],
+    start: Annotated[str, typer.Argument(help="Новое начало YYYY-MM-DDTHH:MM")],
+) -> None:
+    """Перенести черновик или записанное событие на новое начало (длительность та же)."""
+    conn = open_db()
+    try:
+        row = get_event(conn, event_id)
+        if row is not None and row["status"] == "written":
+            done = move_event(conn, event_id, start, CalendarWriter(coach_calendar()))
+        else:
+            done = move_draft(conn, event_id, start)
+            conn.commit()
+        typer.echo(f"Событие {event_id} перенесено: {done['start_at']} - {done['end_at'][11:16]}.")
+    except (AgendaError, CalendarError) as e:
+        conn.rollback()
+        fail(f"Событие {event_id}: {e}")
+    finally:
+        conn.close()
 
 
 @event_app.command("cancel")

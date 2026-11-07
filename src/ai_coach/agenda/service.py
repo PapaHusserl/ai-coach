@@ -44,6 +44,8 @@ class EventWriter(Protocol):
 
     def remove(self, uid: str, future: bool = False) -> None: ...
 
+    def move(self, uid: str, start_at: str, end_at: str) -> None: ...
+
 
 def _moment(value: Any, name: str) -> datetime:
     try:
@@ -210,6 +212,62 @@ def remove_event(conn: sqlite3.Connection, event_id: int, writer: EventWriter) -
         raise AgendaError(
             f"Событие {event_id} снято из календаря (uid={uid}), но база не обновлена: {e}"
         ) from e
+
+
+def shifted(
+    conn: sqlite3.Connection, row: dict[str, Any], start_at: str, today: date | None
+) -> dict[str, Any]:
+    """Проверенные start_at, end_at, date события при новом начале; длительность сохраняется.
+    Повторяющееся не двигается."""
+    if row["repeat"] is not None:
+        raise AgendaError(
+            f"Событие {row['id']} повторяющееся: снять (event remove) и поставить заново."
+        )
+    start = _moment(start_at, "start_at")
+    length = datetime.fromisoformat(row["end_at"]) - datetime.fromisoformat(row["start_at"])
+    values = {**row, "start_at": start.isoformat(), "end_at": (start + length).isoformat()}
+    checked = validate_draft(conn, values, today)
+    return {k: checked[k] for k in ("start_at", "end_at", "date")}
+
+
+def move_draft(
+    conn: sqlite3.Connection, event_id: int, start_at: str, today: date | None = None
+) -> dict[str, Any]:
+    """Двигает черновик на новое начало (длительность та же), возвращает start_at, end_at, date."""
+    row = _get(conn, event_id)
+    if row["status"] != "draft":
+        raise AgendaError(f"Это не черновик: событие {event_id} — {row['status']}.")
+    values = shifted(conn, row, start_at, today)
+    update_event(conn, event_id, values)
+    return values
+
+
+def move_event(
+    conn: sqlite3.Connection,
+    event_id: int,
+    start_at: str,
+    writer: EventWriter,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """Двигает записанное событие (сначала календарь, потом база) на новое начало, длительность
+    та же. Сбой календаря базу не меняет; сбой базы после переноса - AgendaError с uid.
+    Возвращает start_at, end_at, date. Черновик двигает move_draft."""
+    row = _get(conn, event_id)
+    if row["status"] != "written":
+        raise AgendaError(
+            f"Двигать можно записанное, а {event_id} — {row['status']} (черновик — move_draft)."
+        )
+    values = shifted(conn, row, start_at, today)
+    uid = row["calendar_uid"]
+    writer.move(uid, values["start_at"], values["end_at"])
+    try:
+        update_event(conn, event_id, values)
+        conn.commit()
+    except sqlite3.Error as e:
+        raise AgendaError(
+            f"Событие {event_id} перенесено в календаре (uid={uid}), но база не обновлена: {e}"
+        ) from e
+    return values
 
 
 def agenda_rows(conn: sqlite3.Connection, date_from: str, date_to: str) -> list[dict[str, Any]]:

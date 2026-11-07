@@ -12,6 +12,8 @@ from ai_coach.agenda.service import (
     AgendaError,
     agenda_rows,
     cancel_event,
+    move_draft,
+    move_event,
     remove_event,
     validate_draft,
     write_event,
@@ -453,6 +455,117 @@ def test_commit_error_after_write_reports_uid(conn: sqlite3.Connection) -> None:
     event_id = stored(conn)
     with pytest.raises(AgendaError, match="fake-uid-1"):
         write_event(FlakyCommitConn(conn), event_id, FakeCalendarWriter())  # type: ignore[arg-type]
+
+
+NEW_START = "2026-10-12T15:30"
+
+
+def test_move_draft_keeps_duration_and_updates_date(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    result = move_draft(conn, event_id, NEW_START, TODAY)
+    assert result == {
+        "start_at": "2026-10-12T15:30:00",
+        "end_at": "2026-10-12T17:30:00",
+        "date": "2026-10-12",
+    }
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["start_at"], row["end_at"], row["date"]) == tuple(result.values())
+
+
+@pytest.mark.parametrize("status", ["written", "cancelled", "removed"])
+def test_move_draft_of_non_draft_is_error(conn: sqlite3.Connection, status: str) -> None:
+    event_id = stored(conn, status=status, calendar_uid="u1")
+    with pytest.raises(AgendaError):
+        move_draft(conn, event_id, NEW_START, TODAY)
+
+
+def test_move_draft_unknown_id_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        move_draft(conn, 999, NEW_START, TODAY)
+
+
+def test_move_draft_to_bad_time_is_error_and_keeps_row(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    before = get_event(conn, event_id)
+    with pytest.raises(AgendaError):
+        move_draft(conn, event_id, "завтра", TODAY)
+    with pytest.raises(AgendaError):
+        move_draft(conn, event_id, "2027-10-12T10:00", TODAY)
+    assert get_event(conn, event_id) == before
+
+
+def test_move_draft_of_rest_event_keeps_category(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, kind="rest", category="rest")
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+
+
+def test_move_draft_repeating_is_refused_with_hint(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, **CHECKIN)
+    with pytest.raises(AgendaError, match="снять .* и поставить заново"):
+        move_draft(conn, event_id, NEW_START, TODAY)
+
+
+def test_move_written_event_moves_calendar_then_database(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u7")
+    writer = FakeCalendarWriter()
+    result = move_event(conn, event_id, NEW_START, writer, TODAY)
+    assert writer.moved == [("u7", "2026-10-12T15:30:00", "2026-10-12T17:30:00")]
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["status"], row["start_at"], row["end_at"], row["date"]) == (
+        "written",
+        result["start_at"],
+        result["end_at"],
+        "2026-10-12",
+    )
+
+
+def test_move_event_of_draft_is_error_and_does_not_touch_writer(
+    conn: sqlite3.Connection,
+) -> None:
+    event_id = stored(conn)
+    before = get_event(conn, event_id)
+    writer = FakeCalendarWriter()
+    with pytest.raises(AgendaError, match="записанное"):
+        move_event(conn, event_id, NEW_START, writer, TODAY)
+    assert writer.moved == []
+    assert get_event(conn, event_id) == before
+
+
+@pytest.mark.parametrize("status", ["cancelled", "removed"])
+def test_move_event_of_inactive_is_error(conn: sqlite3.Connection, status: str) -> None:
+    event_id = stored(conn, status=status, calendar_uid="u1")
+    writer = FakeCalendarWriter()
+    with pytest.raises(AgendaError):
+        move_event(conn, event_id, NEW_START, writer, TODAY)
+    assert writer.moved == []
+
+
+def test_move_event_repeating_written_is_refused_before_calendar(
+    conn: sqlite3.Connection,
+) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u1", **CHECKIN)
+    writer = FakeCalendarWriter()
+    with pytest.raises(AgendaError, match="снять .* и поставить заново"):
+        move_event(conn, event_id, NEW_START, writer, TODAY)
+    assert writer.moved == []
+
+
+def test_move_event_calendar_error_keeps_database(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u1")
+    before = get_event(conn, event_id)
+    with pytest.raises(CalendarError):
+        move_event(conn, event_id, NEW_START, FakeCalendarWriter(error=CalendarError("нет")), TODAY)
+    assert get_event(conn, event_id) == before
+
+
+def test_commit_error_after_move_reports_uid(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u9")
+    writer = FakeCalendarWriter()
+    with pytest.raises(AgendaError, match="u9"):
+        move_event(FlakyCommitConn(conn), event_id, NEW_START, writer, TODAY)  # type: ignore[arg-type]
+    assert len(writer.moved) == 1
 
 
 def test_commit_error_after_remove_reports_uid(conn: sqlite3.Connection) -> None:

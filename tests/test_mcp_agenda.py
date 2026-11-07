@@ -149,6 +149,69 @@ def test_cancel_missing_event_is_rejected(conn: sqlite3.Connection) -> None:
         call(conn, "cancel_draft_event", event_id=999)
 
 
+AFTER = (TODAY + timedelta(days=2)).isoformat()
+
+
+def test_move_draft_event_moves_draft_keeping_duration(conn: sqlite3.Connection) -> None:
+    draft_id = create(conn)["draft_id"]
+    result = call(conn, "move_draft_event", event_id=draft_id, start_at=f"{AFTER}T15:30")
+    assert result == {
+        "start_at": f"{AFTER}T15:30:00",
+        "end_at": f"{AFTER}T17:30:00",
+        "date": AFTER,
+    }
+    row = get_event(conn, draft_id)
+    assert row is not None
+    assert (row["start_at"], row["date"], row["status"]) == (f"{AFTER}T15:30:00", AFTER, "draft")
+
+
+def test_move_draft_event_written_changes_nothing_and_gives_command(
+    conn: sqlite3.Connection,
+) -> None:
+    event_id = add_event(conn, coach_event(status="written", calendar_uid="u1"))
+    before = get_event(conn, event_id)
+    result = call(conn, "move_draft_event", event_id=event_id, start_at=f"{AFTER}T15:30")
+    assert result == {"command": f"uv run coach event move {event_id} {AFTER}T15:30"}
+    assert get_event(conn, event_id) == before
+
+
+def test_move_draft_event_written_repeating_is_rejected(conn: sqlite3.Connection) -> None:
+    fields = {"kind": "checkin", "category": None, "repeat": "daily"}
+    event_id = add_event(conn, coach_event(status="written", calendar_uid="u1", **fields))
+    before = get_event(conn, event_id)
+    with pytest.raises(ToolError, match="поставить заново"):
+        call(conn, "move_draft_event", event_id=event_id, start_at=f"{AFTER}T15:30")
+    assert get_event(conn, event_id) == before
+
+
+def test_move_draft_event_written_bad_time_is_rejected(conn: sqlite3.Connection) -> None:
+    event_id = add_event(conn, coach_event(status="written", calendar_uid="u1"))
+    before = get_event(conn, event_id)
+    with pytest.raises(ToolError):
+        call(conn, "move_draft_event", event_id=event_id, start_at="завтра")
+    with pytest.raises(ToolError):
+        call(conn, "move_draft_event", event_id=event_id, start_at="2099-01-01T10:00")
+    assert get_event(conn, event_id) == before
+
+
+@pytest.mark.parametrize("status", ["cancelled", "removed"])
+def test_move_draft_event_inactive_is_rejected(conn: sqlite3.Connection, status: str) -> None:
+    event_id = add_event(conn, coach_event(status=status, calendar_uid="u1"))
+    with pytest.raises(ToolError):
+        call(conn, "move_draft_event", event_id=event_id, start_at=f"{AFTER}T15:30")
+
+
+def test_move_draft_event_missing_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, "move_draft_event", event_id=999, start_at=f"{AFTER}T15:30")
+
+
+def test_move_draft_event_repeating_is_rejected(conn: sqlite3.Connection) -> None:
+    draft_id = create(conn, kind="checkin", category=None, repeat="daily")["draft_id"]
+    with pytest.raises(ToolError, match="поставить заново"):
+        call(conn, "move_draft_event", event_id=draft_id, start_at=f"{AFTER}T15:30")
+
+
 def test_get_agenda_returns_rows_with_statuses(conn: sqlite3.Connection) -> None:
     add_event(conn, coach_event(status="draft", title="Черновик"))
     add_event(conn, coach_event(status="written", calendar_uid="u1", title="Записано"))

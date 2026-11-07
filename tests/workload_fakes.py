@@ -130,6 +130,12 @@ class FakeCalendarWriter:
         self.foreign = foreign
         self.written: list[dict[str, Any]] = []
         self.removed: list[tuple[str, bool]] = []
+        self.moved: list[tuple[str, str, str]] = []
+
+    def move(self, uid: str, start_at: str, end_at: str) -> None:
+        if self.error is not None:
+            raise self.error
+        self.moved.append((uid, start_at, end_at))
 
     def write(self, event: dict[str, Any]) -> str:
         if self.error is not None:
