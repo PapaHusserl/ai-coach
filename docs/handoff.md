@@ -52,5 +52,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n23.md](plan-n23.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие Н23); metrics.py на коммите: пока нет. Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 1fc5be9 (закрытие Н23); metrics.py на коммите: 30,80 $ (вся сессия, с перебором R2). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-07-n23.md`.
