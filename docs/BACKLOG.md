@@ -197,3 +197,21 @@ updated: 2026-11-07
 
 Продолжение BACKLOG 44 (docs/plan-n23.md, `wc -c` 2026-11-07): `coach.md` 16301 из 16384 Б, `coach-day.md`
 6142 из 6144 Б. Следующая правка в них не влезет без выноса текста в `coach-help/` или подъёма лимита.
+
+## 57. Повторы по дням в `coach event list` и MCP `get_agenda`
+status: idea
+priority: medium
+updated: 2026-11-07
+
+`agenda_rows` (`agenda/service.py:277`) отдаёт активные серии с исходной датой, без раскладки по дням: weekly-
+чек-ин виден в списке любого дня. Пульт П1 фильтрует сам (`web/day.py`); раскладка для CLI и MCP — видимое,
+решает Влад (docs/plan-p1.md «Правки по ревью» п.1).
+
+## 58. `make smells` красный на HEAD: 4 при пороге 0
+status: idea
+priority: low
+updated: 2026-11-07
+
+На HEAD 6a69bcc (worktree, 2026-11-07) `make smells` даёт 4 при `SMELLS_MAX` 0 — в старых файлах
+(`plan/service`, `sync/workload_sync` и др.), не от П1; `make check` встаёт на smells. Причина роста — не
+установлена.
