@@ -82,9 +82,9 @@ def test_repeat_daily_is_accepted_for_checkin(conn: sqlite3.Connection) -> None:
     put(conn, kind="checkin", repeat="daily")
 
 
-def test_repeat_weekly_is_rejected(conn: sqlite3.Connection) -> None:
+def test_unknown_repeat_is_rejected(conn: sqlite3.Connection) -> None:
     with pytest.raises(sqlite3.IntegrityError):
-        put(conn, kind="checkin", repeat="weekly")
+        put(conn, kind="checkin", repeat="monthly")
 
 
 def test_repeat_is_rejected_for_other_kinds(conn: sqlite3.Connection) -> None:
