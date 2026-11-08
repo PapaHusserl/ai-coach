@@ -6,9 +6,11 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from ai_coach.agenda.service import agenda_rows
+from ai_coach.profile.service import current_profile, profile_nutrition
 from ai_coach.store.journal import evening_done
 from ai_coach.store.workload import list_calendar_events
-from ai_coach.web.marks import due, empty_marks, marks_for_day
+from ai_coach.web.food import meal_view
+from ai_coach.web.marks import COOKING, due, empty_marks, marks_for_day
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.workload.service import (
     _clip,  # pyright: ignore[reportPrivateUsage]
@@ -25,12 +27,21 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
     rows = sorted((moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
     marks = marks_for_day(conn, day.isoformat())
     evening = evening_done(conn, day.isoformat())
+    meal = None
     items: list[dict[str, Any]] = []
     for r in rows:
         mine = marks.get(r["id"], empty_marks())
         past = _moment(r, "end_at") <= now
         item = {k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]}
-        items.append(item | {"marks": mine, "due": due(r["kind"], mine, evening, past)})
+        item |= {"marks": mine, "due": due(r["kind"], mine, evening, past, r["title"])}
+        if r["kind"] == "meal" and r["title"] != COOKING:
+            if meal is None:  # остаток один на день, не на пункт
+                target = profile_nutrition(
+                    conn, day.isoformat(), current_profile(conn, day.isoformat())
+                )
+                meal = meal_view(conn, day.isoformat(), target)
+            item["meal"] = {**meal, "food": mine["food"]}
+        items.append(item)
     return items
 
 

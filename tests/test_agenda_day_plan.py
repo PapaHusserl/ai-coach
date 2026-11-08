@@ -32,6 +32,7 @@ from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.journal import add_who5
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.workload import replace_calendar_window
+from ai_coach.web.marks import COOKING
 
 MON = date(2026, 11, 2)
 SAT = date(2026, 11, 7)
@@ -1343,6 +1344,13 @@ def test_early_breakfast_keeps_time_and_task_goes_after(conn: sqlite3.Connection
         f"{MON}T09:30",
     )
     assert by_title["Т"]["start_at"] >= by_title["Завтрак"]["end_at"]
+
+
+def test_cooking_title_matches_pult_constant() -> None:
+    """Пульт отличает «Готовку» от еды по названию (web.marks.COOKING)."""
+    blocks, _ = plan_day(WEEKDAY, span(MON, "06:00", "22:00"), [], [], None, False)
+    cooks = [b for b in blocks if b["kind"] == "meal" and b["title"] == COOKING]
+    assert cooks
 
 
 def test_snack_not_flush_with_shifted_breakfast(conn: sqlite3.Connection) -> None:

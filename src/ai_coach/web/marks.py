@@ -10,10 +10,13 @@ from ai_coach.store.journal import (
     add_slip,
     add_wellbeing,
     list_focus,
+    list_food,
     list_slip,
     list_wellbeing,
 )
 from ai_coach.store.workload import upsert_counter
+from ai_coach.web.errors import MarkError, NoEvent
+from ai_coach.web.food import save_food
 from ai_coach.web.repeat import moved, on_day
 
 ALLOWED = {
@@ -21,8 +24,10 @@ ALLOWED = {
     "focus": ("rating", "feel", "slip"),
     "practice": ("done", "feel", "slip"),
     "rest": ("done", "feel", "slip"),
+    "meal": ("food", "feel", "slip"),
     "checkin": ("checkin",),
 }
+COOKING = "Готовка"  # пункт meal из agenda/day_plan.py: окна нет, красным не бывает
 MIN_SCORE = 1
 MAX_SCORE = 5
 MAX_HOURS = 24  # как cli/main.py MAX_HOURS
@@ -34,14 +39,6 @@ CHECKIN_SCORES = {
     "hindrance": "hindrance",
     "valuable": "valuable",
 }
-
-
-class MarkError(ValueError):
-    """Отметку нельзя записать; текст - пользователю."""
-
-
-class NoEvent(MarkError):
-    """Пункта нет (или он отменён)."""
 
 
 def _score(name: str, value: Any) -> int:
@@ -87,7 +84,7 @@ def _event(conn: sqlite3.Connection, payload: dict[str, Any]) -> tuple[dict[str,
 
 def _kinds(row: dict[str, Any], mark: Any) -> None:
     kinds = ALLOWED.get(row["kind"])
-    if kinds is None:
+    if kinds is None or (row["kind"] == "meal" and row["title"] == COOKING):
         raise MarkError("У этого пункта пока нет окна отметок.")
     if mark not in kinds:
         raise MarkError("У этого пункта нет такой отметки.")
@@ -113,6 +110,21 @@ def _checkin(conn: sqlite3.Connection, payload: dict[str, Any], base: dict[str, 
     return wellbeing_id
 
 
+def _entry(
+    conn: sqlite3.Connection, mark: Any, payload: dict[str, Any], base: dict[str, Any]
+) -> int:
+    """Запись в журнал: food, rating, feel, slip; id строки."""
+    if mark == "food":
+        return save_food(conn, payload, base)
+    if mark == "rating":
+        scores = {k: _score(k, payload.get(k)) for k in ("focus", "fatigue", "effort")}
+        return add_focus(conn, {**base, **scores, "text": _text(payload)})
+    if mark == "feel":
+        values = {**base, "score": _score("score", payload.get("score")), "text": _text(payload)}
+        return add_wellbeing(conn, values)
+    return add_slip(conn, {**base, "text": _text(payload, required=True)})
+
+
 def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) -> int | None:
     """Записать отметку пункта (без commit); id строки, у done - None. date - день пункта,
     logged_at - min(сейчас, конец пункта): у прошедшего пункта - его конец."""
@@ -132,23 +144,18 @@ def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) 
         else:
             raise MarkError("done: 1, 0 или null.")
         return None
-    if mark == "rating":
-        scores = {k: _score(k, payload.get(k)) for k in ("focus", "fatigue", "effort")}
-        return add_focus(conn, {**base, **scores, "text": _text(payload)})
-    if mark == "feel":
-        values = {**base, "score": _score("score", payload.get("score")), "text": _text(payload)}
-        return add_wellbeing(conn, values)
-    if mark == "slip":
-        return add_slip(conn, {**base, "text": _text(payload, required=True)})
-    return _checkin(conn, payload, base)
+    if mark == "checkin":
+        return _checkin(conn, payload, base)
+    return _entry(conn, mark, payload, base)
 
 
 def empty_marks() -> dict[str, Any]:
-    return {"ratings": [], "feel": [], "slips": [], "done": None}
+    return {"ratings": [], "feel": [], "slips": [], "done": None, "food": []}
 
 
 def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any]]:
-    """Отметки дня по пунктам: event_id -> ratings, feel, slips (по времени), done (None - нет)."""
+    """Отметки дня по пунктам: event_id -> ratings, feel, slips, food (по времени), done (None -
+    нет)."""
     found: dict[int, dict[str, Any]] = {}
 
     def of(event_id: int) -> dict[str, Any]:
@@ -167,14 +174,21 @@ def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any
             of(r["event_id"])["slips"].append({k: r[k] for k in ("text", "logged_at")})
     for r in list_done(conn, day, day):
         of(r["event_id"])["done"] = {"done": r["done"], "logged_at": r["logged_at"]}
+    for r in list_food(conn, day, day):
+        if r["event_id"] is not None:
+            keys = ("id", "text", "kcal", "logged_at")
+            of(r["event_id"])["food"].append({k: r[k] for k in keys})
     return found
 
 
-def due(kind: str, marks: dict[str, Any], evening: bool, past: bool) -> bool:
+def due(kind: str, marks: dict[str, Any], evening: bool, past: bool, title: str = "") -> bool:
     """Прошедший заполняемый пункт без отметки (красный): task/focus - нет оценки, practice/rest -
-    нет «сделал/пропустил», checkin - чек-ин вечера за день не сделан."""
+    нет «сделал/пропустил», meal - нет записи еды (у «Готовки» окна нет), checkin - чек-ин
+    вечера за день не сделан."""
     if not past:
         return False
+    if kind == "meal":
+        return title != COOKING and not marks["food"]
     if kind in ("task", "focus"):
         return not marks["ratings"]
     if kind in ("practice", "rest"):

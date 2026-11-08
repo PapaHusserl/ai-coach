@@ -107,10 +107,11 @@ def post(
         conn.close()
 
 
-def add_task(db_path: Path, kind: str = "task") -> int:
+def add_task(db_path: Path, kind: str = "task", title: str = "Задача") -> int:
     now = datetime.now()
     values = coach_event(
         kind=kind,
+        title=title,
         date=now.date().isoformat(),
         start_at=(now - timedelta(hours=1)).isoformat(timespec="seconds"),
         end_at=(now + timedelta(hours=1)).isoformat(timespec="seconds"),
@@ -218,6 +219,51 @@ def test_post_mark_error_is_400_with_text(port: int, db_path: Path) -> None:
     status, answer = post(port, mark_body(event_id, mark="slip", text=""))
     assert status == 400
     assert answer.decode() == "Текст не может быть пустым."
+
+
+def test_post_food_writes_food_log_with_event_id(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    status, answer = post(port, mark_body(event_id, mark="food", text="омлет"))
+    assert status == 200
+    conn = open_db(db_path)
+    try:
+        [row] = conn.execute("SELECT * FROM food_log").fetchall()
+    finally:
+        conn.close()
+    assert json.loads(answer) == {"id": row["id"]}
+    assert (row["event_id"], row["text"], row["kcal"]) == (event_id, "омлет", None)
+
+
+def test_post_food_shows_in_api_day_meal(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    post(port, mark_body(event_id, mark="food", text="омлет"))
+    status, body = request(port, "/api/day")
+    [item] = json.loads(body)["items"]
+    assert status == 200
+    assert [f["text"] for f in item["meal"]["food"]] == ["омлет"]
+    assert [f["text"] for f in item["marks"]["food"]] == ["омлет"]
+
+
+def test_post_food_empty_text_is_400(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    status, answer = post(port, mark_body(event_id, mark="food", text=" "))
+    assert (status, answer.decode()) == (400, "Текст не может быть пустым.")
+
+
+def test_post_food_for_cooking_is_400_and_writes_nothing(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal", "Готовка")
+    status, _ = post(port, mark_body(event_id, mark="food", text="суп"))
+    assert status == 400
+    conn = open_db(db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM food_log").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_post_food_for_task_is_400(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    assert post(port, mark_body(event_id, mark="food", text="суп"))[0] == 400
 
 
 def test_post_error_is_written_to_stderr(

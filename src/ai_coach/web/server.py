@@ -17,7 +17,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from ai_coach.store.db import open_db
 from ai_coach.web.day import day_view
-from ai_coach.web.marks import MarkError, NoEvent, save_mark
+from ai_coach.web.errors import MarkError, NoEvent
+from ai_coach.web.marks import save_mark
 
 MAX_BODY = 64 * 1024
 STATIC_PREFIX = "/static/"

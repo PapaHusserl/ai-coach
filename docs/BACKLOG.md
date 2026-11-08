@@ -198,3 +198,41 @@ updated: 2026-11-07
 На HEAD 6a69bcc (worktree, 2026-11-07) `make smells` даёт 4 при `SMELLS_MAX` 0 — в старых файлах
 (`plan/service`, `sync/workload_sync` и др.), не от П1; `make check` встаёт на smells. Причина роста — не
 установлена.
+
+## 60. Журнал приёма курсов
+status: idea
+priority: low
+updated: 2026-11-08
+
+`intake_log.kind` — только `supplement` (0014), курсы `med_course` не отмечаются; без этого нет блока «Добавки к приёму»
+в окне еды из прототипа. Кандидат после П4 (docs/plan-p3.md, Р6).
+
+## 61. Шкала «тяжело — легко» после тренировки
+status: idea
+priority: low
+updated: 2026-11-08
+
+Шкала RPE из прототипа: отдельная колонка или таблица; в П3 «Как прошло» — шкала самочувствия (docs/plan-p3.md, Р5).
+
+## 62. Списание кладовой при «Съел вариант»
+status: idea
+priority: low
+updated: 2026-11-08
+
+Состав съеденного варианта → `coach pantry use`; П4 (кладовая) или отдельный пункт (docs/plan-p3.md, «Побочные находки»).
+
+## 63. `coach-meal/SKILL.md` у лимита
+status: idea
+priority: low
+updated: 2026-11-08
+
+3016 из 3072 Б: следующая правка только боковым файлом; продолжение BACKLOG 56 для скилов (docs/plan-p3.md, «Побочные
+находки»).
+
+## 64. Своя тема справки про пульт
+status: idea
+priority: low
+updated: 2026-11-08
+
+`coach-help/day-plan.md` 7498 из 8192 Б; темы пульта просятся в `coach-help/pult.md`, иглы
+`tests/test_skills_help.py:123` переедут (docs/plan-p3.md, «Побочные находки»).

@@ -4,8 +4,9 @@ from typing import Any
 
 from workload_fakes import coach_event
 
+from ai_coach.profile.service import set_value
 from ai_coach.store.agenda import add_event
-from ai_coach.store.journal import add_slip, add_wellbeing
+from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing
 from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
 from ai_coach.web.marks import save_mark
@@ -234,12 +235,146 @@ def test_past_unfilled_checkin_is_due_only_when_past(conn: sqlite3.Connection) -
 def test_kinds_without_window_are_never_due_and_have_empty_marks(
     conn: sqlite3.Connection,
 ) -> None:
-    ids = [item(conn, "06:00", "07:00", kind=k) for k in ("sleep", "meal", "training")]
+    ids = [item(conn, "06:00", "07:00", kind=k) for k in ("sleep", "training")]
     result = view(conn, "15:00")
     for event_id in ids:
         row = by_id(result, event_id)
         assert row["due"] is False
-        assert row["marks"] == {"ratings": [], "feel": [], "slips": [], "done": None}
+        assert row["marks"] == {"ratings": [], "feel": [], "slips": [], "done": None, "food": []}
+        assert "meal" not in row
+
+
+def meal(conn: sqlite3.Connection, start: str = "08:00", end: str = "09:00", **fields: Any) -> int:
+    return item(conn, start, end, kind="meal", title=fields.pop("title", "Завтрак"), **fields)
+
+
+def profile(conn: sqlite3.Connection) -> None:
+    for key, value in [
+        ("sex", "m"),
+        ("birth_date", "1990-01-15"),
+        ("height_cm", "180"),
+        ("kcal_target", "2400"),
+    ]:
+        set_value(conn, key, value, "manual", "2026-10-01T10:00:00")
+    add_weight(conn, {"measured_at": "2026-11-06 07:00:00", "weight_kg": 80.0})
+    conn.commit()
+
+
+def eaten(conn: sqlite3.Connection, text: str, kcal: float | None, **fields: Any) -> None:
+    values = {"logged_at": f"{D} 08:00:00", "text": text, "kcal": kcal}
+    if kcal is not None:
+        values |= {"protein_g": 30, "fat_g": 10, "carbs_g": 50}
+    add_food(conn, values | fields)
+    conn.commit()
+
+
+def test_past_meal_without_food_is_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is True
+
+
+def test_future_or_running_meal_is_not_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn, "16:00", "17:00")
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is False
+    assert by_id(view(conn, "16:30"), breakfast)["due"] is False
+
+
+def test_food_text_without_nutrition_clears_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    save_mark(conn, mark(breakfast, "food", text="омлет"), at("08:30"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is False
+
+
+def test_food_of_another_item_does_not_clear_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    save_mark(conn, mark(supper, "food", text="суп"), at("13:30"))
+    conn.commit()
+    result = view(conn, "15:00")
+    assert by_id(result, breakfast)["due"] is True
+    assert by_id(result, supper)["due"] is False
+
+
+def test_food_from_cli_without_event_does_not_clear_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    eaten(conn, "из CLI", None)
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is True
+
+
+def test_feel_does_not_clear_meal_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    save_mark(conn, mark(breakfast, "feel", score=4), at("08:30"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is True
+
+
+def test_cooking_is_never_due(conn: sqlite3.Connection) -> None:
+    cooking = meal(conn, title="Готовка")
+    row = by_id(view(conn, "15:00"), cooking)
+    assert row["due"] is False
+
+
+def test_cooking_has_no_meal_key_and_breakfast_has(conn: sqlite3.Connection) -> None:
+    cooking = meal(conn, title="Готовка")
+    breakfast = meal(conn, "10:00", "11:00")
+    result = view(conn, "15:00")
+    assert "meal" not in by_id(result, cooking)
+    assert "meal" in by_id(result, breakfast)
+
+
+def test_meal_item_has_food_of_own_item_only(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    save_mark(conn, mark(breakfast, "food", text="омлет"), at("08:30"))
+    save_mark(conn, mark(supper, "food", text="суп"), at("13:30"))
+    eaten(conn, "из CLI", None)
+    conn.commit()
+    result = view(conn, "15:00")
+    assert [f["text"] for f in by_id(result, breakfast)["meal"]["food"]] == ["омлет"]
+    assert [f["text"] for f in by_id(result, supper)["meal"]["food"]] == ["суп"]
+
+
+def test_meal_food_row_fields(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    eaten(conn, "каша", 400, event_id=breakfast)
+    [food] = by_id(view(conn, "15:00"), breakfast)["meal"]["food"]
+    assert set(food) == {"id", "text", "kcal", "logged_at"}
+    assert (food["text"], food["kcal"], food["logged_at"]) == ("каша", 400, f"{D} 08:00:00")
+
+
+def test_meal_food_of_other_day_is_not_shown(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    eaten(conn, "вчера", None, event_id=breakfast, logged_at="2026-11-06 08:00:00")
+    assert by_id(view(conn, "15:00"), breakfast)["meal"]["food"] == []
+
+
+def test_meal_remaining_is_none_without_profile(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    row = by_id(view(conn, "15:00"), breakfast)
+    assert row["meal"]["remaining"] is None
+
+
+def test_meal_remaining_is_target_minus_all_day_food(conn: sqlite3.Connection) -> None:
+    profile(conn)
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    eaten(conn, "каша", 500, event_id=breakfast)
+    eaten(conn, "из CLI", 300)
+    eaten(conn, "без КБЖУ", None, event_id=supper)
+    result = view(conn, "15:00")
+    for event_id in (breakfast, supper):
+        remaining = by_id(result, event_id)["meal"]["remaining"]
+        assert remaining["kcal"] == 2400 - 800
+        assert remaining["pending_count"] == 1
+        assert set(remaining) == {"kcal", "protein_g", "fat_g", "carbs_g", "pending_count"}
+
+
+def test_meal_remaining_ignores_other_day_food(conn: sqlite3.Connection) -> None:
+    profile(conn)
+    breakfast = meal(conn)
+    eaten(conn, "вчера", 900, logged_at="2026-11-06 20:00:00")
+    assert by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]["kcal"] == 2400
 
 
 def test_marks_carry_fields_and_order_by_time(conn: sqlite3.Connection) -> None:
