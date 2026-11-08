@@ -13,7 +13,7 @@ from ai_coach.load.deviations import main_wellbeing
 from ai_coach.store.agenda import add_event, list_done, mark_done, unmark_done, update_event
 from ai_coach.store.journal import evening_done, list_focus, list_slip, list_wellbeing
 from ai_coach.store.workload import list_counters
-from ai_coach.web.marks import MarkError, NoEvent, save_mark
+from ai_coach.web.marks import MarkError, NoEvent, marks_for_day, save_mark
 
 D = "2026-11-08"
 
@@ -142,7 +142,16 @@ def test_checkin_writes_wellbeing_and_hours(conn: sqlite3.Connection) -> None:
 
 
 @pytest.mark.parametrize(
-    "extra", [{"thoughts": 6}, {"work": 25}, {"flow": 2}, {"flow": True}, {"mood": 0}]
+    "extra",
+    [
+        {"thoughts": 6},
+        {"work": 25},
+        {"work": "6"},
+        {"work": True},
+        {"flow": 2},
+        {"flow": True},
+        {"mood": 0},
+    ],
 )
 def test_checkin_bad_values_are_rejected(conn: sqlite3.Connection, extra: dict[str, Any]) -> None:
     eid = event(conn, "checkin", "20:00", "20:15")
@@ -245,3 +254,120 @@ def test_item_error_prefixes_of_pult_js_match_mark_errors() -> None:
     assert prefixes
     for prefix in prefixes:
         assert any(text.startswith(prefix) for text in texts), prefix
+
+
+REFUSALS = [
+    ("task", {"mark": "feel", "score": 9}, "score: от 1 до 5."),
+    ("task", {"mark": "rating", "focus": 9, "fatigue": 2, "effort": 3}, "focus: от 1 до 5."),
+    ("checkin", {"mark": "checkin"}, "score: от 1 до 5."),
+    ("checkin", {"mark": "checkin", "score": 4, "mood": 0}, "mood: от 1 до 5."),
+    (
+        "checkin",
+        {"mark": "checkin", "score": 4, "work": 25},
+        "Часы (work) должны быть числом от 0 до 24.",
+    ),
+    ("checkin", {"mark": "checkin", "score": 4, "flow": 2}, "flow: 0 или 1."),
+    ("practice", {"mark": "done", "done": 2}, "done: 1, 0 или null."),
+    ("meal", {"mark": "feel", "score": 3}, "У этого пункта пока нет окна отметок."),
+    ("task", {"mark": "done", "done": 1}, "У этого пункта нет такой отметки."),
+    ("task", {"mark": "feel", "score": 3, "date": "вчера"}, "date: нужна дата YYYY-MM-DD."),
+]
+
+
+@pytest.mark.parametrize(("kind", "fields", "message"), REFUSALS)
+def test_refusal_text_is_exact(
+    conn: sqlite3.Connection, kind: str, fields: dict[str, Any], message: str
+) -> None:
+    eid = event(conn, kind)
+    with pytest.raises(MarkError) as error:
+        save_mark(conn, {"event_id": eid, "date": D, **fields}, at("10:30"))
+    assert str(error.value) == message
+
+
+def test_missing_event_text_is_exact(conn: sqlite3.Connection) -> None:
+    with pytest.raises(NoEvent) as error:
+        save_mark(conn, payload(999, "feel", score=3), at("10:30"))
+    assert str(error.value) == "Пункта нет."
+
+
+def test_off_day_text_is_exact(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15", repeat="weekly")
+    off_day = {**payload(eid, "checkin", score=3), "date": "2026-11-10"}
+    with pytest.raises(MarkError) as error:
+        save_mark(conn, off_day, datetime.fromisoformat("2026-11-10T20:05:00"))
+    assert str(error.value) == "Пункта в этот день нет."
+
+
+def test_not_started_text_is_exact(conn: sqlite3.Connection) -> None:
+    eid = event(conn)
+    with pytest.raises(MarkError) as error:
+        save_mark(conn, payload(eid, "feel", score=3), at("09:59"))
+    assert str(error.value) == "Пункт ещё не начался."
+
+
+def test_string_event_id_is_not_found_even_if_such_event_exists(conn: sqlite3.Connection) -> None:
+    eid = event(conn)
+    with pytest.raises(NoEvent):
+        save_mark(conn, payload(str(eid), "feel", score=3), at("10:30"))  # type: ignore[arg-type]
+
+
+def test_item_can_be_marked_at_its_start_moment(conn: sqlite3.Connection) -> None:
+    eid = event(conn)
+    save_mark(conn, payload(eid, "feel", score=3), at("10:00"))
+    assert list_wellbeing(conn, D, D)[0]["logged_at"] == f"{D} 10:00:00"
+
+
+def test_logged_at_drops_fractions_of_second(conn: sqlite3.Connection) -> None:
+    eid = event(conn)
+    save_mark(conn, payload(eid, "feel", score=3), at("10:30").replace(microsecond=500000))
+    assert list_wellbeing(conn, D, D)[0]["logged_at"] == f"{D} 10:30:00"
+
+
+def test_checkin_flow_zero_is_saved(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=4, flow=0), at("20:05"))
+    assert list_wellbeing(conn, D, D)[0]["flow"] == 0
+
+
+def test_checkin_hours_accept_zero_and_limit(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=4, work=0, hobby=24), at("20:05"))
+    [work] = list_counters(conn, D, D, "work_hours")
+    [hobby] = list_counters(conn, D, D, "hobby_hours")
+    assert (work["value"], hobby["value"]) == (0, 24)
+
+
+def test_second_checkin_with_hours_same_day_replaces_counter(conn: sqlite3.Connection) -> None:
+    first = event(conn, "checkin", "12:00", "12:15")
+    second = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(first, "checkin", score=4, work=6), at("12:05"))
+    save_mark(conn, payload(second, "checkin", score=4, work=7), at("20:05"))
+    [counter] = list_counters(conn, D, D, "work_hours")
+    assert (counter["value"], counter["source"], counter["synced_at"]) == (
+        7,
+        "manual",
+        f"{D} 20:05:00",
+    )
+
+
+def test_second_checkin_with_same_hours_keeps_counter_untouched(conn: sqlite3.Connection) -> None:
+    first = event(conn, "checkin", "12:00", "12:15")
+    second = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(first, "checkin", score=4, work=6), at("12:05"))
+    save_mark(conn, payload(second, "checkin", score=4, work=6), at("20:05"))
+    [counter] = list_counters(conn, D, D, "work_hours")
+    assert (counter["value"], counter["synced_at"]) == (6, f"{D} 12:05:00")
+
+
+def test_feel_ignores_checkin_only_fields(conn: sqlite3.Connection) -> None:
+    eid = event(conn)
+    save_mark(conn, payload(eid, "feel", score=4, mood=3, stress=2, work=5, flow=1), at("10:30"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["mood"], row["stress"], row["flow"]) == (None, None, None)
+    assert list_counters(conn, D, D, "work_hours") == []
+
+
+def test_marks_for_day_done_has_value_and_time(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "practice")
+    save_mark(conn, payload(eid, "done", done=1), at("10:30"))
+    assert marks_for_day(conn, D)[eid]["done"] == {"done": 1, "logged_at": f"{D} 10:30:00"}

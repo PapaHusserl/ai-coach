@@ -461,3 +461,33 @@ def test_static_css_content_type(port: int) -> None:
         assert response.getheader("Content-Type") == "text/css; charset=utf-8"
     finally:
         conn.close()
+
+
+def test_post_other_path_text(port: int) -> None:
+    assert post(port, {}, path="/api/day")[1].decode() == "Не найдено."
+
+
+def test_post_foreign_origin_text(port: int) -> None:
+    status, answer = post(port, {}, origin="http://evil.example")
+    assert (status, answer.decode()) == (403, "Запись только со страницы пульта.")
+
+
+def test_post_without_length_text(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.putrequest("POST", "/api/mark")
+        conn.putheader("Origin", f"http://127.0.0.1:{port}")
+        conn.endheaders()
+        assert conn.getresponse().read().decode() == "Нужно тело запроса."
+    finally:
+        conn.close()
+
+
+def test_post_over_limit_text(port: int) -> None:
+    status, answer = post(port, b"{}", length=64 * 1024 + 1)
+    assert (status, answer.decode()) == (413, "Тело слишком большое.")
+
+
+def test_post_not_object_text(port: int) -> None:
+    status, answer = post(port, b"[1]")
+    assert (status, answer.decode()) == (400, "Нужен JSON-объект.")

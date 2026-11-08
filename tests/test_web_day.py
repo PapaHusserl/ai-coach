@@ -418,6 +418,16 @@ def test_moved_shifts_dates_keeping_time_of_day() -> None:
     assert (row["start_at"], row["end_at"]) == ("2026-11-07T20:00:00", "2026-11-07T20:15:00")
 
 
+def test_moved_on_start_day_returns_row_untouched() -> None:
+    row = {**repeat_row("weekly"), "start_at": "2026-10-31 20:00", "end_at": "2026-10-31 20:15"}
+    assert moved(row, date(2026, 10, 31)) == row
+
+
+def test_item_ending_exactly_now_is_past_and_due(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "10:00")
+    assert by_id(view(conn, "10:00"), task)["due"] is True
+
+
 def test_moved_leaves_non_repeating_row() -> None:
     row = repeat_row(None)
     assert moved(row, date(2026, 11, 7)) == row
