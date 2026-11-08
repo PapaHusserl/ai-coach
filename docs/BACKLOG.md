@@ -164,23 +164,6 @@ updated: 2026-11-07
 Нового в данных: привязка отметок к пункту плана, «сделал» у практики, пульсовые зоны тренировки. Стек и сервер —
 решает архитектор.
 
-## 51. Атомарная запись туду в whats-up
-status: idea
-priority: low
-updated: 2026-11-04
-
-Находка папы-кабана в docs/plan-n21.md: `~/.claude/skills/whats-up/todo.py` пишет `~/.claude/todo.json` не атомарно
-(`open(path, "w")`); обрыв записи оставит битый JSON, тренер и `coach sync` упадут на `TodoError`. Правка —
-через skill-intake.
-
-## 52. Общая модель туду
-status: idea
-priority: low
-updated: 2026-11-04
-
-Находка папы-кабана в docs/plan-n21.md: модель туду живёт в двух местах (whats-up `todo.py` и
-`src/ai_coach/workload/todo.py`). Выносить общий модуль — только если появится третий потребитель.
-
 ## 55. Календарь коуча: ручные события и черновики
 status: idea
 priority: low
