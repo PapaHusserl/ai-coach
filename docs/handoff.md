@@ -59,5 +59,5 @@
 ## Ссылки
 
 - Документ шага: [plan-p2v.md](plan-p2v.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие П2в). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: e5e0713 (закрытие П2в); metrics.py на коммите: 28,08 $ (с 2026-11-08T10:05Z). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-08-p2v.md`.
