@@ -70,12 +70,14 @@ export function isFuture(row, now) {
 	return row.start_at > now;
 }
 
-// Краткая отметка в строке пункта: последняя оценка и «сделал / пропустил».
+// Краткая отметка в строке пункта: последняя оценка и «сделал / пропустил»; без них — последнее самочувствие.
 export function markSummary(marks) {
 	const parts = [];
 	const last = marks.ratings.at(-1);
 	if (last) parts.push(`${last.focus}/${last.fatigue}/${last.effort}`);
 	if (marks.done) parts.push(marks.done.done === 1 ? "сделал" : "пропустил");
+	const feel = marks.feel?.at(-1);
+	if (parts.length === 0 && feel) parts.push(`самочувствие ${feel.score}`);
 	return parts.join(" · ");
 }
 

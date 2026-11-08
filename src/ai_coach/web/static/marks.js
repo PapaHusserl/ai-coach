@@ -29,13 +29,40 @@ function el(tag, className, text) {
 const state = { id: null, day: null, tab: null, future: false, forms: {}, reload: null };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
+// Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
+const ui = {};
+let toastTimer;
+// Черновики формы по «день:id пункта» до перезагрузки страницы (Р17 = 1); у каждого — формы по вкладкам, текст в form.text.
+const drafts = {};
+
+function paneNode() {
+	if (!ui.pane) {
+		ui.pane = el("div", "pane");
+		ui.sub = el("p", "bar-label");
+		ui.tabs = el("div", "tabs");
+		ui.tabs.setAttribute("role", "tablist");
+		ui.form = el("div", "blk");
+		ui.history = el("ul", "history");
+		ui.pane.append(ui.sub, ui.tabs, ui.form, ui.history);
+	}
+	return ui.pane;
+}
+
+// Всплывающее «Записано» (Р9).
+function toast(text) {
+	if (!ui.toast) {
+		ui.toast = el("div", "toast");
+		ui.toast.setAttribute("role", "status");
+		document.body.append(ui.toast);
+	}
+	ui.toast.textContent = text;
+	ui.toast.classList.add("show");
+	clearTimeout(toastTimer);
+	toastTimer = setTimeout(() => ui.toast.classList.remove("show"), 1800);
+}
 
 export function setupMarks(reload) {
 	state.reload = reload;
-	const dialog = document.getElementById("marks");
-	dialog.addEventListener("close", () => {
-		state.id = null;
-	});
 }
 
 function showError(text) {
@@ -45,7 +72,8 @@ function showError(text) {
 
 async function send(tab, text) {
 	showError("");
-	const form = { ...state.forms[tab], event_id: state.id, date: state.day, text };
+	const forms = state.forms;
+	const form = { ...forms[tab], event_id: state.id, date: state.day, text };
 	const body = JSON.stringify(buildPayload(tab, form));
 	let status = 0;
 	let reply = "";
@@ -58,9 +86,10 @@ async function send(tab, text) {
 		status = response.status;
 		reply = await response.text();
 		if (response.ok) {
-			state.forms[tab] = {};
+			forms[tab] = {};
 			await state.reload();
 			buildForm();
+			toast("Записано");
 			return;
 		}
 	} catch (error) {
@@ -74,27 +103,29 @@ function scale(tab, name, save) {
 	const field = FIELDS[name];
 	const form = state.forms[tab];
 	const optional = !REQUIRED[tab].includes(name);
-	const wrap = el("div", "field");
-	wrap.append(el("div", "label", field.label));
-	const line = el("div", "scale");
-	line.append(el("span", "pole", field.low));
+	// Строка: название, кнопки 1–5, полюса словами (Р8); у обязательной пустой шкалы название красное.
+	const wrap = el("div", "sr");
+	const line = el("div", "qs");
 	const buttons = [];
+	const mark = () => {
+		wrap.classList.toggle("empty", !optional && !Number.isInteger(form[name]));
+		for (const [index, other] of buttons.entries()) {
+			other.setAttribute("aria-pressed", String(index + 1 === form[name]));
+		}
+	};
 	for (let value = 1; value <= 5; value += 1) {
 		const button = el("button", "", String(value));
 		button.type = "button";
-		button.setAttribute("aria-pressed", String(form[name] === value));
 		button.addEventListener("click", () => {
 			form[name] = optional && form[name] === value ? null : value;
-			for (const other of buttons) {
-				other.setAttribute("aria-pressed", String(buttons.indexOf(other) + 1 === form[name]));
-			}
+			mark();
 			save.disabled = !canSave(tab, form);
 		});
 		buttons.push(button);
 		line.append(button);
 	}
-	line.append(el("span", "pole", field.high));
-	wrap.append(line);
+	wrap.append(el("span", "", field.label), line, el("span", "h", `${field.low} — ${field.high}`));
+	mark();
 	return wrap;
 }
 
@@ -121,12 +152,11 @@ function hoursFields(form) {
 
 // Погружение: да / нет, повторный клик снимает выбор.
 function flowField(form) {
-	const wrap = el("div", "field");
-	wrap.append(el("div", "label", "Погружение"));
-	const line = el("div", "choices");
+	const wrap = el("div", "sr");
+	const line = el("div", "yn");
 	const buttons = [];
 	for (const choice of FLOW_CHOICES) {
-		const button = el("button", "", choice.label);
+		const button = el("button", choice.flow === 1 ? "y" : "n", choice.label);
 		button.type = "button";
 		button.setAttribute("aria-pressed", String(form.flow === choice.flow));
 		button.addEventListener("click", () => {
@@ -138,12 +168,12 @@ function flowField(form) {
 		buttons.push(button);
 		line.append(button);
 	}
-	wrap.append(line);
+	wrap.append(el("span", "", "Погружение"), line);
 	return wrap;
 }
 
 function buildForm() {
-	const box = document.getElementById("marks-form");
+	const box = ui.form;
 	box.replaceChildren();
 	const tab = state.tab;
 	state.forms[tab] ??= {};
@@ -169,6 +199,10 @@ function buildForm() {
 	save.type = "button";
 	const text = el("textarea", "text");
 	text.rows = 2;
+	text.value = state.forms[tab].text ?? "";
+	text.addEventListener("input", () => {
+		state.forms[tab].text = text.value;
+	});
 	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, name, save));
 	if (tab === "checkin") box.append(hoursFields(state.forms[tab]), flowField(state.forms[tab]));
 	box.append(text, errorLine, save);
@@ -177,12 +211,13 @@ function buildForm() {
 }
 
 function buildTabs(kind) {
-	const tabs = document.getElementById("marks-tabs");
+	const tabs = ui.tabs;
 	tabs.replaceChildren();
 	for (const tab of tabsFor(kind)) {
 		const button = el("button", "tab", TAB_LABELS[tab]);
 		button.type = "button";
-		button.setAttribute("aria-pressed", String(tab === state.tab));
+		button.setAttribute("role", "tab");
+		button.setAttribute("aria-selected", String(tab === state.tab));
 		button.addEventListener("click", () => {
 			state.tab = tab;
 			showError("");
@@ -194,38 +229,39 @@ function buildTabs(kind) {
 }
 
 function buildHistory(row) {
-	document.getElementById("marks-sub").textContent = markSummary(row.marks) || (row.due ? "не отмечено" : "");
-	const list = document.getElementById("marks-history");
-	list.replaceChildren();
-	for (const entry of historyRows(row.marks)) list.append(el("li", "", `${entry.time} · ${entry.text}`));
+	ui.sub.textContent = row.due ? "не отмечено" : markSummary(row.marks);
+	ui.sub.classList.toggle("bad", Boolean(row.due));
+	ui.history.replaceChildren();
+	for (const entry of historyRows(row.marks)) ui.history.append(el("li", "", `${entry.time} · ${entry.text}`));
 }
 
-// Открыть окно пункта row дня day; view — ответ /api/day.
-export function openMarks(row, day, view) {
+function startPane(row, view) {
 	state.id = row.id;
-	state.day = day;
+	state.day = view.date;
 	state.tab = tabsFor(row.kind)[0];
 	state.future = isFuture(row, view.now);
-	state.forms = {};
-	const clock = `${row.start_at.slice(11, 16)}–${row.end_at.slice(11, 16)}`;
-	document.getElementById("marks-title").textContent = `${clock} ${row.title}`;
+	state.forms = drafts[`${view.date}:${row.id}`] ??= {};
 	showError("");
 	buildTabs(row.kind);
 	buildForm();
-	buildHistory(row);
-	document.getElementById("marks").showModal();
 }
 
-// После load(): перерисовать историю и подпись открытого окна; форма ввода не трогается.
-export function refreshMarks(view) {
-	const dialog = document.getElementById("marks");
-	if (state.id === null || !dialog.open) return;
-	const row = view.items.find((item) => item.id === state.id);
-	if (!row) return;
-	buildHistory(row);
+// Раскрыть окно пункта row под строкой item; view — ответ /api/day. Тот же пункт того же дня после load():
+// узел переезжает в новую строку, обновляются история и подпись, форма ввода не трогается.
+export function mountMarks(item, row, view) {
+	const pane = paneNode();
+	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);
 	if (future !== state.future) {
 		state.future = future;
 		buildForm();
 	}
+	buildHistory(row);
+	item.append(pane);
+}
+
+// Свернуть окно: узел уходит из списка, черновик остаётся (Р17).
+export function unmountMarks() {
+	ui.pane?.remove();
+	state.id = null;
 }

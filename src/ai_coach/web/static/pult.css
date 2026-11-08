@@ -376,34 +376,57 @@ nav button[aria-selected="true"] {
 	justify-content: space-between;
 }
 
-dialog {
-	background: var(--surface);
-	border: 1px solid var(--line);
-	border-radius: 9px;
+/* Окно пункта: раскрывается под строкой (Р1 = 2). */
+.open:not(.current) {
+	background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.pane {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 4px 8px 10px 52px;
+}
+
+.blk {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.bar-label.bad {
+	color: var(--bad);
+}
+
+.tabs {
+	border-bottom: 1px solid var(--line);
+	display: flex;
+	gap: 2px;
+}
+
+.tabs button {
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	color: var(--muted);
+	font-size: 12px;
+	padding: 4px 10px;
+}
+
+.tabs button[aria-selected="true"] {
+	border-color: var(--accent);
 	color: var(--fg);
-	max-width: 32rem;
-	width: calc(100% - 2rem);
 }
 
-dialog h2 {
-	font-size: 14px;
-	margin: 0;
-}
-
-.tabs,
 .choices {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem;
-	margin: 0.5rem 0;
+	gap: 6px;
 }
 
-.tabs button,
-.choices button,
-.save,
-.close {
-	font-size: 13px;
-	padding: 0 0.75rem;
+.save {
+	align-self: flex-start;
 }
 
 [aria-pressed="true"] {
@@ -412,14 +435,78 @@ dialog h2 {
 	color: var(--bg);
 }
 
-.label,
 .hint {
+	color: var(--muted);
+}
+
+.sr {
+	align-items: center;
+	display: grid;
+	font-size: 12px;
+	gap: 8px;
+	grid-template-columns: 96px auto 1fr;
+}
+
+.sr .h {
 	color: var(--muted);
 	font-size: 11px;
 }
 
-.scale button {
+.sr.empty > span:first-child {
+	color: var(--bad);
+	font-weight: 600;
+}
+
+.qs,
+.yn {
+	display: flex;
+	gap: 3px;
+}
+
+.qs button {
+	border-radius: 5px;
 	font-family: var(--f-mono);
+	font-size: 12px;
+	min-width: 28px;
+	padding: 3px 0;
+}
+
+.yn button {
+	border-radius: 5px;
+	color: var(--muted);
+	font-size: 11px;
+	padding: 3px 9px;
+}
+
+.yn button.y[aria-pressed="true"] {
+	background: var(--good);
+	border-color: var(--good);
+	color: var(--bg);
+}
+
+.yn button.n[aria-pressed="true"] {
+	background: var(--bad);
+	border-color: var(--bad);
+	color: var(--bg);
+}
+
+.toast {
+	background: var(--fg);
+	border-radius: 7px;
+	bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+	color: var(--bg);
+	font-size: 12px;
+	left: 50%;
+	opacity: 0;
+	padding: 8px 14px;
+	pointer-events: none;
+	position: fixed;
+	transform: translateX(-50%);
+	transition: opacity 0.2s;
+}
+
+.toast.show {
+	opacity: 1;
 }
 
 /* Телефон (Р3): текст крупнее, нажимаемое — от 44 px. */
@@ -437,8 +524,35 @@ dialog h2 {
 		min-height: 44px;
 	}
 
-	.prog {
+	.prog,
+	.pane {
 		padding-left: 0;
+	}
+
+	input,
+	textarea,
+	select {
+		font-size: 16px;
+	}
+
+	/* Шкала в две строки (Р20): название и полюса серым справа, под ними кнопки 44×44. */
+	.sr {
+		font-size: 15px;
+		grid-template-columns: 1fr auto;
+	}
+
+	.sr .h {
+		grid-column: 2;
+		grid-row: 1;
+		text-align: right;
+	}
+
+	.qs {
+		grid-column: 1 / -1;
+	}
+
+	.qs button {
+		min-width: 44px;
 	}
 
 	.tm,
@@ -458,56 +572,29 @@ dialog h2 {
 	}
 }
 
-.field {
-	margin: 0.75rem 0;
-}
-
-.scale {
-	align-items: center;
-	display: flex;
-	gap: 0.4rem;
-}
-
-.pole {
-	color: var(--muted);
-	flex: 1;
-	font-size: 11px;
-	line-height: 1.1;
-}
-
-.pole:last-child {
-	text-align: right;
-}
-
 .hours {
-	display: flex;
-	gap: 0.5rem;
-	margin: 0.75rem 0;
+	display: grid;
+	gap: 4px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .hour {
-	flex: 1;
+	color: var(--muted);
+	display: flex;
+	flex-direction: column;
 	font-size: 11px;
-}
-
-.hour input {
-	width: 100%;
+	gap: 2px;
 }
 
 .text {
 	width: 100%;
 }
 
-.save,
-.close {
-	margin-top: 0.5rem;
-}
-
 .history {
 	color: var(--muted);
 	font-size: 12px;
 	list-style: none;
-	margin: 0.75rem 0 0;
+	margin: 0;
 	padding: 0;
 }
 

@@ -1,6 +1,6 @@
 // Пульт: план дня, DOM (в браузере). Чистые функции — pult-model.js, здесь реэкспорт для тестов (tests/web).
 
-import { isPast, openMarks, refreshMarks, setupMarks } from "./marks.js";
+import { isPast, mountMarks, setupMarks, unmountMarks } from "./marks.js";
 import {
 	barLabel,
 	barPercent,
@@ -10,6 +10,7 @@ import {
 	hasWindow,
 	itemProgress,
 	nextRow,
+	openedId,
 	part,
 	rowStatus,
 	shiftDay,
@@ -50,19 +51,20 @@ function progressNode(progress) {
 	return box;
 }
 
-// Строка открывается кликом и с клавиатуры (Enter, пробел).
-function makeTappable(head, open) {
+// Строка раскрывает окно кликом и с клавиатуры (Enter, пробел).
+function makeTappable(head, toggle, expanded) {
 	head.tabIndex = 0;
 	head.setAttribute("role", "button");
-	head.addEventListener("click", open);
+	head.setAttribute("aria-expanded", String(expanded));
+	head.addEventListener("click", toggle);
 	head.addEventListener("keydown", (event) => {
 		if (event.key !== "Enter" && event.key !== " ") return;
 		event.preventDefault();
-		open();
+		toggle();
 	});
 }
 
-function rowClasses(row, now) {
+function rowClasses(row, now, open) {
 	const flags = {
 		allday: row.all_day,
 		muted: row.muted,
@@ -70,24 +72,37 @@ function rowClasses(row, now) {
 		current: row.current,
 		due: row.due,
 		tap: hasWindow(row),
+		open,
 	};
 	return ["agi", ...Object.keys(flags).filter((name) => flags[name])].join(" ");
 }
 
-function rowNode(row, view, next) {
-	const item = el("li", rowClasses(row, view.now));
+// choice — что раскрыл пользователь (см. openedId); lastView — по нему перерисовка без запроса.
+let choice = null;
+let lastView = null;
+
+function rowNode(row, view, next, openId) {
+	const open = hasWindow(row) && row.id === openId;
+	const item = el("li", rowClasses(row, view.now, open));
 	const [time, title] = rowText(row);
 	const head = el("div", "agh");
 	const status = rowStatus(row, view.now, row === next);
 	head.append(el("span", "tm", time), el("span", "ttl", title), el("span", `st ${status.tone}`.trim(), status.text));
-	if (hasWindow(row)) makeTappable(head, () => openMarks(row, view.date, view));
+	if (hasWindow(row)) {
+		makeTappable(head, () => {
+			choice = open ? false : row.id;
+			render(lastView);
+		}, open);
+	}
 	item.append(head);
 	const progress = row.current ? itemProgress(row, view.now) : null;
 	if (progress) item.append(progressNode(progress));
+	if (open) mountMarks(item, row, view);
 	return item;
 }
 
 function render(view) {
+	lastView = view;
 	document.getElementById("date").textContent = formatDate(view.date);
 	document.getElementById("now").textContent = formatClock(view.now);
 	document.getElementById("fill").style.width = `${barPercent(view.elapsed_min, view.left_min)}%`;
@@ -95,8 +110,15 @@ function render(view) {
 	const rows = dayRows(view);
 	document.getElementById("empty").hidden = rows.length > 0;
 	const next = nextRow(rows, view);
-	document.getElementById("rows").replaceChildren(...rows.map((row) => rowNode(row, view, next)));
-	refreshMarks(view);
+	const openId = openedId(choice, rows);
+	if (openId === null) unmountMarks();
+	document.getElementById("rows").replaceChildren(...rows.map((row) => rowNode(row, view, next, openId)));
+}
+
+// Таймер не перерисовывает список, пока в окне пункта идёт ввод (прототип :513).
+function typing() {
+	const active = document.activeElement;
+	return Boolean(active?.closest(".pane")) && ["INPUT", "TEXTAREA"].includes(active.tagName);
 }
 
 if (typeof document !== "undefined") {
@@ -120,6 +142,7 @@ if (typeof document !== "undefined") {
 		const shown = document.body.dataset.day ?? day;
 		if (!shown) return;
 		day = shiftDay(shown, delta);
+		choice = null;
 		load();
 	};
 	setupMarks(load);
@@ -135,5 +158,7 @@ if (typeof document !== "undefined") {
 	document.getElementById("prev").addEventListener("click", () => move(-1));
 	document.getElementById("next").addEventListener("click", () => move(1));
 	load();
-	setInterval(load, REFRESH_MS);
+	setInterval(() => {
+		if (!typing()) load();
+	}, REFRESH_MS);
 }

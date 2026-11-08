@@ -9,6 +9,7 @@ import {
 	isCurrent,
 	itemProgress,
 	nextRow,
+	openedId,
 	rowStatus,
 	shiftDay,
 } from "../../src/ai_coach/web/static/pult.js";
@@ -223,6 +224,33 @@ test("nextRow: сегодня — первый будущий пункт с ок
 	const first = later(3);
 	const rows = [itemRow({ id: 0 }), meeting, allDay, noWindow, first, later(4)];
 	assert.equal(nextRow(rows, todayView), first);
+});
+
+test("openedId: идущий раскрыт сам, клик выбирает, false сворачивает", () => {
+	const running = itemRow({ id: 1, current: true });
+	const other = later(2);
+	const meeting = { source: "meeting", id: 3, current: true };
+	const rows = [meeting, running, other];
+	assert.equal(openedId(null, rows), 1);
+	assert.equal(openedId(2, rows), 2);
+	assert.equal(openedId(false, rows), null);
+	assert.equal(openedId(99, rows), 1);
+	assert.equal(openedId(null, [other]), null);
+});
+
+test("openedId: два идущих — раскрыт первый по списку (Р18), второй выбирается кликом", () => {
+	const first = itemRow({ id: 1, current: true });
+	const second = itemRow({ id: 2, current: true });
+	assert.equal(openedId(null, [first, second]), 1);
+	assert.equal(openedId(2, [first, second]), 2);
+});
+
+test("openedId: id встречи или пункта без окна не раскрывается", () => {
+	const running = itemRow({ id: 1, current: true });
+	const meeting = { source: "meeting", id: 5, current: false };
+	const noWindow = itemRow({ id: 6, kind: "other" });
+	assert.equal(openedId(5, [meeting, running]), 1);
+	assert.equal(openedId(6, [noWindow, running]), 1);
 });
 
 test("nextRow: нет будущих пунктов с окном — undefined", () => {

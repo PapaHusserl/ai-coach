@@ -78,6 +78,14 @@ export function hasWindow(row) {
 	return row.source === "item" && tabsFor(row.kind).length > 0;
 }
 
+// Какой пункт раскрыт: choice — id, выбранный кликом; false — свёрнуто всё; null — раскрыт идущий.
+export function openedId(choice, rows) {
+	if (choice === false) return null;
+	const windowed = rows.filter(hasWindow);
+	const chosen = windowed.find((row) => row.id === choice);
+	return (chosen ?? windowed.find((row) => row.current))?.id ?? null;
+}
+
 // Статус прошедшего пункта с окном: красный «не заполнено», зелёная сводка или null.
 function pastStatus(row) {
 	if (row.due) return { text: "не заполнено", tone: "bad" };

@@ -40,6 +40,18 @@ test("markSummary: оценка, сделал, пропустил, пусто", 
 	assert.equal(markSummary(empty), "");
 });
 
+test("markSummary: без оценки и «сделал» — последнее самочувствие, у оценки приоритет", () => {
+	const feel = [{ score: 2 }, { score: 4 }];
+	assert.equal(markSummary({ ...empty, feel }), "самочувствие 4");
+	assert.equal(markSummary({ ...empty, feel, done: { done: 1, logged_at: "x" } }), "сделал");
+	assert.equal(markSummary({ ratings: [], done: null }), "");
+});
+
+test("markSummary: оценка важнее самочувствия", () => {
+	const ratings = [{ focus: 4, fatigue: 2, effort: 3 }];
+	assert.equal(markSummary({ ratings, done: null, feel: [{ score: 5 }] }), "4/2/3");
+});
+
 test("historyRows: все отметки по времени", () => {
 	const marks = {
 		ratings: [{ focus: 4, fatigue: 2, effort: 3, text: "", logged_at: "2026-11-08 11:00:00" }],
