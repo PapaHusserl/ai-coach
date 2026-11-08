@@ -120,10 +120,17 @@ def test_wellbeing_topic_has_scale_poles() -> None:
         assert pole in text, pole
 
 
+def test_day_plan_topic_describes_pult_marks() -> None:
+    text = topic("day-plan.md")
+    for needle in ("окно", "сделал", "дозаполн", "истори", "coach web", "чек-ин", "в сети"):
+        assert needle in text, needle
+
+
 def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
-    script = (ROOT / "src" / "ai_coach" / "web" / "static" / "marks.js").read_text(encoding="utf-8")
+    model = ROOT / "src" / "ai_coach" / "web" / "static" / "marks-model.js"
+    script = model.read_text(encoding="utf-8")
     poles = re.findall(r'low: "([^"]+)", high: "([^"]+)"', script)
-    assert len(poles) == 4
+    assert len(poles) == 9
     text = topic("wellbeing.md")
     for low, high in poles:
         assert f"1 - {low}, 5 - {high}" in text, (low, high)

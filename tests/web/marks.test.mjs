@@ -58,6 +58,20 @@ test("historyRows: все отметки по времени", () => {
 	assert.equal(historyRows(done)[0].text, "Сделал");
 });
 
+test("historyRows: запись чек-ина с настроением и стрессом, пустые не выводятся", () => {
+	const feel = (extra) => ({
+		...empty,
+		feel: [{ score: 4, text: "", mood: null, stress: null, logged_at: "2026-11-08 20:00:00", ...extra }],
+	});
+	assert.equal(
+		historyRows(feel({ mood: 3, stress: 2, text: "устал" }))[0].text,
+		"Самочувствие 4, настроение 3, стресс 2 — устал",
+	);
+	assert.equal(historyRows(feel({ mood: 3 }))[0].text, "Самочувствие 4, настроение 3");
+	assert.equal(historyRows(feel({ stress: 2 }))[0].text, "Самочувствие 4, стресс 2");
+	assert.equal(historyRows(feel({}))[0].text, "Самочувствие 4");
+});
+
 test("у каждой шкалы FIELDS есть подпись и полюса", () => {
 	for (const field of Object.values(FIELDS)) {
 		assert.ok(field.label);
@@ -91,6 +105,47 @@ test("buildPayload: числа, пустой текст не уходит", () =
 		text: "ок",
 	});
 	assert.deepEqual(buildPayload("slip", { ...base, text: "бесит" }), { ...base, mark: "slip", text: "бесит" });
+});
+
+test("canSave чек-ина: нужно только самочувствие", () => {
+	assert.equal(canSave("checkin", { mood: 3 }), false);
+	assert.equal(canSave("checkin", { score: 4 }), true);
+});
+
+test("buildPayload checkin: пустые поля не уходят, часы — число", () => {
+	const base = { event_id: 9, date: "2026-11-08" };
+	assert.deepEqual(buildPayload("checkin", { ...base, score: 4, text: "" }), {
+		...base,
+		mark: "checkin",
+		score: 4,
+	});
+	const full = buildPayload("checkin", {
+		...base,
+		score: 4,
+		mood: 5,
+		stress: null,
+		thoughts: 2,
+		work: "6,5",
+		hobby: "0",
+		rest: "",
+		flow: 0,
+		text: "ок",
+	});
+	assert.deepEqual(full, {
+		...base,
+		mark: "checkin",
+		score: 4,
+		mood: 5,
+		thoughts: 2,
+		work: 6.5,
+		hobby: 0,
+		flow: 0,
+		text: "ок",
+	});
+	assert.equal("stress" in full, false);
+	assert.equal("rest" in full, false);
+	assert.equal("work" in buildPayload("checkin", { ...base, score: 3, work: "abc" }), false);
+	assert.equal("flow" in buildPayload("checkin", { ...base, score: 3, flow: null }), false);
 });
 
 test("buildPayload done: 1, 0 и null", () => {

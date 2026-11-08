@@ -1,108 +1,23 @@
-// Пульт: окно отметок пункта. Чистые функции — для тестов (tests/web), DOM — в функциях, зовутся только в браузере.
-// Полюса шкал — слова из coach-help/wellbeing.md (тест в tests/test_skills_help.py держит расхождение).
+// Пульт: окно отметок пункта, только DOM (зовётся в браузере). Таблицы и чистые функции — marks-model.js,
+// их тесты — tests/web/marks.test.mjs; здесь они же реэкспортируются.
+import {
+	DONE_CHOICES,
+	FIELDS,
+	FLOW_CHOICES,
+	HOURS,
+	REQUIRED,
+	TAB_FIELDS,
+	TAB_LABELS,
+	buildPayload,
+	canSave,
+	errorText,
+	historyRows,
+	isFuture,
+	markSummary,
+	tabsFor,
+} from "./marks-model.js";
 
-const TABS = {
-	"task": ["rating", "feel", "slip"],
-	"focus": ["rating", "feel", "slip"],
-	"practice": ["done", "feel", "slip"],
-	"rest": ["done", "feel", "slip"],
-	"checkin": ["checkin"],
-};
-export const TAB_LABELS = {
-	rating: "Оценка",
-	feel: "Самочувствие",
-	slip: "Срыв",
-	done: "Сделал",
-	checkin: "Чек-ин",
-};
-export const FIELDS = {
-	focus: { label: "Фокус", low: "рассеян", high: "полностью собран" },
-	fatigue: { label: "Усталость", low: "свеж", high: "выжат" },
-	effort: { label: "Усилие", low: "легко взялся", high: "через силу" },
-	score: { label: "Самочувствие", low: "плохо", high: "отлично" },
-};
-const TAB_FIELDS = { rating: ["focus", "fatigue", "effort"], feel: ["score"] };
-const DONE_CHOICES = [
-	{ label: "Сделал", done: 1 },
-	{ label: "Пропустил", done: 0 },
-	{ label: "Снять отметку", done: null },
-];
-// Ошибки про пункт сервер пишет текстом; остальные — протокольные (Р10).
-const ITEM_ERRORS = [
-	"Пункт ещё не начался",
-	"Пункта в этот день нет",
-	"У этого пункта пока нет окна",
-	"Текст не может быть пустым",
-	"Часы (",
-];
-
-// Вкладки окна пункта по его типу; пусто — окна нет.
-export function tabsFor(kind) {
-	return TABS[kind] ?? [];
-}
-
-// Прошёл ли пункт: конец не позже now (ISO-строки одного формата).
-export function isPast(row, now) {
-	return row.end_at <= now;
-}
-
-export function isFuture(row, now) {
-	return row.start_at > now;
-}
-
-// Краткая отметка в строке пункта: последняя оценка и «сделал / пропустил».
-export function markSummary(marks) {
-	const parts = [];
-	const last = marks.ratings.at(-1);
-	if (last) parts.push(`${last.focus}/${last.fatigue}/${last.effort}`);
-	if (marks.done) parts.push(marks.done.done === 1 ? "сделал" : "пропустил");
-	return parts.join(" · ");
-}
-
-// Все отметки пункта по времени: {time: "HH:MM", tab, text}.
-export function historyRows(marks) {
-	const withText = (head, text) => (text ? `${head} — ${text}` : head);
-	const rows = [
-		...marks.ratings.map((r) => ({
-			at: r.logged_at,
-			tab: "rating",
-			text: withText(`Оценка ${r.focus}/${r.fatigue}/${r.effort}`, r.text),
-		})),
-		...marks.feel.map((r) => ({
-			at: r.logged_at,
-			tab: "feel",
-			text: withText(`Самочувствие ${r.score}`, r.text),
-		})),
-		...marks.slips.map((r) => ({ at: r.logged_at, tab: "slip", text: withText("Срыв", r.text) })),
-	];
-	if (marks.done) {
-		const word = marks.done.done === 1 ? "Сделал" : "Пропустил";
-		rows.push({ at: marks.done.logged_at, tab: "done", text: word });
-	}
-	rows.sort((a, b) => a.at.localeCompare(b.at));
-	return rows.map((r) => ({ time: r.at.slice(11, 16), tab: r.tab, text: r.text }));
-}
-
-// Можно ли сохранять вкладку: у шкал выбраны все значения.
-export function canSave(tab, form) {
-	return (TAB_FIELDS[tab] ?? []).every((name) => Number.isInteger(form[name]));
-}
-
-// Тело POST /api/mark: числа — числами, пустой текст не уходит.
-export function buildPayload(tab, form) {
-	const payload = { event_id: form.event_id, date: form.date, mark: tab };
-	for (const name of TAB_FIELDS[tab] ?? []) payload[name] = Number(form[name]);
-	if (tab === "done") payload.done = form.done === null ? null : Number(form.done);
-	const text = (form.text ?? "").trim();
-	if (text) payload.text = text;
-	return payload;
-}
-
-// Что показать при ошибке: про пункт — текст сервера, остальное — «ошибка пульта (код N)».
-export function errorText(status, text) {
-	if (status === 400 && ITEM_ERRORS.some((start) => text.startsWith(start))) return text;
-	return `Не сохранилось, ошибка пульта (код ${status}).`;
-}
+export * from "./marks-model.js";
 
 function el(tag, className, text) {
 	const node = document.createElement(tag);
@@ -158,6 +73,7 @@ async function send(tab, text) {
 function scale(tab, name, save) {
 	const field = FIELDS[name];
 	const form = state.forms[tab];
+	const optional = !REQUIRED[tab].includes(name);
 	const wrap = el("div", "field");
 	wrap.append(el("div", "label", field.label));
 	const line = el("div", "scale");
@@ -168,14 +84,60 @@ function scale(tab, name, save) {
 		button.type = "button";
 		button.setAttribute("aria-pressed", String(form[name] === value));
 		button.addEventListener("click", () => {
-			form[name] = value;
-			for (const other of buttons) other.setAttribute("aria-pressed", String(other === button));
+			form[name] = optional && form[name] === value ? null : value;
+			for (const other of buttons) {
+				other.setAttribute("aria-pressed", String(buttons.indexOf(other) + 1 === form[name]));
+			}
 			save.disabled = !canSave(tab, form);
 		});
 		buttons.push(button);
 		line.append(button);
 	}
 	line.append(el("span", "pole", field.high));
+	wrap.append(line);
+	return wrap;
+}
+
+// Часы дня чек-ина: поля ввода, значение живёт в форме вкладки.
+function hoursFields(form) {
+	const line = el("div", "hours");
+	for (const [name, label] of Object.entries(HOURS)) {
+		const wrap = el("label", "hour", label);
+		const input = el("input");
+		input.type = "number";
+		input.min = "0";
+		input.max = "24";
+		input.step = "0.5";
+		input.inputMode = "decimal";
+		input.value = form[name] ?? "";
+		input.addEventListener("input", () => {
+			form[name] = input.value;
+		});
+		wrap.append(input);
+		line.append(wrap);
+	}
+	return line;
+}
+
+// Погружение: да / нет, повторный клик снимает выбор.
+function flowField(form) {
+	const wrap = el("div", "field");
+	wrap.append(el("div", "label", "Погружение"));
+	const line = el("div", "choices");
+	const buttons = [];
+	for (const choice of FLOW_CHOICES) {
+		const button = el("button", "", choice.label);
+		button.type = "button";
+		button.setAttribute("aria-pressed", String(form.flow === choice.flow));
+		button.addEventListener("click", () => {
+			form.flow = form.flow === choice.flow ? null : choice.flow;
+			for (const [index, other] of buttons.entries()) {
+				other.setAttribute("aria-pressed", String(FLOW_CHOICES[index].flow === form.flow));
+			}
+		});
+		buttons.push(button);
+		line.append(button);
+	}
 	wrap.append(line);
 	return wrap;
 }
@@ -187,10 +149,6 @@ function buildForm() {
 	state.forms[tab] ??= {};
 	if (state.future) {
 		box.append(el("p", "hint", "Ещё не началось."));
-		return;
-	}
-	if (tab === "checkin") {
-		box.append(el("p", "hint", "Анкета чек-ина пока не готова."));
 		return;
 	}
 	if (tab === "done") {
@@ -212,6 +170,7 @@ function buildForm() {
 	const text = el("textarea", "text");
 	text.rows = 2;
 	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, name, save));
+	if (tab === "checkin") box.append(hoursFields(state.forms[tab]), flowField(state.forms[tab]));
 	box.append(text, errorLine, save);
 	save.disabled = !canSave(tab, state.forms[tab]);
 	save.addEventListener("click", () => send(tab, text.value));

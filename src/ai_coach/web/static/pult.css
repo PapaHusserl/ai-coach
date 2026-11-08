@@ -171,6 +171,23 @@ dialog h2 {
 	text-align: right;
 }
 
+.hours {
+	display: flex;
+	gap: 0.5rem;
+	margin: 0.75rem 0;
+}
+
+.hour {
+	flex: 1;
+	font-size: 0.9rem;
+}
+
+.hour input {
+	box-sizing: border-box;
+	font: inherit;
+	width: 100%;
+}
+
 .text {
 	box-sizing: border-box;
 	font: inherit;
