@@ -2,17 +2,58 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	FIELDS,
+	TAB_LABELS,
 	buildPayload,
 	canSave,
 	errorText,
+	foodSummary,
 	historyRows,
 	isFuture,
 	isPast,
 	markSummary,
+	remainingText,
 	tabsFor,
 } from "../../src/ai_coach/web/static/marks.js";
 
-const empty = { ratings: [], feel: [], slips: [], done: null };
+const empty = { ratings: [], feel: [], slips: [], done: null, food: [] };
+
+const left = (extra) => ({ kcal: 800, protein_g: 40, fat_g: 20, carbs_g: 90, pending_count: 0, ...extra });
+
+test("remainingText: цели нет", () => {
+	assert.equal(remainingText({ remaining: null, food: [] }), "Цель на день не задана.");
+});
+
+test("remainingText: остаток, без «без КБЖУ» при pending_count 0", () => {
+	assert.equal(
+		remainingText({ remaining: left(), food: [] }),
+		"Осталось на день 800 ккал · белок 40 г · жир 20 г · углеводы 90 г",
+	);
+});
+
+test("remainingText: перебор по ккал", () => {
+	const text = remainingText({ remaining: left({ kcal: -120 }), food: [] });
+	assert.ok(text.startsWith("Перебор 120 ккал · белок 40 г"));
+});
+
+test("remainingText: записи без КБЖУ — число в конце", () => {
+	const text = remainingText({ remaining: left({ pending_count: 2 }), food: [] });
+	assert.ok(text.endsWith(" · без КБЖУ: 2"));
+});
+
+test("remainingText: дробные значения округляются, знак — после округления", () => {
+	const frac = { kcal: -0.4, protein_g: -0.9000000000000057, fat_g: 19.6000000000001, carbs_g: 89.5 };
+	assert.equal(
+		remainingText({ remaining: left(frac), food: [] }),
+		"Осталось на день 0 ккал · белок -1 г · жир 20 г · углеводы 90 г",
+	);
+	assert.ok(remainingText({ remaining: left({ kcal: -0.6 }), food: [] }).startsWith("Перебор 1 ккал"));
+});
+
+test("canSave: еда — только непустой текст", () => {
+	assert.equal(canSave("food", {}), false);
+	assert.equal(canSave("food", { text: "   " }), false);
+	assert.equal(canSave("food", { text: " омлет " }), true);
+});
 
 test("tabsFor по типам", () => {
 	assert.deepEqual(tabsFor("task"), ["rating", "feel", "slip"]);
@@ -20,7 +61,55 @@ test("tabsFor по типам", () => {
 	assert.deepEqual(tabsFor("rest"), ["done", "feel", "slip"]);
 	assert.deepEqual(tabsFor("practice"), ["done", "feel", "slip"]);
 	assert.deepEqual(tabsFor("checkin"), ["checkin"]);
-	assert.deepEqual(tabsFor("meal"), []);
+	assert.deepEqual(tabsFor("meal"), ["food", "feel", "slip"]);
+	assert.deepEqual(tabsFor("sleep"), []);
+});
+
+test("TAB_LABELS.food — «Что съел»", () => {
+	assert.equal(TAB_LABELS.food, "Что съел");
+});
+
+test("markSummary: еда — «съел»", () => {
+	const food = [{ id: 1, text: "омлет", kcal: null, logged_at: "2026-11-08 08:30:00" }];
+	assert.equal(markSummary({ ...empty, food }), "съел");
+	assert.equal(markSummary({ ...empty, food: [] }), "");
+});
+
+test("markSummary: еда перед самочувствием, самочувствие не добавляется", () => {
+	const food = [{ id: 1, text: "омлет", kcal: null, logged_at: "2026-11-08 08:30:00" }];
+	const feel = [{ score: 4, logged_at: "2026-11-08 08:40:00" }];
+	assert.equal(markSummary({ ...empty, food, feel }), "съел");
+});
+
+test("foodSummary: тексты записей пункта через запятую", () => {
+	const row = (text) => ({ id: 1, text, kcal: null, logged_at: "2026-11-08 08:30:00" });
+	assert.equal(foodSummary({ remaining: null, food: [row("омлет"), row("кофе")] }), "омлет, кофе");
+	assert.equal(foodSummary({ remaining: null, food: [row("омлет")] }), "омлет");
+});
+
+test("buildPayload: вкладка food — mark food и текст, без чисел", () => {
+	const form = { event_id: 5, date: "2026-11-08", text: "  омлет " };
+	assert.deepEqual(buildPayload("food", form), {
+		event_id: 5,
+		date: "2026-11-08",
+		mark: "food",
+		text: "омлет",
+	});
+});
+
+test("historyRows: запись еды стоит по времени среди отметок, вкладка food", () => {
+	const marks = {
+		...empty,
+		food: [{ id: 1, text: "омлет", kcal: null, logged_at: "2026-11-08 08:30:00" }],
+		feel: [{ score: 4, text: "", logged_at: "2026-11-08 08:40:00" }],
+	};
+	const rows = historyRows(marks);
+	assert.deepEqual(rows.map((r) => [r.time, r.tab]), [["08:30", "food"], ["08:40", "feel"]]);
+	assert.ok(rows[0].text.includes("омлет"));
+});
+
+test("foodSummary: записей нет — пусто", () => {
+	assert.equal(foodSummary({ remaining: null, food: [] }), "");
 });
 
 test("isPast и isFuture по границам", () => {
@@ -44,12 +133,12 @@ test("markSummary: без оценки и «сделал» — последне�
 	const feel = [{ score: 2 }, { score: 4 }];
 	assert.equal(markSummary({ ...empty, feel }), "самочувствие 4");
 	assert.equal(markSummary({ ...empty, feel, done: { done: 1, logged_at: "x" } }), "сделал");
-	assert.equal(markSummary({ ratings: [], done: null }), "");
+	assert.equal(markSummary({ ratings: [], done: null, food: [] }), "");
 });
 
 test("markSummary: оценка важнее самочувствия", () => {
 	const ratings = [{ focus: 4, fatigue: 2, effort: 3 }];
-	assert.equal(markSummary({ ratings, done: null, feel: [{ score: 5 }] }), "4/2/3");
+	assert.equal(markSummary({ ratings, done: null, food: [], feel: [{ score: 5 }] }), "4/2/3");
 });
 
 test("historyRows: все отметки по времени", () => {
@@ -58,6 +147,7 @@ test("historyRows: все отметки по времени", () => {
 		feel: [{ score: 4, text: "бодро", mood: null, stress: null, logged_at: "2026-11-08 10:30:00" }],
 		slips: [{ text: "бесит", logged_at: "2026-11-08 10:45:00" }],
 		done: { done: 0, logged_at: "2026-11-08 09:15:00" },
+		food: [],
 	};
 	assert.deepEqual(historyRows(marks), [
 		{ time: "09:15", tab: "done", text: "Пропустил" },

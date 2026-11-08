@@ -439,6 +439,11 @@ nav button[aria-selected="true"] {
 	color: var(--muted);
 }
 
+.saved {
+	color: var(--good);
+	margin: 0;
+}
+
 .sr {
 	align-items: center;
 	display: grid;

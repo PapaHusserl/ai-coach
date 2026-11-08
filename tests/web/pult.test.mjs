@@ -6,6 +6,7 @@ import {
 	dayRows,
 	formatClock,
 	formatDate,
+	hasWindow,
 	isCurrent,
 	itemProgress,
 	nextRow,
@@ -109,7 +110,7 @@ test("barLabel минуты и часы", () => {
 });
 
 const NOW = "2026-11-07T12:00:00";
-const noMarks = { ratings: [], done: null };
+const noMarks = { ratings: [], done: null, food: [] };
 const itemRow = (extra) => ({
 	source: "item",
 	kind: "task",
@@ -131,7 +132,7 @@ test("rowStatus: текущая встреча тоже «идёт»", () => {
 });
 
 test("rowStatus: прошедший со сводкой отметок", () => {
-	const marks = { ratings: [{ focus: 4, fatigue: 2, effort: 3 }], done: null };
+	const marks = { ratings: [{ focus: 4, fatigue: 2, effort: 3 }], done: null, food: [] };
 	assert.deepEqual(rowStatus(itemRow({ marks }), NOW, false), { text: "4/2/3", tone: "good" });
 });
 
@@ -169,6 +170,57 @@ test("rowStatus: не текущая встреча — пусто", () => {
 
 test("rowStatus: пункт без окна — пусто", () => {
 	assert.deepEqual(rowStatus(itemRow({ kind: "other" }), NOW, false), { text: "", tone: "" });
+});
+
+const mealMarks = (food) => ({ ratings: [], feel: [], slips: [], done: null, food });
+const eaten = [{ id: 1, text: "омлет", kcal: null, logged_at: "2026-11-07 10:30:00" }];
+
+test("rowStatus: прошедшая еда с записью — «съел», good", () => {
+	const row = itemRow({ kind: "meal", meal: { remaining: null, food: eaten }, marks: mealMarks(eaten) });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "съел", tone: "good" });
+});
+
+test("rowStatus: прошедшая еда без записи и due — «не заполнено»", () => {
+	const row = itemRow({ kind: "meal", meal: { remaining: null, food: [] }, marks: mealMarks([]), due: true });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
+});
+
+test("rowStatus: будущая еда не ближайшая — подпись есть, не «съел»", () => {
+	const row = itemRow({
+		kind: "meal",
+		meal: { remaining: null, food: [] },
+		marks: mealMarks([]),
+		start_at: "2026-11-07T13:00:00",
+		end_at: "2026-11-07T14:00:00",
+	});
+	const status = rowStatus(row, NOW, false);
+	assert.equal(status.tone, "");
+	assert.notEqual(status.text, "");
+	assert.notEqual(status.text, "съел");
+});
+
+test("hasWindow: еда с ключом meal — есть окно", () => {
+	assert.equal(hasWindow(itemRow({ kind: "meal", meal: { remaining: null, food: [] } })), true);
+});
+
+test("hasWindow: еда без ключа meal («Готовка») — окна нет", () => {
+	assert.equal(hasWindow(itemRow({ kind: "meal" })), false);
+});
+
+test("hasWindow: у остальных видов ключ meal не нужен, встреча — нет", () => {
+	assert.equal(hasWindow(itemRow({ kind: "task" })), true);
+	assert.equal(hasWindow({ source: "meeting", kind: "meal", meal: {} }), false);
+});
+
+test("rowStatus: «Готовка» без окна — пусто", () => {
+	assert.deepEqual(rowStatus(itemRow({ kind: "meal" }), NOW, false), { text: "", tone: "" });
+});
+
+test("openedId: «Готовка» не раскрывается, ни сама, ни по клику", () => {
+	const cooking = itemRow({ id: 1, kind: "meal", current: true });
+	const breakfast = itemRow({ id: 2, kind: "meal", meal: { remaining: null, food: [] }, current: true });
+	assert.equal(openedId(null, [cooking, breakfast]), 2);
+	assert.equal(openedId(1, [cooking]), null);
 });
 
 const cur = (extra) =>

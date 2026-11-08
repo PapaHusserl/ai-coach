@@ -65,6 +65,7 @@ const KIND_LABELS = {
 	focus: "фокус",
 	practice: "практика",
 	rest: "отдых",
+	meal: "еда",
 	checkin: "чек-ин",
 };
 
@@ -75,7 +76,8 @@ function minutesBetween(a, b) {
 
 // У пункта есть окно отметок (встречи и пункты без окна — нет).
 export function hasWindow(row) {
-	return row.source === "item" && tabsFor(row.kind).length > 0;
+	// У «Готовки» (kind meal без ключа meal) окна нет, Р7.
+	return row.source === "item" && tabsFor(row.kind).length > 0 && (row.kind !== "meal" || row.meal != null);
 }
 
 // Какой пункт раскрыт: choice — id, выбранный кликом; false — свёрнуто всё; null — раскрыт идущий.

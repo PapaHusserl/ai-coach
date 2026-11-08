@@ -11,9 +11,11 @@ import {
 	buildPayload,
 	canSave,
 	errorText,
+	foodSummary,
 	historyRows,
 	isFuture,
 	markSummary,
+	remainingText,
 	tabsFor,
 } from "./marks-model.js";
 
@@ -26,7 +28,7 @@ function el(tag, className, text) {
 	return node;
 }
 
-const state = { id: null, day: null, tab: null, future: false, forms: {}, reload: null };
+const state = { id: null, day: null, tab: null, future: false, forms: {}, reload: null, meal: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -70,7 +72,18 @@ function showError(text) {
 	errorLine.hidden = text === "";
 }
 
+// Пока запись уходит и список перезагружается, второй клик не создаёт вторую запись.
 async function send(tab, text) {
+	if (state.busy) return;
+	state.busy = true;
+	try {
+		await sendNow(tab, text);
+	} finally {
+		state.busy = false;
+	}
+}
+
+async function sendNow(tab, text) {
 	showError("");
 	const forms = state.forms;
 	const form = { ...forms[tab], event_id: state.id, date: state.day, text };
@@ -172,9 +185,19 @@ function flowField(form) {
 	return wrap;
 }
 
+// Остаток дня и «Записано ✓» у еды: меняется только текст узлов, форма ввода не пересобирается.
+function fillMeal() {
+	const eaten = foodSummary(state.meal);
+	ui.saved.textContent = `Записано ✓ ${eaten}`;
+	ui.saved.hidden = eaten === "";
+	ui.left.textContent = remainingText(state.meal);
+}
+
 function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
+	ui.saved = null;
+	ui.left = null;
 	const tab = state.tab;
 	state.forms[tab] ??= {};
 	if (state.future) {
@@ -195,14 +218,23 @@ function buildForm() {
 		box.append(errorLine, line);
 		return;
 	}
-	const save = el("button", "save", "Сохранить");
+	const food = tab === "food";
+	const save = el("button", "save", food ? "Записать" : "Сохранить");
 	save.type = "button";
 	const text = el("textarea", "text");
 	text.rows = 2;
 	text.value = state.forms[tab].text ?? "";
 	text.addEventListener("input", () => {
 		state.forms[tab].text = text.value;
+		if (food) save.disabled = !canSave(tab, state.forms[tab]);
 	});
+	if (food) {
+		ui.saved = el("p", "saved");
+		ui.left = el("p", "bar-label");
+		fillMeal();
+		box.append(ui.saved, ui.left);
+		text.placeholder = "напиши, что съел";
+	}
 	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, name, save));
 	if (tab === "checkin") box.append(hoursFields(state.forms[tab]), flowField(state.forms[tab]));
 	box.append(text, errorLine, save);
@@ -250,12 +282,14 @@ function startPane(row, view) {
 // узел переезжает в новую строку, обновляются история и подпись, форма ввода не трогается.
 export function mountMarks(item, row, view) {
 	const pane = paneNode();
+	state.meal = row.meal ?? null;
 	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);
 	if (future !== state.future) {
 		state.future = future;
 		buildForm();
 	}
+	if (ui.left) fillMeal();
 	buildHistory(row);
 	item.append(pane);
 }

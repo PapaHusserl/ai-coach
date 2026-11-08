@@ -6,9 +6,11 @@ const TABS = {
 	"focus": ["rating", "feel", "slip"],
 	"practice": ["done", "feel", "slip"],
 	"rest": ["done", "feel", "slip"],
+	"meal": ["food", "feel", "slip"],
 	"checkin": ["checkin"],
 };
 export const TAB_LABELS = {
+	food: "Что съел",
 	rating: "Оценка",
 	feel: "Самочувствие",
 	slip: "Срыв",
@@ -75,9 +77,26 @@ export function markSummary(marks) {
 	const parts = [];
 	const last = marks.ratings.at(-1);
 	if (last) parts.push(`${last.focus}/${last.fatigue}/${last.effort}`);
+	if (marks.food.length) parts.push("съел");
 	if (marks.done) parts.push(marks.done.done === 1 ? "сделал" : "пропустил");
 	const feel = marks.feel?.at(-1);
 	if (parts.length === 0 && feel) parts.push(`самочувствие ${feel.score}`);
+	return parts.join(" · ");
+}
+
+// Что записано у пункта еды: тексты записей через запятую; нет записей — "".
+export function foodSummary(meal) {
+	return meal.food.map((r) => r.text).join(", ");
+}
+
+// Остаток дня для окна еды; meal.remaining null — цели нет (профиль не заполнен).
+export function remainingText(meal) {
+	const left = meal.remaining;
+	if (!left) return "Цель на день не задана.";
+	const [kcal, protein, fat, carbs] = [left.kcal, left.protein_g, left.fat_g, left.carbs_g].map(Math.round);
+	const head = kcal < 0 ? `Перебор ${-kcal} ккал` : `Осталось на день ${kcal} ккал`;
+	const parts = [head, `белок ${protein} г`, `жир ${fat} г`, `углеводы ${carbs} г`];
+	if (left.pending_count > 0) parts.push(`без КБЖУ: ${left.pending_count}`);
 	return parts.join(" · ");
 }
 
@@ -104,6 +123,7 @@ export function historyRows(marks) {
 			text: withText(feelHead(r), r.text),
 		})),
 		...marks.slips.map((r) => ({ at: r.logged_at, tab: "slip", text: withText("Срыв", r.text) })),
+		...marks.food.map((r) => ({ at: r.logged_at, tab: "food", text: `Съел — ${r.text}` })),
 	];
 	if (marks.done) {
 		const word = marks.done.done === 1 ? "Сделал" : "Пропустил";
@@ -113,8 +133,9 @@ export function historyRows(marks) {
 	return rows.map((r) => ({ time: r.at.slice(11, 16), tab: r.tab, text: r.text }));
 }
 
-// Можно ли сохранять вкладку: у шкал выбраны все значения.
+// Можно ли сохранять вкладку: у шкал выбраны все значения, у еды — непустой текст.
 export function canSave(tab, form) {
+	if (tab === "food") return (form.text ?? "").trim() !== "";
 	return (REQUIRED[tab] ?? []).every((name) => Number.isInteger(form[name]));
 }
 
