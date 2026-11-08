@@ -21,7 +21,12 @@ from ai_coach.web.marks import MarkError, NoEvent, save_mark
 
 MAX_BODY = 64 * 1024
 STATIC_PREFIX = "/static/"
-TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
+TYPES = {
+    ".html": "text/html",
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".woff2": "font/woff2",
+}
 
 
 def lan_address() -> str | None:
@@ -34,6 +39,11 @@ def lan_address() -> str | None:
         return None
     finally:
         probe.close()
+
+
+def _content_type(kind: str) -> str:
+    """Заголовок Content-Type: у текста charset, у бинарного шрифта его нет."""
+    return kind if kind.startswith("font/") else f"{kind}; charset=utf-8"
 
 
 def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
@@ -85,7 +95,7 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
 
         def send(self, status: int, body: bytes, content_type: str) -> None:
             self.send_response(status)
-            self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+            self.send_header("Content-Type", _content_type(content_type))
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

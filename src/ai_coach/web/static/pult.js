@@ -1,69 +1,90 @@
-// Пульт: план дня. Чистые функции — для тестов (tests/web), DOM — внизу, только в браузере.
+// Пульт: план дня, DOM (в браузере). Чистые функции — pult-model.js, здесь реэкспорт для тестов (tests/web).
 
-import { markSummary, openMarks, refreshMarks, setupMarks, tabsFor } from "./marks.js";
+import { isPast, openMarks, refreshMarks, setupMarks } from "./marks.js";
+import {
+	barLabel,
+	barPercent,
+	dayRows,
+	formatClock,
+	formatDate,
+	hasWindow,
+	itemProgress,
+	nextRow,
+	part,
+	rowStatus,
+	shiftDay,
+} from "./pult-model.js";
 
-const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
-const MONTHS = [
-	"января", "февраля", "марта", "апреля", "мая", "июня",
-	"июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
+export * from "./pult-model.js";
+
 const REFRESH_MS = 60000;
 
-// "2026-11-07T09:05:00" -> "09:05"
-export function formatClock(iso) {
-	return iso.slice(11, 16);
-}
-
-// "2026-11-07" -> "сб, 7 ноября"
-export function formatDate(day) {
-	const [year, month, date] = day.split("-").map(Number);
-	const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay();
-	return `${WEEKDAYS[weekday]}, ${date} ${MONTHS[month - 1]}`;
-}
-
-// Ширина заполненной части бара, 0..100 %.
-export function barPercent(elapsedMin, leftMin) {
-	const total = elapsedMin + leftMin;
-	if (total <= 0) return 0;
-	return Math.min(100, Math.max(0, Math.round((elapsedMin / total) * 100)));
-}
-
-// "2026-11-07" + 1 -> "2026-11-08"
-export function shiftDay(day, delta) {
-	const [year, month, date] = day.split("-").map(Number);
-	return new Date(Date.UTC(year, month - 1, date + delta)).toISOString().slice(0, 10);
-}
-
-// Идёт ли сейчас пункт: current — список {source, id} из /api/day.
-export function isCurrent(current, source, id) {
-	return current.some((c) => c.source === source && c.id === id);
-}
-
-// Строки дня: all_day сверху, остальные по началу; у каждой source, current, muted.
-export function dayRows(view) {
-	const rows = [
-		...view.items.map((row) => ({ ...row, source: "item" })),
-		...view.meetings.map((row) => ({ ...row, source: "meeting" })),
-	];
-	const marked = rows.map((row) => ({
-		...row,
-		current: isCurrent(view.current, row.source, row.id),
-		muted: row.source === "meeting",
-	}));
-	const order = (a, b) => a.start_at.localeCompare(b.start_at);
-	return [...marked.filter((r) => r.all_day).sort(order), ...marked.filter((r) => !r.all_day).sort(order)];
-}
-
-// Подпись бара: "прошло 1 ч 30 мин / осталось 2 ч 0 мин".
-export function barLabel(elapsedMin, leftMin) {
-	const part = (min) => (min >= 60 ? `${Math.floor(min / 60)} ч ${min % 60} мин` : `${min} мин`);
-	return `прошло ${part(elapsedMin)} / осталось ${part(leftMin)}`;
-}
-
 function rowText(row) {
-	const time = row.all_day ? "весь день" : `${formatClock(row.start_at)}–${formatClock(row.end_at)}`;
+	const time = row.all_day ? "весь день" : formatClock(row.start_at);
 	const draft = row.status === "draft" ? " (черновик)" : "";
 	return [time, `${row.title || "Встреча"}${draft}`];
+}
+
+function el(tag, className, text) {
+	const node = document.createElement(tag);
+	if (className) node.className = className;
+	if (text !== undefined) node.textContent = text;
+	return node;
+}
+
+function progressNode(progress) {
+	const box = el("div", "prog");
+	const bar = el("div", "bar");
+	const fill = el("i");
+	fill.style.width = `${progress.percent}%`;
+	const marker = el("b");
+	marker.style.left = `${progress.percent}%`;
+	bar.append(fill, marker);
+	const label = el("div", "pl");
+	label.append(
+		el("span", "", `прошло ${part(progress.elapsedMin)}`),
+		el("span", "", `${progress.percent}%`),
+		el("span", "", `осталось ${part(progress.leftMin)} · до ${progress.until}`),
+	);
+	box.append(bar, label);
+	return box;
+}
+
+// Строка открывается кликом и с клавиатуры (Enter, пробел).
+function makeTappable(head, open) {
+	head.tabIndex = 0;
+	head.setAttribute("role", "button");
+	head.addEventListener("click", open);
+	head.addEventListener("keydown", (event) => {
+		if (event.key !== "Enter" && event.key !== " ") return;
+		event.preventDefault();
+		open();
+	});
+}
+
+function rowClasses(row, now) {
+	const flags = {
+		allday: row.all_day,
+		muted: row.muted,
+		past: isPast(row, now),
+		current: row.current,
+		due: row.due,
+		tap: hasWindow(row),
+	};
+	return ["agi", ...Object.keys(flags).filter((name) => flags[name])].join(" ");
+}
+
+function rowNode(row, view, next) {
+	const item = el("li", rowClasses(row, view.now));
+	const [time, title] = rowText(row);
+	const head = el("div", "agh");
+	const status = rowStatus(row, view.now, row === next);
+	head.append(el("span", "tm", time), el("span", "ttl", title), el("span", `st ${status.tone}`.trim(), status.text));
+	if (hasWindow(row)) makeTappable(head, () => openMarks(row, view.date, view));
+	item.append(head);
+	const progress = row.current ? itemProgress(row, view.now) : null;
+	if (progress) item.append(progressNode(progress));
+	return item;
 }
 
 function render(view) {
@@ -71,39 +92,10 @@ function render(view) {
 	document.getElementById("now").textContent = formatClock(view.now);
 	document.getElementById("fill").style.width = `${barPercent(view.elapsed_min, view.left_min)}%`;
 	document.getElementById("bar-label").textContent = barLabel(view.elapsed_min, view.left_min);
-	const list = document.getElementById("rows");
-	list.replaceChildren();
 	const rows = dayRows(view);
 	document.getElementById("empty").hidden = rows.length > 0;
-	for (const row of rows) {
-		const item = document.createElement("li");
-		const tappable = row.source === "item" && tabsFor(row.kind).length > 0;
-		item.className = [
-			"row",
-			row.muted ? "muted" : "",
-			row.current ? "current" : "",
-			row.due ? "due" : "",
-			tappable ? "tap" : "",
-		]
-			.join(" ")
-			.trim();
-		const [time, title] = rowText(row);
-		const when = document.createElement("span");
-		when.className = "when";
-		when.textContent = time;
-		const what = document.createElement("span");
-		what.className = "what";
-		what.textContent = title;
-		item.append(when, what);
-		if (tappable) {
-			const summary = document.createElement("span");
-			summary.className = "mark";
-			summary.textContent = markSummary(row.marks);
-			item.append(summary);
-			item.addEventListener("click", () => openMarks(row, view.date, view));
-		}
-		list.append(item);
-	}
+	const next = nextRow(rows, view);
+	document.getElementById("rows").replaceChildren(...rows.map((row) => rowNode(row, view, next)));
 	refreshMarks(view);
 }
 
@@ -131,6 +123,15 @@ if (typeof document !== "undefined") {
 		load();
 	};
 	setupMarks(load);
+	const tabs = document.querySelectorAll("#tabs button");
+	for (const tab of tabs) {
+		tab.addEventListener("click", () => {
+			for (const other of tabs) other.setAttribute("aria-selected", String(other === tab));
+			for (const panel of document.querySelectorAll("[data-panel]")) {
+				panel.hidden = panel.dataset.panel !== tab.dataset.tab;
+			}
+		});
+	}
 	document.getElementById("prev").addEventListener("click", () => move(-1));
 	document.getElementById("next").addEventListener("click", () => move(1));
 	load();

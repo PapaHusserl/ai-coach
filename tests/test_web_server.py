@@ -463,6 +463,19 @@ def test_static_css_content_type(port: int) -> None:
         conn.close()
 
 
+def test_static_woff2_content_type_without_charset(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("GET", "/static/manrope-latin.woff2")
+        response = conn.getresponse()
+        body = response.read()
+        assert response.status == 200
+        assert response.getheader("Content-Type") == "font/woff2"
+        assert body[:4] == b"wOF2"
+    finally:
+        conn.close()
+
+
 def test_post_other_path_text(port: int) -> None:
     assert post(port, {}, path="/api/day")[1].decode() == "Не найдено."
 

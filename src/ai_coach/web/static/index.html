@@ -2,21 +2,40 @@
 <html lang="ru">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<title>Пульт</title>
 	<link rel="stylesheet" href="/static/pult.css">
 </head>
 <body>
-	<header>
-		<button id="prev" aria-label="Предыдущий день">‹</button>
-		<h1><span id="date"></span> <span id="now" class="now"></span></h1>
-		<button id="next" aria-label="Следующий день">›</button>
-	</header>
-	<div class="bar"><div id="fill" class="fill"></div></div>
-	<p id="bar-label" class="bar-label"></p>
-	<p id="error" class="error" hidden></p>
-	<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
-	<ul id="rows" class="rows"></ul>
+	<div class="wrap">
+		<header>
+			<div>
+				<h1 id="date"></h1>
+				<div id="now" class="sub"></div>
+			</div>
+			<span class="days">
+				<button id="prev" aria-label="Предыдущий день">‹</button>
+				<button id="next" aria-label="Следующий день">›</button>
+			</span>
+		</header>
+		<div class="bar"><i id="fill"></i></div>
+		<p id="bar-label" class="bar-label"></p>
+		<p id="error" class="error" hidden></p>
+		<nav id="tabs" role="tablist">
+			<button role="tab" data-tab="plan" aria-selected="true">План</button>
+			<button role="tab" data-tab="train" aria-selected="false">Тренировки</button>
+			<button role="tab" data-tab="food" aria-selected="false">Еда</button>
+			<button role="tab" data-tab="state" aria-selected="false">Состояние</button>
+		</nav>
+		<section data-panel="plan" class="card">
+			<div class="plan-h"><h2>План дня</h2></div>
+			<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
+			<ul id="rows" class="rows"></ul>
+		</section>
+		<section data-panel="train" class="card" hidden><p class="empty">скоро</p></section>
+		<section data-panel="food" class="card" hidden><p class="empty">скоро</p></section>
+		<section data-panel="state" class="card" hidden><p class="empty">скоро</p></section>
+	</div>
 	<dialog id="marks">
 		<h2 id="marks-title"></h2>
 		<p id="marks-sub" class="bar-label"></p>
