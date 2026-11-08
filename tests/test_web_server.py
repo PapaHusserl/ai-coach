@@ -220,6 +220,22 @@ def test_post_mark_error_is_400_with_text(port: int, db_path: Path) -> None:
     assert answer.decode() == "Текст не может быть пустым."
 
 
+def test_post_error_is_written_to_stderr(
+    port: int, db_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    event_id = add_task(db_path)
+    post(port, mark_body(event_id, mark="slip", text=""))
+    assert "POST /api/mark 400 Текст не может быть пустым." in capsys.readouterr().err
+
+
+def test_post_ok_writes_nothing_to_stderr(
+    port: int, db_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    event_id = add_task(db_path)
+    post(port, mark_body(event_id, mark="feel", score=3))
+    assert capsys.readouterr().err == ""
+
+
 def test_post_missing_event_is_404(port: int) -> None:
     status, _ = post(port, mark_body(999, mark="feel", score=3))
     assert status == 404

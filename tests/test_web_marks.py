@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -232,3 +233,15 @@ def test_unknown_mark_is_rejected(conn: sqlite3.Connection) -> None:
     eid = event(conn)
     with pytest.raises(MarkError):
         save_mark(conn, payload(eid, "bogus"), at("10:30"))
+
+
+def test_item_error_prefixes_of_pult_js_match_mark_errors() -> None:
+    root = Path(__file__).parent.parent / "src" / "ai_coach" / "web"
+    script = (root / "static" / "marks.js").read_text(encoding="utf-8")
+    block = script.split("const ITEM_ERRORS = [", 1)[1].split("];", 1)[0]
+    prefixes = re.findall(r'"([^"]+)"', block)
+    source = (root / "marks.py").read_text(encoding="utf-8")
+    texts = re.findall(r'MarkError\(\s*f?"([^"]*)"', source)
+    assert prefixes
+    for prefix in prefixes:
+        assert any(text.startswith(prefix) for text in texts), prefix

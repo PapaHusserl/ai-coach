@@ -120,6 +120,15 @@ def test_wellbeing_topic_has_scale_poles() -> None:
         assert pole in text, pole
 
 
+def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
+    script = (ROOT / "src" / "ai_coach" / "web" / "static" / "marks.js").read_text(encoding="utf-8")
+    poles = re.findall(r'low: "([^"]+)", high: "([^"]+)"', script)
+    assert len(poles) == 4
+    text = topic("wellbeing.md")
+    for low, high in poles:
+        assert f"1 - {low}, 5 - {high}" in text, (low, high)
+
+
 def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
     text = topic("wellbeing.md")
     for needle in (

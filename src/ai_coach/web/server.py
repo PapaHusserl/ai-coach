@@ -4,6 +4,7 @@
 
 import json
 import socket
+import sys
 from datetime import date, datetime
 from email.message import Message
 from http import HTTPStatus
@@ -132,6 +133,8 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
 
         def do_POST(self) -> None:
             status, body = mark_reply(db, self.path, self.headers, self.rfile)
+            if status != HTTPStatus.OK:
+                print(f"POST {self.path} {int(status)} {body}", file=sys.stderr)
             self.send(status, body.encode(), "application/json" if status == 200 else "text/plain")
 
         do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse

@@ -1,5 +1,7 @@
 // Пульт: план дня. Чистые функции — для тестов (tests/web), DOM — внизу, только в браузере.
 
+import { markSummary, openMarks, refreshMarks, setupMarks, tabsFor } from "./marks.js";
+
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 const MONTHS = [
 	"января", "февраля", "марта", "апреля", "мая", "июня",
@@ -75,7 +77,16 @@ function render(view) {
 	document.getElementById("empty").hidden = rows.length > 0;
 	for (const row of rows) {
 		const item = document.createElement("li");
-		item.className = ["row", row.muted ? "muted" : "", row.current ? "current" : ""].join(" ").trim();
+		const tappable = row.source === "item" && tabsFor(row.kind).length > 0;
+		item.className = [
+			"row",
+			row.muted ? "muted" : "",
+			row.current ? "current" : "",
+			row.due ? "due" : "",
+			tappable ? "tap" : "",
+		]
+			.join(" ")
+			.trim();
 		const [time, title] = rowText(row);
 		const when = document.createElement("span");
 		when.className = "when";
@@ -84,8 +95,16 @@ function render(view) {
 		what.className = "what";
 		what.textContent = title;
 		item.append(when, what);
+		if (tappable) {
+			const summary = document.createElement("span");
+			summary.className = "mark";
+			summary.textContent = markSummary(row.marks);
+			item.append(summary);
+			item.addEventListener("click", () => openMarks(row, view.date, view));
+		}
 		list.append(item);
 	}
+	refreshMarks(view);
 }
 
 if (typeof document !== "undefined") {
@@ -111,6 +130,7 @@ if (typeof document !== "undefined") {
 		day = shiftDay(shown, delta);
 		load();
 	};
+	setupMarks(load);
 	document.getElementById("prev").addEventListener("click", () => move(-1));
 	document.getElementById("next").addEventListener("click", () => move(1));
 	load();
