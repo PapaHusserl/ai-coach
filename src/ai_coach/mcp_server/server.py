@@ -11,6 +11,7 @@ from ai_coach.mcp_server import (
     agenda,
     habits,
     links,
+    meal,
     review,
     snapshot,
     tools,
@@ -32,7 +33,8 @@ INSTRUCTIONS = (
     "двигает только draft, propose_phase) и "
     "КБЖУ записи еды, "
     "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition), и группы "
-    "старым записям без групп (save_food_groups). "
+    "старым записям без групп (save_food_groups); варианты блюд к пункту еды "
+    "(create_meal_offers, cancel_meal_offers). "
     "Отправки на часы нет: утверждает и отправляет пользователь командами coach approve/push. "
     "Для телефона без часов: get_workout_link даёт ссылку на страницу с тренировкой, "
     "покажи её пользователю как есть. "
@@ -336,6 +338,18 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Записать группы продуктов (groups - ключи как в save_food_nutrition, не пустой список) "
         "записи еды, у которой КБЖУ уже есть, а групп нет. КБЖУ не меняет; размеченную запись "
         "не меняет.",
+    ),
+    "create_meal_offers": (
+        meal.create_meal_offers,
+        "Варианты блюд к пункту еды (kind meal) event_id за день date для окна еды пульта; "
+        "прежние варианты пункта за день заменяются. offers - от 1 до 5: {name, items, groups}; "
+        "items - до 12 строк {what, qty, kcal, protein_g, fat_g, carbs_g} на порцию (итоги "
+        "считает сервер); groups - ключи групп продуктов (" + ", ".join(FOOD_GROUPS) + "). "
+        "Съесть вариант пользователь жмёт в пульте: запись еды получит КБЖУ и группы сразу.",
+    ),
+    "cancel_meal_offers": (
+        meal.cancel_meal_offers,
+        "Снять варианты блюд пункта еды event_id за день date; нет вариантов - не ошибка.",
     ),
     "create_draft_workout": (
         tools.create_draft_workout,

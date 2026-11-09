@@ -630,6 +630,38 @@ def test_api_week_without_date_is_today(port: int) -> None:
     assert len(json.loads(body)["days"]) == 7
 
 
+def test_post_food_offer_writes_nutrition_and_shows_offers_in_api_day(
+    port: int, db_path: Path
+) -> None:
+    event_id = add_task(db_path, "meal")
+    today = datetime.now().date().isoformat()
+    conn = open_db(db_path)
+    sql = (
+        "INSERT INTO meal_offer (event_id, date, position, name, items_json, kcal, protein_g, "
+        "fat_g, carbs_g, groups_json) VALUES (?, ?, 1, 'Омлет', '[]', 270, 16, 11, 25, '[]')"
+    )
+    offer_id = conn.execute(sql, (event_id, today)).lastrowid
+    conn.commit()
+    conn.close()
+    _, body = request(port, "/api/day")
+    [item] = json.loads(body)["items"]
+    assert [o["id"] for o in item["meal"]["offers"]] == [offer_id]
+    status, _ = post(port, mark_body(event_id, mark="food", offer_id=offer_id))
+    assert status == 200
+    conn = open_db(db_path)
+    try:
+        [row] = conn.execute("SELECT * FROM food_log").fetchall()
+    finally:
+        conn.close()
+    assert (row["event_id"], row["kcal"]) == (event_id, 270)
+
+
+def test_post_food_with_unknown_offer_is_400(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    status, _ = post(port, mark_body(event_id, mark="food", offer_id=999))
+    assert status == 400
+
+
 def test_api_week_garbage_date_is_400_with_text(port: int) -> None:
     status, body = request(port, "/api/week?date=" + quote("мусор"))
     assert status == 400

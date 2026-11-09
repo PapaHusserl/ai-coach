@@ -2,10 +2,6 @@
 // их тесты — tests/web/marks.test.mjs; здесь они же реэкспортируются.
 import {
 	DONE_CHOICES,
-	FIELDS,
-	FLOW_CHOICES,
-	HOURS,
-	REQUIRED,
 	TAB_FIELDS,
 	buildPayload,
 	canSave,
@@ -19,6 +15,8 @@ import {
 	tabLabel,
 	tabsFor,
 } from "./marks-model.js";
+import { flowField, hoursFields, scale } from "./marks-fields.js";
+import { offersBlock } from "./offers-pane.js";
 import { fillTraining } from "./training-pane.js";
 
 export * from "./marks-model.js";
@@ -30,7 +28,7 @@ function el(tag, className, text) {
 	return node;
 }
 
-const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, training: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -75,20 +73,20 @@ function showError(text) {
 }
 
 // Пока запись уходит и список перезагружается, второй клик не создаёт вторую запись.
-async function send(tab, text) {
+async function send(tab, text, extra = {}) {
 	if (state.busy) return;
 	state.busy = true;
 	try {
-		await sendNow(tab, text);
+		await sendNow(tab, text, extra);
 	} finally {
 		state.busy = false;
 	}
 }
 
-async function sendNow(tab, text) {
+async function sendNow(tab, text, extra) {
 	showError("");
 	const forms = state.forms;
-	const form = { ...forms[tab], event_id: state.id, date: state.day, text };
+	const form = { ...forms[tab], ...extra, event_id: state.id, date: state.day, text };
 	const body = JSON.stringify(buildPayload(tab, form));
 	let status = 0;
 	let reply = "";
@@ -114,85 +112,24 @@ async function sendNow(tab, text) {
 	showError(errorText(status, reply));
 }
 
-function scale(tab, name, save) {
-	const field = FIELDS[name];
-	const form = state.forms[tab];
-	const optional = !REQUIRED[tab].includes(name);
-	// Строка: название, кнопки 1–5, полюса словами (Р8); у обязательной пустой шкалы название красное.
-	const wrap = el("div", "sr");
-	const line = el("div", "qs");
-	const buttons = [];
-	const mark = () => {
-		wrap.classList.toggle("empty", !optional && !Number.isInteger(form[name]));
-		for (const [index, other] of buttons.entries()) {
-			other.setAttribute("aria-pressed", String(index + 1 === form[name]));
-		}
-	};
-	for (let value = 1; value <= 5; value += 1) {
-		const button = el("button", "", String(value));
-		button.type = "button";
-		button.addEventListener("click", () => {
-			form[name] = optional && form[name] === value ? null : value;
-			mark();
-			save.disabled = !canSave(tab, form);
-		});
-		buttons.push(button);
-		line.append(button);
-	}
-	wrap.append(el("span", "", field.label), line, el("span", "h", `${field.low} — ${field.high}`));
-	mark();
-	return wrap;
-}
-
-// Часы дня чек-ина: поля ввода, значение живёт в форме вкладки.
-function hoursFields(form) {
-	const line = el("div", "hours");
-	for (const [name, label] of Object.entries(HOURS)) {
-		const wrap = el("label", "hour", label);
-		const input = el("input");
-		input.type = "number";
-		input.min = "0";
-		input.max = "24";
-		input.step = "0.5";
-		input.inputMode = "decimal";
-		input.value = form[name] ?? "";
-		input.addEventListener("input", () => {
-			form[name] = input.value;
-		});
-		wrap.append(input);
-		line.append(wrap);
-	}
-	return line;
-}
-
-// Погружение: да / нет, повторный клик снимает выбор.
-function flowField(form) {
-	const wrap = el("div", "sr");
-	const line = el("div", "yn");
-	const buttons = [];
-	for (const choice of FLOW_CHOICES) {
-		const button = el("button", choice.flow === 1 ? "y" : "n", choice.label);
-		button.type = "button";
-		button.setAttribute("aria-pressed", String(form.flow === choice.flow));
-		button.addEventListener("click", () => {
-			form.flow = form.flow === choice.flow ? null : choice.flow;
-			for (const [index, other] of buttons.entries()) {
-				other.setAttribute("aria-pressed", String(FLOW_CHOICES[index].flow === form.flow));
-			}
-		});
-		buttons.push(button);
-		line.append(button);
-	}
-	wrap.append(el("span", "", "Погружение"), line);
-	return wrap;
-}
-
 // Остаток дня и «Записано ✓» у еды: меняется только текст узлов, форма ввода не пересобирается.
 function fillMeal() {
 	const eaten = foodSummary(state.meal);
 	ui.saved.textContent = `Записано ✓ ${eaten}`;
 	ui.saved.hidden = eaten === "";
 	ui.left.textContent = remainingText(state.meal);
+	fillOffers();
+}
+
+// Варианты блюд и подвал «Итого»: живут по минутам вместе с остатком, textarea не трогается.
+function fillOffers() {
+	const count = state.meal.offers.length;
+	state.offer = Math.min(state.offer, Math.max(count - 1, 0));
+	const take = state.future ? null : takeOffer; // у будущего пункта «Съел» нет (Р36)
+	ui.offers.replaceChildren(...(count ? offersBlock(state.meal, state.offer, pickOffer, take) : []));
+	if (!ui.save) return;
+	ui.save.textContent = saveLabel(true, state.meal.offers);
+	ui.text.placeholder = count ? "или напиши, что съел на самом деле" : "напиши, что съел";
 }
 
 // Узел окна тренировки (шаги или факт); минутный load перерисовывает его в mountMarks.
@@ -202,36 +139,68 @@ function trainingNode() {
 	return ui.train;
 }
 
+function pickOffer(index) {
+	state.offer = index;
+	fillOffers();
+}
+
+function takeOffer(offer) {
+	send("food", "", { offer_id: offer.id });
+}
+
+// Кнопки «Сделал» / «Пропустил»: клик сразу отправляет.
+function doneChoices() {
+	const line = el("div", "choices");
+	for (const choice of DONE_CHOICES) {
+		const button = el("button", "", choice.label);
+		button.type = "button";
+		button.addEventListener("click", () => {
+			state.forms.done = { done: choice.done };
+			send("done", "");
+		});
+		line.append(button);
+	}
+	return line;
+}
+
+function saveLabel(food, offers) {
+	if (!food) return "Сохранить";
+	return offers.length ? "Записать своё" : "Записать";
+}
+
+// Верх окна еды: «Записано ✓», остаток дня, варианты блюд.
+function mealHead(box) {
+	ui.saved = el("p", "saved");
+	ui.left = el("p", "bar-label");
+	ui.offers = el("div");
+	fillMeal();
+	box.append(ui.saved, ui.left, ui.offers);
+}
+
 function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
 	ui.saved = null;
 	ui.left = null;
+	ui.offers = null;
+	ui.save = null;
+	ui.text = null;
 	ui.train = null;
 	const tab = state.tab;
 	state.forms[tab] ??= {};
 	if (state.future) {
 		box.append(el("p", "hint", "Ещё не началось."));
+		if (tab === "food") mealHead(box); // остаток и варианты без «Съел» и без поля «своё» (Р36)
 		if (tab === "done" && state.training) box.append(trainingNode()); // шаги плана без кнопок (Р24)
 		return;
 	}
 	if (tab === "done") {
-		const line = el("div", "choices");
-		for (const choice of DONE_CHOICES) {
-			const button = el("button", "", choice.label);
-			button.type = "button";
-			button.addEventListener("click", () => {
-				state.forms.done = { done: choice.done };
-				send("done", "");
-			});
-			line.append(button);
-		}
 		if (state.training) box.append(trainingNode());
-		box.append(errorLine, line);
+		box.append(errorLine, doneChoices());
 		return;
 	}
 	const food = tab === "food";
-	const save = el("button", "save", food ? "Записать" : "Сохранить");
+	const save = el("button", "save", saveLabel(food, []));
 	save.type = "button";
 	const text = el("textarea", "text");
 	text.rows = 2;
@@ -241,13 +210,11 @@ function buildForm() {
 		if (food) save.disabled = !canSave(tab, state.forms[tab]);
 	});
 	if (food) {
-		ui.saved = el("p", "saved");
-		ui.left = el("p", "bar-label");
-		fillMeal();
-		box.append(ui.saved, ui.left);
-		text.placeholder = "напиши, что съел";
+		ui.save = save;
+		ui.text = text;
+		mealHead(box);
 	}
-	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, name, save));
+	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, state.forms[tab], name, save));
 	if (tab === "checkin") box.append(hoursFields(state.forms[tab]), flowField(state.forms[tab]));
 	box.append(text, errorLine, save);
 	save.disabled = !canSave(tab, state.forms[tab]);
@@ -285,6 +252,7 @@ function startPane(row, view) {
 	state.tab = tabsFor(row.kind)[0];
 	state.future = isFuture(row, view.now);
 	state.forms = drafts[`${view.date}:${row.id}`] ??= {};
+	state.offer = 0;
 	showError("");
 	buildTabs(row.kind);
 	buildForm();

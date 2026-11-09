@@ -460,3 +460,58 @@ test("missingText: названия через запятую, пусто — п
 	assert.equal(missingText({ missing: [] }), "");
 	assert.equal(missingText({ missing: null }), "");
 });
+
+// Партия 6: варианты блюд.
+const ITEM = (kcal, protein_g, fat_g, carbs_g) => ({ what: "x", qty: "1", kcal, protein_g, fat_g, carbs_g });
+
+test("offerTotals: суммы строк варианта", async () => {
+	const { offerTotals } = await model();
+	const offer = { items: [ITEM(150, 12, 10, 1), ITEM(120, 4, 1, 24)] };
+	assert.deepEqual(offerTotals(offer), { kcal: 270, protein_g: 16, fat_g: 11, carbs_g: 25 });
+});
+
+test("offerTotals: пустой вариант — нули", async () => {
+	const { offerTotals } = await model();
+	assert.deepEqual(offerTotals({ items: [] }), { kcal: 0, protein_g: 0, fat_g: 0, carbs_g: 0 });
+});
+
+test("offerRows: подвал — Итого и Останется на день, четыре числа", async () => {
+	const { offerRows } = await model();
+	const offer = { items: [ITEM(150, 12, 10, 1), ITEM(120.5, 4, 1, 24)] };
+	const remaining = { kcal: 800, protein_g: 40, fat_g: 20, carbs_g: 90 };
+	const { rows, foot } = offerRows(offer, remaining);
+	assert.deepEqual(rows, [
+		["x", "1", "150", "12", "10", "1"],
+		["x", "1", "120.5", "4", "1", "24"],
+	]);
+	assert.deepEqual(foot, [
+		["Итого", "", "270.5", "16", "11", "25"],
+		["Останется на день", "", "529.5", "24", "9", "65"],
+	]);
+});
+
+test("offerRows: цели нет — в подвале только Итого", async () => {
+	const { offerRows } = await model();
+	const { foot } = offerRows({ items: [ITEM(150, 12, 10, 1)] }, null);
+	assert.deepEqual(foot, [["Итого", "", "150", "12", "10", "1"]]);
+});
+
+test("buildPayload: еда по варианту — offer_id числом, текста нет", () => {
+	const form = { event_id: 5, date: "2026-11-07", offer_id: 3 };
+	assert.deepEqual(buildPayload("food", form), {
+		event_id: 5,
+		date: "2026-11-07",
+		mark: "food",
+		offer_id: 3,
+	});
+});
+
+test("buildPayload: еда своим текстом — без offer_id", () => {
+	const form = { event_id: 5, date: "2026-11-07", text: " борщ " };
+	assert.deepEqual(buildPayload("food", form), {
+		event_id: 5,
+		date: "2026-11-07",
+		mark: "food",
+		text: "борщ",
+	});
+});

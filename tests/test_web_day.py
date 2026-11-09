@@ -3,6 +3,8 @@ from datetime import date, datetime
 from typing import Any
 
 import pytest
+from test_web_food import ITEMS
+from test_web_food import put_offer as put_offer_on
 from test_web_training import RUN_SPEC, activity, actual, workout
 from workload_fakes import coach_event
 
@@ -11,6 +13,7 @@ from ai_coach.store.agenda import add_event
 from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing
 from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
+from ai_coach.web.errors import MarkError
 from ai_coach.web.marks import save_mark
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.workouts.phone import player_payload
@@ -305,6 +308,88 @@ def test_food_from_cli_without_event_does_not_clear_due(conn: sqlite3.Connection
     breakfast = meal(conn)
     eaten(conn, "из CLI", None)
     assert by_id(view(conn, "15:00"), breakfast)["due"] is True
+
+
+def offers_of(conn: sqlite3.Connection, event_id: int, now: str = "15:00") -> list[dict[str, Any]]:
+    return by_id(view(conn, now), event_id)["meal"]["offers"]
+
+
+def put_offer(conn: sqlite3.Connection, day: str = D, **fields: Any) -> int:
+    """Вариант на день этого файла (D), не на день test_web_food."""
+    return put_offer_on(conn, day=day, **fields)
+
+
+def test_meal_offers_of_other_day_are_not_shown(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    put_offer(conn, event_id=breakfast, name="Вчерашний", day="2026-11-06")
+    put_offer(conn, event_id=breakfast, name="Сегодняшний")
+    assert [o["name"] for o in offers_of(conn, breakfast)] == ["Сегодняшний"]
+
+
+def test_meal_without_offers_has_empty_offers_list(conn: sqlite3.Connection) -> None:
+    assert offers_of(conn, meal(conn)) == []
+
+
+def test_meal_offers_have_id_name_items_and_totals(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    offer_id = put_offer(conn, event_id=breakfast, name="Омлет")
+    [offer] = offers_of(conn, breakfast)
+    assert offer["id"] == offer_id
+    assert offer["name"] == "Омлет"
+    assert offer["items"] == ITEMS
+    totals = (offer["kcal"], offer["protein_g"], offer["fat_g"], offer["carbs_g"])
+    assert totals == (270, 16, 11, 25)
+
+
+def test_meal_offers_follow_position_order(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    put_offer(conn, event_id=breakfast, name="Второй", position=2)
+    put_offer(conn, event_id=breakfast, name="Первый", position=1)
+    assert [o["name"] for o in offers_of(conn, breakfast)] == ["Первый", "Второй"]
+
+
+def test_meal_offers_are_only_of_own_item(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    put_offer(conn, event_id=supper, name="Суп")
+    assert offers_of(conn, breakfast) == []
+    assert [o["name"] for o in offers_of(conn, supper)] == ["Суп"]
+
+
+def test_cooking_has_no_offers_key_even_with_offer_row(conn: sqlite3.Connection) -> None:
+    cooking = meal(conn, title="Готовка")
+    put_offer(conn, event_id=cooking)
+    assert "meal" not in by_id(view(conn, "15:00"), cooking)
+
+
+def test_taking_offer_lowers_remaining_by_its_kcal_without_pending(
+    conn: sqlite3.Connection,
+) -> None:
+    profile(conn)
+    breakfast = meal(conn)
+    before = by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]
+    offer_id = put_offer(conn, event_id=breakfast)
+    save_mark(conn, mark(breakfast, "food", offer_id=offer_id), at("08:30"))
+    conn.commit()
+    after = by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]
+    assert before["kcal"] - after["kcal"] == 270
+    assert after["pending_count"] == 0
+
+
+def test_taking_offer_clears_meal_due(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    offer_id = put_offer(conn, event_id=breakfast)
+    save_mark(conn, mark(breakfast, "food", offer_id=offer_id), at("08:30"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is False
+
+
+def test_offer_of_another_meal_item_is_rejected_by_save_mark(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    offer_id = put_offer(conn, event_id=supper)
+    with pytest.raises(MarkError):
+        save_mark(conn, mark(breakfast, "food", offer_id=offer_id), at("08:30"))
 
 
 def test_feel_does_not_clear_meal_due(conn: sqlite3.Connection) -> None:

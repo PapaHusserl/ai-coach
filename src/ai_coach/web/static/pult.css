@@ -636,6 +636,46 @@ nav button[aria-selected="true"] {
 	border-top: 1px solid var(--line);
 }
 
+.mt caption {
+	font-weight: 700;
+	padding: 6px 8px 2px;
+	text-align: left;
+}
+
+.mt tfoot td {
+	border-top: 2px solid var(--fg);
+	font-weight: 700;
+}
+
+.mt tfoot tr + tr td {
+	border-top: 0;
+	color: var(--muted);
+	font-weight: 400;
+}
+
+.mtabs {
+	border-bottom: 1px solid var(--line);
+	display: flex;
+	gap: 2px;
+	overflow-x: auto;
+}
+
+.mtabs button {
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 600;
+	padding: 4px 10px;
+}
+
+.mtabs button[aria-selected="true"] {
+	border-color: var(--accent);
+	color: var(--fg);
+}
+
 .zones {
 	border-radius: 5px;
 	display: flex;

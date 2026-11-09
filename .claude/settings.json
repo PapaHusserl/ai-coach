@@ -6,6 +6,7 @@
       "Bash(cat .claude/agents/coach-help/day-plan.md)",
       "Bash(cat .claude/agents/coach-help/claude.md)",
       "Bash(cat .claude/agents/coach-help/todo.md)",
+      "Bash(cat .claude/skills/coach-meal/pult.md)",
       "Bash(uv run coach sync:*)",
       "Bash(uv run coach screen:*)",
       "Bash(uv run coach food:*)",

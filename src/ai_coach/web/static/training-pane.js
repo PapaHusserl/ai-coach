@@ -18,21 +18,28 @@ function el(tag, className, text) {
 	return node;
 }
 
-// Таблица окна: head — заголовки, rows — строки из ячеек; ячейка — текст или {text, tone}.
-function table(head, rows) {
-	const body = el("tbody");
+function bodyRows(section, rows) {
 	for (const cells of rows) {
 		const tr = el("tr");
 		for (const cell of cells) tr.append(el("td", cell.tone ?? "", cell.text ?? cell));
-		body.append(tr);
+		section.append(tr);
 	}
+	return section;
+}
+
+// Таблица окна: head — заголовки, rows — строки из ячеек; ячейка — текст или {text, tone}.
+// Необязательно: caption — подпись над таблицей, foot — строки подвала (таблица вариантов блюд).
+export function table(head, rows, caption = "", foot = []) {
+	const body = bodyRows(el("tbody"), rows);
 	const thead = el("thead");
 	const headRow = el("tr");
 	for (const title of head) headRow.append(el("th", "", title));
 	thead.append(headRow);
 	const wrap = el("div", "mtw");
 	const node = el("table", "mt");
+	if (caption) node.append(el("caption", "", caption));
 	node.append(thead, body);
+	if (foot.length) node.append(bodyRows(el("tfoot"), foot));
 	wrap.append(node);
 	return wrap;
 }

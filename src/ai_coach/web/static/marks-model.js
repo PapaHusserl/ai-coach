@@ -102,6 +102,29 @@ export function foodSummary(meal) {
 	return meal.food.map((r) => r.text).join(", ");
 }
 
+const NUTRIENTS = ["kcal", "protein_g", "fat_g", "carbs_g"];
+
+// Итоги варианта блюда: сумма строк состава по ккал, белку, жирам, углеводам.
+export function offerTotals(offer) {
+	const sum = (key) => offer.items.reduce((total, item) => total + item[key], 0);
+	return Object.fromEntries(NUTRIENTS.map((key) => [key, sum(key)]));
+}
+
+const round1 = (value) => Math.round(value * 10) / 10;
+
+// Строки таблицы варианта: состав (Что · Сколько · Ккал · Б · Ж · У) и подвал — «Итого» и, если цель дня
+// есть, «Останется на день» (ккал, белок, жиры, углеводы за вычетом варианта).
+export function offerRows(offer, remaining) {
+	const rows = offer.items.map((i) => [i.what, i.qty, i.kcal, i.protein_g, i.fat_g, i.carbs_g].map(String));
+	const total = offerTotals(offer);
+	const foot = [["Итого", "", ...NUTRIENTS.map((key) => String(round1(total[key])))]];
+	if (remaining) {
+		const left = NUTRIENTS.map((key) => String(round1(remaining[key] - total[key])));
+		foot.push(["Останется на день", "", ...left]);
+	}
+	return { rows, foot };
+}
+
 // Остаток дня для окна еды; meal.remaining null — цели нет (профиль не заполнен).
 export function remainingText(meal) {
 	const left = meal.remaining;
@@ -159,19 +182,25 @@ function hoursValue(raw) {
 	return Number.isFinite(value) ? value : null;
 }
 
+// Часы и погружение чек-ина: пустые поля не уходят.
+function checkinFields(form) {
+	const fields = {};
+	for (const name of Object.keys(HOURS)) {
+		const hours = hoursValue(form[name]);
+		if (hours !== null) fields[name] = hours;
+	}
+	if (form.flow === 0 || form.flow === 1) fields.flow = form.flow;
+	return fields;
+}
+
 // Тело POST /api/mark: числа — числами, пустые поля не уходят.
 export function buildPayload(tab, form) {
 	const payload = { event_id: form.event_id, date: form.date, mark: tab };
+	if (tab === "food" && Number.isInteger(form.offer_id)) return { ...payload, offer_id: form.offer_id };
 	for (const name of TAB_FIELDS[tab] ?? []) {
 		if (REQUIRED[tab].includes(name) || Number.isInteger(form[name])) payload[name] = Number(form[name]);
 	}
-	if (tab === "checkin") {
-		for (const name of Object.keys(HOURS)) {
-			const hours = hoursValue(form[name]);
-			if (hours !== null) payload[name] = hours;
-		}
-		if (form.flow === 0 || form.flow === 1) payload.flow = form.flow;
-	}
+	if (tab === "checkin") Object.assign(payload, checkinFields(form));
 	if (tab === "done") payload.done = form.done === null ? null : Number(form.done);
 	const text = (form.text ?? "").trim();
 	if (text) payload.text = text;

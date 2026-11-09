@@ -79,6 +79,8 @@ EXPECTED_TOOLS = {
     "move_draft_event",
     "create_day_plan",
     "get_agenda",
+    "create_meal_offers",
+    "cancel_meal_offers",
 }
 
 

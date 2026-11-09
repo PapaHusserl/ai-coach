@@ -10,7 +10,7 @@ from ai_coach.profile.service import current_profile, profile_nutrition
 from ai_coach.store.journal import evening_done
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
-from ai_coach.web.food import meal_view
+from ai_coach.web.food import meal_view, offers_view
 from ai_coach.web.marks import COOKING, due, empty_marks, marks_for_day
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.training import fact, plan_view
@@ -64,7 +64,11 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
                     conn, day.isoformat(), current_profile(conn, day.isoformat())
                 )
                 meal = meal_view(conn, day.isoformat(), target)
-            item["meal"] = {**meal, "food": mine["food"]}
+            item["meal"] = {
+                **meal,
+                "food": mine["food"],
+                "offers": offers_view(conn, r["id"], day.isoformat()),
+            }
         items.append(item)
     return items
 
