@@ -31,6 +31,11 @@ def _readable(code: str) -> str:
     return code.replace("_", " ").capitalize()
 
 
+def exercise_title(item: dict[str, Any]) -> str:
+    """Название упражнения, как его зовёт плеер: title спеки, иначе читаемый код."""
+    return item.get("title") or _readable(item["exercise"])
+
+
 def _clean(values: dict[str, Any]) -> dict[str, Any]:
     """Только непустые ключи."""
     return {key: value for key, value in values.items() if value not in (None, "", [], 0)}
@@ -48,17 +53,20 @@ def _strength_blocks(spec: dict[str, Any]) -> list[dict[str, Any]]:
         steps = [work]
         if item["rest_seconds"]:
             steps.append({"k": "rest", "sec": _num(item["rest_seconds"])})
-        title = item.get("title") or _readable(item["exercise"])
-        blocks.append({"r": item["sets"], "t": title, "s": steps})
+        blocks.append({"r": item["sets"], "t": exercise_title(item), "s": steps})
     return blocks
 
 
 def _mobility_blocks(spec: dict[str, Any]) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for item in spec["steps"]:
-        title = item.get("title") or _readable(item["exercise"])
         work = _clean(
-            {"k": "work", "sec": _num(item["seconds"]), "t": title, "note": item["description"]}
+            {
+                "k": "work",
+                "sec": _num(item["seconds"]),
+                "t": exercise_title(item),
+                "note": item["description"],
+            }
         )
         blocks.append({"r": 1, "s": [work]})
     return blocks

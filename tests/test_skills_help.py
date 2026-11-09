@@ -126,6 +126,23 @@ def test_day_plan_topic_describes_pult_marks() -> None:
         assert needle in text, needle
 
 
+def test_day_plan_topic_points_pult_windows_to_food_and_training() -> None:
+    text = topic("day-plan.md")
+    assert "Еда и тренировка - окна в `food.md` и `training.md`" in text
+    assert "тренировок в окнах пока нет" not in text
+
+
+def test_coach_help_index_mentions_pult_food_and_training() -> None:
+    text = (ROOT / ".claude" / "agents" / "coach-help.md").read_text(encoding="utf-8")
+    assert "еда и тренировки" in text
+
+
+def test_training_topic_describes_pult_window() -> None:
+    text = topic("training.md")
+    for needle in ("пульт", "Сделал", "зон", "coach sync"):
+        assert needle in text, needle
+
+
 def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
     model = ROOT / "src" / "ai_coach" / "web" / "static" / "marks-model.js"
     script = model.read_text(encoding="utf-8")

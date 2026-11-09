@@ -6,7 +6,7 @@ from typing import Any
 
 from ai_coach.store.garmin_data import get_activity
 from ai_coach.store.plans import get_planned_workout, list_plan_actual
-from ai_coach.workouts.phone import player_payload
+from ai_coach.workouts.phone import exercise_title, player_payload
 
 OK_PERCENT = 90  # факт от плана, начиная с которого длительность и дистанция «ок» (Р8)
 SECONDS_IN_MINUTE = 60
@@ -33,6 +33,14 @@ def plan_view(workout: dict[str, Any]) -> dict[str, Any]:
         "duration_min": None if seconds is None else _minutes(seconds),
         "steps": plan_steps(workout),
     }
+
+
+def _missing_titles(spec: dict[str, Any], codes: list[str] | None) -> list[str] | None:
+    """Коды Garmin пропущенных упражнений -> названия, как у плеера; чужой код остаётся как есть."""
+    if codes is None:
+        return None
+    titles = {e["exercise"]: exercise_title(e) for e in spec.get("exercises", [])}
+    return [titles.get(code, code) for code in codes]
 
 
 def _zones(raw: dict[str, Any]) -> list[float] | None:
@@ -116,6 +124,6 @@ def fact(conn: sqlite3.Connection, workout_id: int, day: str) -> dict[str, Any] 
             "pace_s_km": pace,
             "zones": _zones(json.loads(act["raw_json"])),
             "rows": _plan_vs_fact(spec, act, pace),
-            "missing": details.get("missing_exercises"),
+            "missing": _missing_titles(spec, details.get("missing_exercises")),
         }
     )

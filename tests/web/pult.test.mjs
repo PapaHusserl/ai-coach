@@ -313,3 +313,47 @@ test("nextRow: чужой день — undefined", () => {
 	const view = { date: "2026-11-08", now: NOW };
 	assert.equal(nextRow([later(1)], view), undefined);
 });
+
+// Партия 4: тренировка.
+const trainMarks = { ratings: [], feel: [], slips: [], done: null, food: [] };
+const plan = { name: "Бег", sport: "run", duration_min: 45, steps: [] };
+const factOf = (kind) => ({ kind, rows: [], zones: null });
+const trainRow = (training, extra) =>
+	itemRow({ kind: "training", training, marks: trainMarks, ...extra });
+
+test("hasWindow: тренировка с training — окно есть", () => {
+	assert.equal(hasWindow(trainRow({ plan, fact: null })), true);
+});
+
+test("hasWindow: тренировка без ключа training (Р15 = 1) — окно есть", () => {
+	assert.equal(hasWindow(itemRow({ kind: "training", marks: trainMarks })), true);
+});
+
+test("rowStatus: прошедшая тренировка с фактом done и без отметки — «✓ по плану», good", () => {
+	const row = trainRow({ plan, fact: factOf("done") });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "✓ по плану", tone: "good" });
+});
+
+test("rowStatus: прошедшая тренировка due — «не заполнено»", () => {
+	const row = trainRow({ plan, fact: factOf("skipped") }, { due: true });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
+});
+
+test("rowStatus: прошедшая тренировка с отметкой «сделал» без факта — «сделал»", () => {
+	const marks = { ...trainMarks, done: { done: 1, logged_at: "2026-11-07 11:00:00" } };
+	const row = trainRow({ plan, fact: null }, { marks });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "сделал", tone: "good" });
+});
+
+test("rowStatus: будущая тренировка не ближайшая — «тренировка»", () => {
+	const row = trainRow(
+		{ plan, fact: null },
+		{ start_at: "2026-11-07T13:00:00", end_at: "2026-11-07T14:00:00" },
+	);
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "тренировка", tone: "" });
+});
+
+test("rowStatus: прошедшая тренировка без факта и отметок, не due — «тренировка»", () => {
+	const row = trainRow({ plan, fact: null });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "тренировка", tone: "" });
+});

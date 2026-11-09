@@ -66,6 +66,7 @@ const KIND_LABELS = {
 	practice: "практика",
 	rest: "отдых",
 	meal: "еда",
+	training: "тренировка",
 	checkin: "чек-ин",
 };
 
@@ -91,7 +92,7 @@ export function openedId(choice, rows) {
 // Статус прошедшего пункта с окном: красный «не заполнено», зелёная сводка или null.
 function pastStatus(row) {
 	if (row.due) return { text: "не заполнено", tone: "bad" };
-	const summary = markSummary(row.marks);
+	const summary = markSummary(row.marks, row.training?.fact);
 	return summary ? { text: summary, tone: "good" } : null;
 }
 

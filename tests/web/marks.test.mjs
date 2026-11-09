@@ -276,3 +276,187 @@ test("errorText: про пункт — текст сервера, остальн
 	assert.equal(errorText(400, "Пункт ещё не начался."), "Пункт ещё не начался.");
 	assert.equal(errorText(0, ""), "Не сохранилось, ошибка пульта (код 0).");
 });
+
+// Партия 4: имена новые — импорт внутри теста, чтобы остальные тесты файла собирались.
+const model = () => import("../../src/ai_coach/web/static/marks.js");
+
+test("tabsFor: тренировка — сделал, самочувствие, срыв", () => {
+	assert.deepEqual(tabsFor("training"), ["done", "feel", "slip"]);
+});
+
+test("zoneShares: доли в проценты Z1..Z5, нулевые зоны пропущены", async () => {
+	const { zoneShares } = await model();
+	const rows = zoneShares({ zones: [0.5, 0.3, 0.2, 0, 0] });
+	assert.deepEqual(
+		rows.map((r) => [r.name, r.percent]),
+		[
+			["Z1", 50],
+			["Z2", 30],
+			["Z3", 20],
+		],
+	);
+});
+
+test("zoneShares: проценты округляются", async () => {
+	const { zoneShares } = await model();
+	const rows = zoneShares({ zones: [0.126, 0, 0, 0, 0.874] });
+	assert.deepEqual(
+		rows.map((r) => [r.name, r.percent]),
+		[
+			["Z1", 13],
+			["Z5", 87],
+		],
+	);
+});
+
+test("zoneShares: зон нет (null) — пусто", async () => {
+	const { zoneShares } = await model();
+	assert.deepEqual(zoneShares({ zones: null }), []);
+});
+
+test("planFactRows: строки с знаком ✓ у ok и ! у warn", async () => {
+	const { planFactRows } = await model();
+	const training = {
+		fact: {
+			rows: [
+				{ label: "Длительность", plan: "45 мин", fact: "44 мин", mark: "ok" },
+				{ label: "Темп", plan: "5:30 /км - 5:00 /км", fact: "6:00 /км", mark: "warn" },
+			],
+		},
+	};
+	assert.deepEqual(planFactRows(training), [
+		{ label: "Длительность", plan: "45 мин", fact: "44 мин", mark: "ok", sign: "✓" },
+		{ label: "Темп", plan: "5:30 /км - 5:00 /км", fact: "6:00 /км", mark: "warn", sign: "!" },
+	]);
+});
+
+test("planFactRows: факта нет — пусто", async () => {
+	const { planFactRows } = await model();
+	assert.deepEqual(planFactRows({ plan: {}, fact: null }), []);
+	assert.deepEqual(planFactRows({ plan: {}, fact: { rows: [] } }), []);
+});
+
+test("stepText: тип шага словами и минуты", async () => {
+	const { stepText } = await model();
+	assert.equal(stepText({ k: "warmup", sec: 300 }), "разминка 5 мин");
+	assert.equal(stepText({ k: "cooldown", sec: 600 }), "заминка 10 мин");
+});
+
+test("stepText: название шага вместо типа", async () => {
+	const { stepText } = await model();
+	assert.equal(stepText({ k: "work", t: "Лёгкий бег", sec: 1200 }), "Лёгкий бег 20 мин");
+});
+
+test("stepText: шаг в метрах — километры", async () => {
+	const { stepText } = await model();
+	assert.match(stepText({ k: "work", m: 1000 }), /1 км/);
+});
+
+test("stepText: подходы силового — повторы и вес", async () => {
+	const { stepText } = await model();
+	const text = stepText({ k: "work", reps: 12, kg: 20 });
+	assert.match(text, /12/);
+	assert.match(text, /20 кг/);
+});
+
+const doneFact = {
+	kind: "done",
+	duration_s: 2460,
+	distance_m: 6000,
+	pace_s_km: 410,
+	avg_hr: 140.4,
+	training_load: 55.6,
+	calories: 300,
+};
+
+test("tabLabel: у тренировки done — «Итог», у практики — «Сделал»", async () => {
+	const { tabLabel } = await model();
+	assert.equal(tabLabel("training", "done"), "Итог");
+	assert.equal(tabLabel("practice", "done"), "Сделал");
+	assert.equal(tabLabel("training", "feel"), "Самочувствие");
+});
+
+test("stepRows: блок с повторами — «3 × …», название блока вместо типа", async () => {
+	const { stepRows } = await model();
+	const blocks = [
+		{ r: 1, s: [{ k: "warmup", sec: 300 }] },
+		{ r: 3, t: "Присед", s: [{ k: "work", reps: 5, kg: 60 }, { k: "rest", sec: 90 }] },
+	];
+	assert.deepEqual(stepRows(blocks), [
+		"разминка 5 мин",
+		"3 × Присед 5 × 60 кг",
+		"3 × отдых 1 мин 30 с",
+	]);
+});
+
+test("factNumbers: шесть чисел с единицами", async () => {
+	const { factNumbers } = await model();
+	assert.deepEqual(
+		factNumbers(doneFact).map((n) => [n.label, n.value]),
+		[
+			["Время", "41 мин"],
+			["Дистанция", "6.0 км"],
+			["Темп", "6:50 /км"],
+			["Пульс ср.", 140],
+			["Нагрузка", 56],
+			["Ккал", 300],
+		],
+	);
+});
+
+test("factNumbers: час и больше, пустое поле — прочерк", async () => {
+	const { factNumbers } = await model();
+	const rows = factNumbers({ ...doneFact, duration_s: 3900, avg_hr: null });
+	assert.equal(rows[0].value, "1 ч 5 мин");
+	assert.equal(rows[3].value, "—");
+});
+
+test("factNumbers: дистанция 0 — прочерк, как на сервере", async () => {
+	const { factNumbers } = await model();
+	const rows = factNumbers({ ...doneFact, distance_m: 0 });
+	assert.equal(rows[1].value, "—");
+});
+
+test("stepText: точные строки — темп бегового шага, метры, секунды, повторы, вес", async () => {
+	const { stepText } = await model();
+	assert.equal(stepText({ k: "work", m: 1000, pace: [300, 330] }), "работа 1 км 5:30 - 5:00 /км");
+	assert.equal(stepText({ k: "work", m: 1500 }), "работа 1.5 км");
+	assert.equal(stepText({ k: "work", m: 400 }), "работа 400 м");
+	assert.equal(stepText({ k: "rest", sec: 45 }), "отдых 45 с");
+	assert.equal(stepText({ k: "work", reps: 12 }), "работа 12 повт.");
+	assert.equal(stepText({ k: "work", kg: 20, sec: 30 }), "работа 30 с 20 кг");
+	assert.equal(stepText({ k: "work", reps: 5, kg: 60 }, "Присед"), "Присед 5 × 60 кг");
+});
+
+test("factNumbers: пропуск без активности — пусто", async () => {
+	const { factNumbers } = await model();
+	assert.deepEqual(factNumbers({ kind: "skipped", duration_s: null, distance_m: null }), []);
+});
+
+test("factPill: три вида по Р20", async () => {
+	const { factPill } = await model();
+	assert.deepEqual(factPill({ kind: "done" }), { text: "✓ выполнено по плану", tone: "good" });
+	assert.deepEqual(factPill({ kind: "different" }), { text: "выполнено иначе", tone: "warn" });
+	assert.deepEqual(factPill({ kind: "skipped" }), { text: "пропущено", tone: "muted" });
+});
+
+test("markSummary: факт done без отметки — «✓ по плану»", () => {
+	assert.equal(markSummary(empty, { kind: "done" }), "✓ по плану");
+});
+
+test("markSummary: факт different — «выполнено иначе», skipped — без слов", () => {
+	assert.equal(markSummary(empty, { kind: "different" }), "выполнено иначе");
+	assert.equal(markSummary(empty, { kind: "skipped" }), "");
+});
+
+test("markSummary: отметка важнее факта", () => {
+	const marks = { ...empty, done: { done: 0, logged_at: "2026-11-07 11:00:00" } };
+	assert.equal(markSummary(marks, { kind: "done" }), "пропустил");
+});
+
+test("missingText: названия через запятую, пусто — пустая строка", async () => {
+	const { missingText } = await model();
+	assert.equal(missingText({ missing: ["Присед", "Тяга"] }), "Не сделано: Присед, Тяга");
+	assert.equal(missingText({ missing: [] }), "");
+	assert.equal(missingText({ missing: null }), "");
+});

@@ -7,17 +7,19 @@ import {
 	HOURS,
 	REQUIRED,
 	TAB_FIELDS,
-	TAB_LABELS,
 	buildPayload,
 	canSave,
 	errorText,
 	foodSummary,
 	historyRows,
 	isFuture,
+	isPast,
 	markSummary,
 	remainingText,
+	tabLabel,
 	tabsFor,
 } from "./marks-model.js";
+import { fillTraining } from "./training-pane.js";
 
 export * from "./marks-model.js";
 
@@ -28,7 +30,7 @@ function el(tag, className, text) {
 	return node;
 }
 
-const state = { id: null, day: null, tab: null, future: false, forms: {}, reload: null, meal: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, training: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -193,15 +195,24 @@ function fillMeal() {
 	ui.left.textContent = remainingText(state.meal);
 }
 
+// Узел окна тренировки (шаги или факт); минутный load перерисовывает его в mountMarks.
+function trainingNode() {
+	ui.train = el("div", "fact");
+	fillTraining(ui.train, state.training, state.past);
+	return ui.train;
+}
+
 function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
 	ui.saved = null;
 	ui.left = null;
+	ui.train = null;
 	const tab = state.tab;
 	state.forms[tab] ??= {};
 	if (state.future) {
 		box.append(el("p", "hint", "Ещё не началось."));
+		if (tab === "done" && state.training) box.append(trainingNode()); // шаги плана без кнопок (Р24)
 		return;
 	}
 	if (tab === "done") {
@@ -215,6 +226,7 @@ function buildForm() {
 			});
 			line.append(button);
 		}
+		if (state.training) box.append(trainingNode());
 		box.append(errorLine, line);
 		return;
 	}
@@ -246,7 +258,7 @@ function buildTabs(kind) {
 	const tabs = ui.tabs;
 	tabs.replaceChildren();
 	for (const tab of tabsFor(kind)) {
-		const button = el("button", "tab", TAB_LABELS[tab]);
+		const button = el("button", "tab", tabLabel(kind, tab));
 		button.type = "button";
 		button.setAttribute("role", "tab");
 		button.setAttribute("aria-selected", String(tab === state.tab));
@@ -261,7 +273,7 @@ function buildTabs(kind) {
 }
 
 function buildHistory(row) {
-	ui.sub.textContent = row.due ? "не отмечено" : markSummary(row.marks);
+	ui.sub.textContent = row.due ? "не отмечено" : markSummary(row.marks, row.training?.fact);
 	ui.sub.classList.toggle("bad", Boolean(row.due));
 	ui.history.replaceChildren();
 	for (const entry of historyRows(row.marks)) ui.history.append(el("li", "", `${entry.time} · ${entry.text}`));
@@ -283,6 +295,8 @@ function startPane(row, view) {
 export function mountMarks(item, row, view) {
 	const pane = paneNode();
 	state.meal = row.meal ?? null;
+	state.training = row.training ?? null;
+	state.past = isPast(row, view.now);
 	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);
 	if (future !== state.future) {
@@ -290,6 +304,7 @@ export function mountMarks(item, row, view) {
 		buildForm();
 	}
 	if (ui.left) fillMeal();
+	if (ui.train && state.training) fillTraining(ui.train, state.training, state.past); // факт мог прийти после coach sync
 	buildHistory(row);
 	item.append(pane);
 }

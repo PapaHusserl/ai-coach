@@ -444,6 +444,148 @@ nav button[aria-selected="true"] {
 	margin: 0;
 }
 
+.fact {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.fh {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: space-between;
+}
+
+.pill {
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	font-weight: 600;
+	padding: 1px 8px;
+}
+
+.pill.good,
+.mt td.good {
+	color: var(--good);
+}
+
+.pill.warn,
+.mt td.warn {
+	color: var(--warn);
+}
+
+.pill.muted {
+	color: var(--muted);
+}
+
+.fk {
+	display: grid;
+	gap: 4px;
+	grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+}
+
+.fk div {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	display: flex;
+	flex-direction: column;
+	padding: 5px 8px;
+}
+
+.fk span {
+	color: var(--muted);
+	font-size: 10px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.fk b {
+	font-family: var(--f-mono);
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+}
+
+.mtw {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	overflow-x: auto;
+}
+
+.mt {
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+	width: 100%;
+}
+
+.mt th,
+.mt td {
+	padding: 4px 8px;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.mt th:first-child,
+.mt td:first-child {
+	text-align: left;
+	white-space: normal;
+}
+
+.mt th {
+	border-bottom: 1px solid var(--line);
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.mt td:not(:first-child) {
+	font-family: var(--f-mono);
+}
+
+.mt tbody tr + tr td {
+	border-top: 1px solid var(--line);
+}
+
+.zones {
+	border-radius: 5px;
+	display: flex;
+	gap: 1px;
+	height: 18px;
+	overflow: hidden;
+}
+
+.zones i {
+	align-items: center;
+	color: #fff;
+	display: flex;
+	font: 600 10px var(--f-mono);
+	justify-content: center;
+}
+
+.z1 {
+	background: #8aa39a;
+}
+
+.z2 {
+	background: #2f8f6a;
+}
+
+.z3 {
+	background: #c9a227;
+}
+
+.z4 {
+	background: #d9722e;
+}
+
+.z5 {
+	background: #c2412d;
+}
+
 .sr {
 	align-items: center;
 	display: grid;

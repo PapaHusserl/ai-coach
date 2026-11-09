@@ -171,8 +171,18 @@ def test_different_strength_has_missing_exercises(conn: sqlite3.Connection) -> N
     result = fact(conn, wid, D)
     assert result is not None
     assert result["kind"] == "different"
-    assert result["missing"] == ["BARBELL_BACK_SQUAT"]
+    assert result["missing"] == ["Barbell back squat"]
     assert result["duration_s"] == 2400
+
+
+def test_missing_exercises_use_spec_title_or_readable_code(conn: sqlite3.Connection) -> None:
+    wid = workout(conn, "strength", STRENGTH_SPEC)
+    codes = ["BARBELL_BENCH_PRESS", "BARBELL_BACK_SQUAT", "UNKNOWN_LIFT"]
+    details = json.dumps({"missing_exercises": codes})
+    actual(conn, wid, "different", activity_id=activity(conn), details_json=details)
+    result = fact(conn, wid, D)
+    assert result is not None
+    assert result["missing"] == ["Жим лёжа", "Barbell back squat", "UNKNOWN_LIFT"]
 
 
 def test_skipped_has_kind_and_no_numbers(conn: sqlite3.Connection) -> None:

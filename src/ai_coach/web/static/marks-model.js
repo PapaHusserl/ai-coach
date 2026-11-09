@@ -1,11 +1,15 @@
 // Пульт: модель окна отметок — чистые функции и таблицы, без DOM (тесты — tests/web/marks.test.mjs).
 // Полюса шкал — слова из coach-help/wellbeing.md (тест в tests/test_skills_help.py держит расхождение).
+// Окно тренировки (шаги, факт, зоны) — training-model.js.
+
+export * from "./training-model.js";
 
 const TABS = {
 	"task": ["rating", "feel", "slip"],
 	"focus": ["rating", "feel", "slip"],
 	"practice": ["done", "feel", "slip"],
 	"rest": ["done", "feel", "slip"],
+	"training": ["done", "feel", "slip"],
 	"meal": ["food", "feel", "slip"],
 	"checkin": ["checkin"],
 };
@@ -63,6 +67,11 @@ export function tabsFor(kind) {
 	return TABS[kind] ?? [];
 }
 
+// Подпись вкладки: у тренировки «Сделал» называется «Итог» (над ним шаги или факт).
+export function tabLabel(kind, tab) {
+	return kind === "training" && tab === "done" ? "Итог" : TAB_LABELS[tab];
+}
+
 // Прошёл ли пункт: конец не позже now (ISO-строки одного формата).
 export function isPast(row, now) {
 	return row.end_at <= now;
@@ -72,13 +81,17 @@ export function isFuture(row, now) {
 	return row.start_at > now;
 }
 
-// Краткая отметка в строке пункта: последняя оценка и «сделал / пропустил»; без них — последнее самочувствие.
-export function markSummary(marks) {
+const FACT_WORDS = { done: "✓ по плану", different: "выполнено иначе" };
+
+// Краткая отметка в строке пункта: последняя оценка, «сделал / пропустил» и факт Garmin тренировки
+// (без отметки «сделал»); без них — последнее самочувствие.
+export function markSummary(marks, fact = null) {
 	const parts = [];
 	const last = marks.ratings.at(-1);
 	if (last) parts.push(`${last.focus}/${last.fatigue}/${last.effort}`);
 	if (marks.food.length) parts.push("съел");
 	if (marks.done) parts.push(marks.done.done === 1 ? "сделал" : "пропустил");
+	else if (fact && FACT_WORDS[fact.kind]) parts.push(FACT_WORDS[fact.kind]);
 	const feel = marks.feel?.at(-1);
 	if (parts.length === 0 && feel) parts.push(`самочувствие ${feel.score}`);
 	return parts.join(" · ");
