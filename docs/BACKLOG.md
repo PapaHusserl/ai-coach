@@ -245,3 +245,19 @@ updated: 2026-11-09
 `rebuild_plan_actual` при синке пишет `skipped` плану текущего дня, хотя тренировка ещё впереди
 (`load/plan_actual.py:79`, `garmin_sync.py:271`): окно и вкладка «Тренировки» показывают «пропущено»
 до вечера (docs/plan-p3.md, Р31).
+
+## 66. Общий `el` в статике пульта
+status: idea
+priority: low
+updated: 2026-11-09
+
+`el(tag, className, text)` — шесть копий в `web/static/` (`pult`, `marks`, `training-pane`, `week-pane`, `offers-pane`,
+`marks-fields`); вынести в общий `dom.js` (docs/plan-p3.md, «Побочные находки»).
+
+## 67. Связь записи еды с вариантом блюда
+status: idea
+priority: low
+updated: 2026-11-09
+
+В `food_log` нет `offer_id`: запись «Съел вариант» не помнит свой вариант; нужна для BACKLOG 62 (docs/plan-p3.md,
+«Побочные находки»).
