@@ -224,7 +224,53 @@ def test_future_item_is_rejected(conn: sqlite3.Connection) -> None:
         save_mark(conn, payload(eid, "feel", score=3), at("09:59"))
 
 
-@pytest.mark.parametrize("kind", ["training", "sleep"])
+def test_training_done_upserts_and_unmarks(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "training", "09:00", "09:40")
+    assert save_mark(conn, payload(eid, "done", done=1), at("09:50")) is None
+    save_mark(conn, payload(eid, "done", done=0), at("09:55"))
+    [row] = list_done(conn, D, D)
+    assert (row["event_id"], row["done"]) == (eid, 0)
+    save_mark(conn, payload(eid, "done", done=None), at("10:00"))
+    assert list_done(conn, D, D) == []
+
+
+@pytest.mark.parametrize(
+    ("mark", "fields"), [("feel", {"score": 4}), ("slip", {"text": "пропустил из-за дождя"})]
+)
+def test_training_feel_and_slip_are_saved_with_event_id(
+    conn: sqlite3.Connection, mark: str, fields: dict[str, Any]
+) -> None:
+    eid = event(conn, "training", "09:00", "09:40")
+    save_mark(conn, payload(eid, mark, **fields), at("09:50"))
+    rows = list_wellbeing(conn, D, D) if mark == "feel" else list_slip(conn, D, D)
+    assert [r["event_id"] for r in rows] == [eid]
+
+
+@pytest.mark.parametrize(
+    ("mark", "fields"), [("food", {"text": "суп"}), ("rating", RATING), ("checkin", {"score": 3})]
+)
+def test_training_other_marks_are_rejected(
+    conn: sqlite3.Connection, mark: str, fields: dict[str, Any]
+) -> None:
+    eid = event(conn, "training", "09:00", "09:40")
+    with pytest.raises(MarkError) as error:
+        save_mark(conn, payload(eid, mark, **fields), at("09:50"))
+    assert str(error.value) == "У этого пункта нет такой отметки."
+
+
+def test_future_training_done_is_rejected(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "training", "09:00", "09:40")
+    with pytest.raises(MarkError, match="не начался"):
+        save_mark(conn, payload(eid, "done", done=1), at("08:59"))
+
+
+def test_marks_for_day_training_done_has_value_and_time(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "training", "09:00", "09:40")
+    save_mark(conn, payload(eid, "done", done=1), at("09:50"))
+    assert marks_for_day(conn, D)[eid]["done"] == {"done": 1, "logged_at": f"{D} 09:40:00"}
+
+
+@pytest.mark.parametrize("kind", ["sleep"])
 def test_kinds_without_window_are_rejected(conn: sqlite3.Connection, kind: str) -> None:
     eid = event(conn, kind)
     with pytest.raises(MarkError):
@@ -491,6 +537,7 @@ def test_marks_for_day_has_food_of_own_item_and_day(conn: sqlite3.Connection) ->
         {"logged_at": "2026-11-07 08:30:00", "text": "вчера", "event_id": mine},
     )
     found = marks_for_day(conn, D)
+    assert first is not None
     assert found[mine]["food"] == [
         {"id": first, "text": "омлет", "kcal": None, "logged_at": f"{D} 08:30:00"},
         {"id": first + 1, "text": "кофе", "kcal": None, "logged_at": f"{D} 08:40:00"},

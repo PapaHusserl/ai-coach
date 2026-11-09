@@ -15,6 +15,7 @@ from workload_fakes import coach_event
 
 from ai_coach.store.agenda import add_event
 from ai_coach.store.db import open_db
+from ai_coach.store.plans import add_planned_workout
 from ai_coach.web import server as server_module
 from ai_coach.web.server import lan_address, make_server
 
@@ -107,11 +108,14 @@ def post(
         conn.close()
 
 
-def add_task(db_path: Path, kind: str = "task", title: str = "Задача") -> int:
+def add_task(
+    db_path: Path, kind: str = "task", title: str = "Задача", workout_id: int | None = None
+) -> int:
     now = datetime.now()
     values = coach_event(
         kind=kind,
         title=title,
+        workout_id=workout_id,
         date=now.date().isoformat(),
         start_at=(now - timedelta(hours=1)).isoformat(timespec="seconds"),
         end_at=(now + timedelta(hours=1)).isoformat(timespec="seconds"),
@@ -259,6 +263,48 @@ def test_post_food_for_cooking_is_400_and_writes_nothing(port: int, db_path: Pat
         assert conn.execute("SELECT COUNT(*) FROM food_log").fetchone()[0] == 0
     finally:
         conn.close()
+
+
+def test_post_done_for_training_writes_done_log(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "training")
+    status, answer = post(port, mark_body(event_id, mark="done", done=1))
+    assert status == 200
+    assert json.loads(answer) == {"id": None}
+    conn = open_db(db_path)
+    try:
+        [row] = conn.execute("SELECT * FROM done_log").fetchall()
+    finally:
+        conn.close()
+    assert (row["event_id"], row["done"]) == (event_id, 1)
+
+
+def test_api_day_training_has_plan_and_null_fact(port: int, db_path: Path) -> None:
+    conn = open_db(db_path)
+    try:
+        today = datetime.now().date().isoformat()
+        wid = add_planned_workout(
+            conn,
+            {
+                "date": today,
+                "sport": "run",
+                "name": "Бег",
+                "workout_json": {
+                    "name": "Бег",
+                    "estimated_duration_secs": 1800,
+                    "steps": [{"type": "interval", "seconds": 1800}],
+                },
+            },
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    event_id = add_task(db_path, "training", workout_id=wid)
+    status, body = request(port, "/api/day")
+    [item] = json.loads(body)["items"]
+    assert status == 200
+    assert (item["id"], item["workout_id"]) == (event_id, wid)
+    assert item["training"]["plan"]["duration_min"] == 30
+    assert item["training"]["fact"] is None
 
 
 def test_post_food_for_task_is_400(port: int, db_path: Path) -> None:

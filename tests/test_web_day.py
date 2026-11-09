@@ -2,6 +2,8 @@ import sqlite3
 from datetime import date, datetime
 from typing import Any
 
+import pytest
+from test_web_training import RUN_SPEC, activity, actual, workout
 from workload_fakes import coach_event
 
 from ai_coach.profile.service import set_value
@@ -11,6 +13,7 @@ from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
 from ai_coach.web.marks import save_mark
 from ai_coach.web.repeat import moved, on_day
+from ai_coach.workouts.phone import player_payload
 
 DAY = date(2026, 11, 7)
 D = "2026-11-07"
@@ -140,8 +143,10 @@ def test_item_fields_whitelist(conn: sqlite3.Connection) -> None:
         "repeat",
         "marks",
         "due",
+        "workout_id",
     }
     assert row["note"] == "заметка"
+    assert row["workout_id"] is None
 
 
 def by_id(result: dict[str, Any], event_id: int) -> dict[str, Any]:
@@ -235,7 +240,7 @@ def test_past_unfilled_checkin_is_due_only_when_past(conn: sqlite3.Connection) -
 def test_kinds_without_window_are_never_due_and_have_empty_marks(
     conn: sqlite3.Connection,
 ) -> None:
-    ids = [item(conn, "06:00", "07:00", kind=k) for k in ("sleep", "training")]
+    ids = [item(conn, "06:00", "07:00", kind=k) for k in ("sleep",)]
     result = view(conn, "15:00")
     for event_id in ids:
         row = by_id(result, event_id)
@@ -574,3 +579,122 @@ def test_repeat_on_other_day_does_not_extend_frame(conn: sqlite3.Connection) -> 
     result = day_view(conn, date(2026, 11, 5), datetime(2026, 11, 5, 9, 30))
     assert [i["kind"] for i in result["items"]] != ["checkin"]
     assert (result["elapsed_min"], result["left_min"]) == (30, 30)
+
+
+def run_item(conn: sqlite3.Connection, start: str = "09:00", end: str = "09:40") -> tuple[int, int]:
+    wid = workout(conn)
+    return item(conn, start, end, kind="training", workout_id=wid), wid
+
+
+def test_training_item_has_workout_id(conn: sqlite3.Connection) -> None:
+    eid, wid = run_item(conn)
+    assert by_id(view(conn, "15:00"), eid)["workout_id"] == wid
+
+
+def test_training_plan_has_name_sport_duration_and_player_steps(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn)
+    plan = by_id(view(conn, "15:00"), eid)["training"]["plan"]
+    assert (plan["name"], plan["sport"], plan["duration_min"]) == ("Лёгкий бег", "run", 40)
+    assert plan["steps"] == player_payload("run", RUN_SPEC, D)["b"]
+
+
+def test_training_fact_is_none_before_sync(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn)
+    assert by_id(view(conn, "15:00"), eid)["training"]["fact"] is None
+
+
+def test_training_fact_after_sync(conn: sqlite3.Connection) -> None:
+    eid, wid = run_item(conn)
+    actual(conn, wid, activity_id=activity(conn))
+    fact = by_id(view(conn, "15:00"), eid)["training"]["fact"]
+    assert (fact["kind"], fact["duration_s"]) == ("done", 2400)
+
+
+def test_other_kinds_have_no_training_key(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "10:00")
+    assert "training" not in by_id(view(conn, "15:00"), task)
+
+
+def test_past_training_without_mark_and_fact_is_due(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn)
+    assert by_id(view(conn, "15:00"), eid)["due"] is True
+
+
+def test_future_training_is_not_due(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn, "16:00", "16:40")
+    assert by_id(view(conn, "15:00"), eid)["due"] is False
+
+
+@pytest.mark.parametrize("kind", ["done", "different"])
+def test_training_with_garmin_fact_is_not_due(conn: sqlite3.Connection, kind: str) -> None:
+    eid, wid = run_item(conn)
+    actual(conn, wid, kind, activity_id=activity(conn))
+    assert by_id(view(conn, "15:00"), eid)["due"] is False
+
+
+def test_skipped_fact_without_mark_stays_due(conn: sqlite3.Connection) -> None:
+    eid, wid = run_item(conn)
+    actual(conn, wid, "skipped")
+    row = by_id(view(conn, "15:00"), eid)
+    assert row["training"]["fact"]["kind"] == "skipped"
+    assert row["due"] is True
+
+
+@pytest.mark.parametrize("done", [1, 0])
+def test_manual_mark_clears_training_due(conn: sqlite3.Connection, done: int) -> None:
+    eid, wid = run_item(conn)
+    actual(conn, wid, "skipped")
+    save_mark(conn, mark(eid, "done", done=done), at("09:50"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), eid)["due"] is False
+
+
+def test_feel_does_not_clear_training_due(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn)
+    save_mark(conn, mark(eid, "feel", score=4), at("09:50"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), eid)["due"] is True
+
+
+def test_fact_of_another_workout_does_not_clear_due(conn: sqlite3.Connection) -> None:
+    eid, _ = run_item(conn)
+    other = workout(conn)
+    actual(conn, other, activity_id=activity(conn))
+    assert by_id(view(conn, "15:00"), eid)["due"] is True
+
+
+UNLINKED = [None, 9999]
+
+
+@pytest.mark.parametrize("workout_id", UNLINKED)
+def test_unlinked_training_has_no_training_key(
+    conn: sqlite3.Connection, workout_id: int | None
+) -> None:
+    eid = item(conn, "09:00", "09:40", kind="training", workout_id=workout_id)
+    assert "training" not in by_id(view(conn, "15:00"), eid)
+
+
+@pytest.mark.parametrize("workout_id", UNLINKED)
+def test_unlinked_past_training_is_due_until_marked(
+    conn: sqlite3.Connection, workout_id: int | None
+) -> None:
+    eid = item(conn, "09:00", "09:40", kind="training", workout_id=workout_id)
+    assert by_id(view(conn, "15:00"), eid)["due"] is True
+    save_mark(conn, mark(eid, "done", done=0), at("09:50"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), eid)["due"] is False
+
+
+@pytest.mark.parametrize("workout_id", UNLINKED)
+def test_unlinked_training_takes_done_feel_and_slip(
+    conn: sqlite3.Connection, workout_id: int | None
+) -> None:
+    eid = item(conn, "09:00", "09:40", kind="training", workout_id=workout_id)
+    save_mark(conn, mark(eid, "done", done=1), at("09:50"))
+    save_mark(conn, mark(eid, "feel", score=4), at("09:51"))
+    save_mark(conn, mark(eid, "slip", text="устал"), at("09:52"))
+    conn.commit()
+    marks = by_id(view(conn, "15:00"), eid)["marks"]
+    assert marks["done"]["done"] == 1
+    assert [f["score"] for f in marks["feel"]] == [4]
+    assert [s["text"] for s in marks["slips"]] == ["устал"]

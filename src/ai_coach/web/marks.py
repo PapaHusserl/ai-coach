@@ -24,6 +24,7 @@ ALLOWED = {
     "focus": ("rating", "feel", "slip"),
     "practice": ("done", "feel", "slip"),
     "rest": ("done", "feel", "slip"),
+    "training": ("done", "feel", "slip"),
     "meal": ("food", "feel", "slip"),
     "checkin": ("checkin",),
 }
@@ -181,16 +182,26 @@ def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any
     return found
 
 
-def due(kind: str, marks: dict[str, Any], evening: bool, past: bool, title: str = "") -> bool:
+def due(
+    kind: str,
+    marks: dict[str, Any],
+    evening: bool,
+    past: bool,
+    title: str = "",
+    fact: dict[str, Any] | None = None,
+) -> bool:
     """Прошедший заполняемый пункт без отметки (красный): task/focus - нет оценки, practice/rest -
-    нет «сделал/пропустил», meal - нет записи еды (у «Готовки» окна нет), checkin - чек-ин
-    вечера за день не сделан."""
-    if not past:
-        return False
-    if kind == "meal":
-        return title != COOKING and not marks["food"]
-    if kind in ("task", "focus"):
-        return not marks["ratings"]
-    if kind in ("practice", "rest"):
-        return marks["done"] is None
-    return kind == "checkin" and not evening
+    нет «сделал/пропустил», training - то же и нет факта Garmin done/different (Р3), meal - нет
+    записи еды (у «Готовки» окна нет), checkin - чек-ин вечера за день не сделан."""
+    no_done = marks["done"] is None
+    no_rating = not marks["ratings"]
+    missing = {
+        "task": no_rating,
+        "focus": no_rating,
+        "practice": no_done,
+        "rest": no_done,
+        "training": no_done and (fact is None or fact["kind"] == "skipped"),
+        "meal": title != COOKING and not marks["food"],
+        "checkin": not evening,
+    }
+    return past and missing.get(kind, False)
