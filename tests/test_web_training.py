@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from typing import Any
 
@@ -6,7 +7,7 @@ import pytest
 
 from ai_coach.store.garmin_data import upsert_activity
 from ai_coach.store.plans import add_plan_actual, add_planned_workout, get_planned_workout
-from ai_coach.web.training import fact, plan_steps
+from ai_coach.web.training import fact, plan_steps, plan_view
 from ai_coach.workouts.phone import player_payload
 
 D = "2026-11-07"
@@ -430,3 +431,80 @@ def test_load_rows_have_tss_ctl_atl(conn: sqlite3.Connection) -> None:
     heart_data(conn)
     row = load_of(conn)["rows"][-1]
     assert {"date", "tss", "ctl", "atl"} <= set(row)
+
+
+# Выжившие мутанты П3: края и пустые значения.
+def test_plan_steps_accept_spec_already_parsed_and_as_json_text() -> None:
+    parsed = {"sport": "run", "date": D, "workout_json": RUN_SPEC}
+    as_text = {**parsed, "workout_json": json.dumps(RUN_SPEC)}
+    assert plan_steps(parsed) == plan_steps(as_text) == player_payload("run", RUN_SPEC, D)["b"]
+
+
+def test_plan_view_without_estimate_has_no_duration() -> None:
+    spec = {k: v for k, v in RUN_SPEC.items() if k != "estimated_duration_secs"}
+    view = plan_view({"sport": "run", "date": D, "name": "Бег", "workout_json": spec})
+    assert view["duration_min"] is None
+
+
+def test_plan_view_duration_is_rounded_minutes() -> None:
+    spec = {**RUN_SPEC, "estimated_duration_secs": 2450}
+    view = plan_view({"sport": "run", "date": D, "name": "Бег", "workout_json": spec})
+    assert view["duration_min"] == 41
+
+
+def test_missing_codes_of_spec_without_exercises_stay_as_they_are(
+    conn: sqlite3.Connection,
+) -> None:
+    wid = workout(conn)
+    details = json.dumps({"missing_exercises": ["SOME_CODE"]})
+    actual(conn, wid, "different", activity_id=activity(conn), details_json=details)
+    result = fact(conn, wid, D)
+    assert result is not None
+    assert result["missing"] == ["SOME_CODE"]
+
+
+def test_zones_with_one_second_in_total_are_shares(conn: sqlite3.Connection) -> None:
+    raw = {f"hrTimeInZone_{n}": (1 if n == 2 else 0) for n in range(1, 6)}
+    assert done_fact(conn, raw_json=raw)["zones"] == [0, 1, 0, 0, 0]
+
+
+def test_pace_with_one_meter_of_distance_is_computed(conn: sqlite3.Connection) -> None:
+    assert done_fact(conn, distance_m=1.0)["pace_s_km"] == pytest.approx(2_400_000)
+
+
+def test_source_names_sync_date_only(conn: sqlite3.Connection) -> None:
+    assert re.fullmatch(r"Garmin, синхронизация \d{4}-\d{2}-\d{2}", done_fact(conn)["source"])
+
+
+def test_skipped_fact_has_empty_rows_and_no_missing(conn: sqlite3.Connection) -> None:
+    wid = workout(conn)
+    actual(conn, wid, "skipped")
+    result = fact(conn, wid, D)
+    assert result is not None
+    assert result["rows"] == []
+    assert result["missing"] is None
+
+
+def test_skipped_fact_keeps_pace_and_zones_keys_as_null(conn: sqlite3.Connection) -> None:
+    wid = workout(conn)
+    actual(conn, wid, "skipped")
+    result = fact(conn, wid, D)
+    assert result is not None
+    assert result["pace_s_km"] is None
+    assert result["zones"] is None
+
+
+def test_week_planned_on_monday_and_sunday_are_included(conn: sqlite3.Connection) -> None:
+    planned_on(conn, "2026-11-09", name="Пн")
+    planned_on(conn, "2026-11-15", name="Вс")
+    days = week_of(conn)["days"]
+    assert [p["name"] for p in days[0]["planned"]] == ["Пн"]
+    assert [p["name"] for p in days[6]["planned"]] == ["Вс"]
+
+
+def test_week_activities_on_monday_and_sunday_are_included(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, start_time_local="2026-11-09 07:00:00", name="Пн-бег")
+    activity(conn, 2, start_time_local="2026-11-15 22:00:00", name="Вс-бег")
+    days = week_of(conn)["days"]
+    assert [f["name"] for f in days[0]["fact"]] == ["Пн-бег"]
+    assert [f["name"] for f in days[6]["fact"]] == ["Вс-бег"]

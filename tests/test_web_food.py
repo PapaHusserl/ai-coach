@@ -128,3 +128,15 @@ def test_offer_can_be_taken_twice_as_two_entries(conn: sqlite3.Connection) -> No
     save_food(conn, {"offer_id": offer_id}, BASE)
     save_food(conn, {"offer_id": offer_id}, {**BASE, "logged_at": f"{D} 09:10:00"})
     assert len(list_food(conn, D, D)) == 2
+
+
+def test_missing_offer_error_text_goes_to_user(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as info:
+        save_food(conn, {"offer_id": 999}, BASE)
+    assert str(info.value) == "Такого варианта у пункта нет."
+
+
+def test_text_and_offer_error_text_goes_to_user(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as info:
+        save_food(conn, {"offer_id": put_offer(conn), "text": "борщ"}, BASE)
+    assert str(info.value) == "Нужен либо текст, либо вариант."

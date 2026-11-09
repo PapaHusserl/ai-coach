@@ -221,3 +221,80 @@ def test_cancel_keeps_other_item_and_other_day(conn: sqlite3.Connection) -> None
 def test_cancel_without_offers_does_not_fail(conn: sqlite3.Connection) -> None:
     event_id = meal_event(conn)
     call(conn, "cancel_meal_offers", event_id=event_id, date=DAY)
+
+
+def test_create_without_groups_key_stores_empty_groups(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    no_groups = {k: v for k, v in offer().items() if k != "groups"}
+    create(conn, event_id, [no_groups])
+    [row] = stored(conn, event_id)
+    assert json.loads(row["groups_json"]) == []
+
+
+def test_create_missing_event_error_names_the_item(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError, match=r"Пункта еды 999 нет\."):
+        create(conn, 999, [offer()])
+
+
+def test_create_other_date_error_names_both_dates(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    with pytest.raises(ToolError, match=rf"стоит на {DAY}, а не на 2026-11-08"):
+        create(conn, event_id, [offer()], day="2026-11-08")
+
+
+def test_create_too_many_offers_error_names_limit(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    with pytest.raises(ToolError, match=r"Вариантов от 1 до 5\."):
+        create(conn, event_id, [offer(f"В{n}") for n in range(6)])
+
+
+def test_cancel_returns_event_id_and_date(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    assert call(conn, "cancel_meal_offers", event_id=event_id, date=DAY) == {
+        "event_id": event_id,
+        "date": DAY,
+    }
+
+
+def refusal(conn: sqlite3.Connection, offers: list[dict]) -> str:
+    event_id = meal_event(conn)
+    with pytest.raises(ToolError) as info:
+        create(conn, event_id, offers)
+    return str(info.value)
+
+
+def test_refusal_text_for_empty_name_is_exact(conn: sqlite3.Connection) -> None:
+    assert refusal(conn, [offer("")]).endswith(": У варианта нужно имя (name).")
+
+
+def test_refusal_text_for_items_count_is_exact(conn: sqlite3.Connection) -> None:
+    text = refusal(conn, [offer(items=[])])
+    assert text.endswith(": В варианте от 1 до 12 строк состава (items).")
+
+
+def test_refusal_text_for_empty_what_is_exact(conn: sqlite3.Connection) -> None:
+    text = refusal(conn, [offer(items=[{**line("яйца", 1), "what": ""}])])
+    assert text.endswith(": У строки состава нужно what.")
+
+
+def test_refusal_text_for_missing_qty_is_exact(conn: sqlite3.Connection) -> None:
+    text = refusal(conn, [offer(items=[{**line("яйца", 1), "qty": 5}])])
+    assert text.endswith(": У строки состава нужно qty текстом.")
+
+
+def test_refusal_text_for_nutrition_range_is_exact(conn: sqlite3.Connection) -> None:
+    text = refusal(conn, [offer(items=[line("яйца", -1)])])
+    assert text.endswith(": КБЖУ строки: ккал и граммы от 0 до 10000.")
+
+
+def test_nutrition_bounds_zero_and_ten_thousand_are_accepted(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    edge = [line("ноль", 0, 0, 0, 0), line("предел", 10000, 10000, 10000, 10000)]
+    create(conn, event_id, [offer(items=edge)])
+    assert len(stored(conn, event_id)) == 1
+
+
+def test_create_returns_event_id_date_and_count(conn: sqlite3.Connection) -> None:
+    event_id = meal_event(conn)
+    result = create(conn, event_id, [offer("А"), offer("Б")])
+    assert result == {"event_id": event_id, "date": DAY, "offers": 2}

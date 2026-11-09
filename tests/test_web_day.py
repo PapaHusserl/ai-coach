@@ -783,3 +783,20 @@ def test_unlinked_training_takes_done_feel_and_slip(
     assert marks["done"]["done"] == 1
     assert [f["score"] for f in marks["feel"]] == [4]
     assert [s["text"] for s in marks["slips"]] == ["устал"]
+
+
+def test_meal_remaining_counts_calories_burned_that_day(conn: sqlite3.Connection) -> None:
+    for key, value in [
+        ("sex", "m"),
+        ("birth_date", "1990-01-15"),
+        ("height_cm", "180"),
+        ("activity_level", "light"),
+    ]:
+        set_value(conn, key, value, "manual", "2026-10-01T10:00:00")
+    add_weight(conn, {"measured_at": "2026-11-06 07:00:00", "weight_kg": 80.0})
+    breakfast = meal(conn)
+    conn.commit()
+    before = by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]
+    activity(conn, 1, calories=600.0)
+    after = by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]
+    assert after["kcal"] > before["kcal"]

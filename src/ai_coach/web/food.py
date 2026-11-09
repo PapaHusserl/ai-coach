@@ -29,7 +29,7 @@ def _offer_entry(conn: sqlite3.Connection, offer_id: Any, base: dict[str, Any]) 
         raise MarkError("Такого варианта у пункта нет.")
     lines = ", ".join(f"{i['what']} {i['qty']}" for i in offer["items"])
     values = {k: offer[k] for k in ("kcal", "protein_g", "fat_g", "carbs_g")}
-    text = f"{offer['name']}: {lines}" if lines else offer["name"]
+    text = f"{offer['name']}: {lines}"
     food_id = add_food(
         conn,
         {"event_id": base["event_id"], "logged_at": base["logged_at"], "text": text} | values,
