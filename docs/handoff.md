@@ -58,5 +58,5 @@
 ## Ссылки
 
 - Документ шага: [plan-p3.md](plan-p3.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: ХЭШ (закрытие П3); metrics.py на коммите: СУММА $ (с 2026-11-08T16:40Z). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 0fe728e (закрытие П3); metrics.py на коммите: 86,41 $ (с 2026-11-08T16:40Z). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-09-p3.md`.
