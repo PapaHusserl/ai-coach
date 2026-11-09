@@ -87,7 +87,8 @@ class CalendarWriter:
             raise CalendarError(f"событие не записано: {type(e).__name__}") from None
 
     def move(self, uid: str, start_at: str, end_at: str) -> None:
-        """Переносит неповторяющееся событие календаря коуча по eventIdentifier на новое время."""
+        """Переносит неповторяющееся событие календаря коуча по eventIdentifier на новое время
+        и меняет длительность (ставит оба конца)."""
         event_kit, foundation, store, calendar = self._open()
         try:
             item = store.eventWithIdentifier_(uid)

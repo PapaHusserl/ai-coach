@@ -568,6 +568,92 @@ def test_commit_error_after_move_reports_uid(conn: sqlite3.Connection) -> None:
     assert len(writer.moved) == 1
 
 
+def test_shifted_with_end_at_changes_duration(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import shifted
+
+    row = get_event(conn, stored(conn))
+    assert row is not None
+    result = shifted(conn, row, "2026-10-10T10:00", TODAY, end_at="2026-10-10T13:30")
+    assert result == {
+        "start_at": "2026-10-10T10:00:00",
+        "end_at": "2026-10-10T13:30:00",
+        "date": "2026-10-10",
+    }
+
+
+def test_shifted_without_end_at_keeps_duration(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import shifted
+
+    row = get_event(conn, stored(conn))
+    assert row is not None
+    assert shifted(conn, row, NEW_START, TODAY)["end_at"] == "2026-10-12T17:30:00"
+
+
+@pytest.mark.parametrize("end_at", ["2026-10-10T10:00", "2026-10-10T09:00"])
+def test_shifted_end_not_after_start_is_error(conn: sqlite3.Connection, end_at: str) -> None:
+    from ai_coach.agenda.service import shifted
+
+    row = get_event(conn, stored(conn))
+    assert row is not None
+    with pytest.raises(AgendaError):
+        shifted(conn, row, "2026-10-10T10:00", TODAY, end_at=end_at)
+
+
+def test_shifted_end_over_24_hours_is_error(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import shifted
+
+    row = get_event(conn, stored(conn))
+    assert row is not None
+    with pytest.raises(AgendaError):
+        shifted(conn, row, "2026-10-10T10:00", TODAY, end_at="2026-10-11T10:01")
+
+
+def test_shifted_repeating_with_end_at_is_refused(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import shifted
+
+    row = get_event(conn, stored(conn, **CHECKIN))
+    assert row is not None
+    with pytest.raises(AgendaError, match="повторяющееся"):
+        shifted(conn, row, NEW_START, TODAY, end_at="2026-10-12T17:30")
+
+
+def test_move_draft_with_end_at_resizes_and_saves(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    result = move_draft(conn, event_id, "2026-10-10T10:00", TODAY, end_at="2026-10-10T11:00")
+    assert result["end_at"] == "2026-10-10T11:00:00"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["start_at"], row["end_at"]) == ("2026-10-10T10:00:00", "2026-10-10T11:00:00")
+
+
+def test_move_draft_end_before_start_is_error_and_keeps_row(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    before = get_event(conn, event_id)
+    with pytest.raises(AgendaError):
+        move_draft(conn, event_id, "2026-10-10T10:00", TODAY, end_at="2026-10-10T09:00")
+    assert get_event(conn, event_id) == before
+
+
+def test_move_event_with_end_at_gives_writer_new_end(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u5")
+    writer = FakeCalendarWriter()
+    result = move_event(
+        conn, event_id, "2026-10-10T10:00", writer, TODAY, end_at="2026-10-10T14:00"
+    )
+    assert writer.moved == [("u5", "2026-10-10T10:00:00", "2026-10-10T14:00:00")]
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["end_at"] == result["end_at"] == "2026-10-10T14:00:00"
+
+
+def test_move_event_end_before_start_does_not_touch_writer(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, status="written", calendar_uid="u5")
+    writer = FakeCalendarWriter()
+    with pytest.raises(AgendaError):
+        move_event(conn, event_id, "2026-10-10T10:00", writer, TODAY, end_at="2026-10-10T10:00")
+    assert writer.moved == []
+
+
 def test_unknown_kind_message_names_kind(conn: sqlite3.Connection) -> None:
     with pytest.raises(AgendaError, match=r"kind должен быть из .*meeting"):
         check(conn, kind="meeting")

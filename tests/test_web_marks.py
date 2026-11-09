@@ -200,6 +200,11 @@ def test_event_id_must_be_int(conn: sqlite3.Connection) -> None:
         save_mark(conn, payload("1", "feel", score=3), at("10:30"))  # type: ignore[arg-type]
 
 
+def test_huge_event_id_is_not_found(conn: sqlite3.Connection) -> None:
+    with pytest.raises(NoEvent):
+        save_mark(conn, payload(2**63, "feel", score=3), at("10:30"))
+
+
 def test_date_must_be_a_date(conn: sqlite3.Connection) -> None:
     eid = event(conn)
     bad = {**payload(eid, "feel", score=3), "date": "вчера"}

@@ -29,6 +29,7 @@ ALLOWED = {
     "checkin": ("checkin",),
 }
 COOKING = "Готовка"  # пункт meal из agenda/day_plan.py: окна нет, красным не бывает
+MAX_ID = 2**63 - 1  # предел INTEGER sqlite
 MIN_SCORE = 1
 MAX_SCORE = 5
 MAX_HOURS = 24  # как cli/main.py MAX_HOURS
@@ -71,7 +72,9 @@ def _text(payload: dict[str, Any], required: bool = False) -> str:
 def _event(conn: sqlite3.Connection, payload: dict[str, Any]) -> tuple[dict[str, Any], date]:
     """Живой пункт и день: повтор - только в свой день."""
     event_id = payload.get("event_id")
-    row = get_event(conn, event_id) if isinstance(event_id, int) else None
+    row = None
+    if isinstance(event_id, int) and abs(event_id) <= MAX_ID:
+        row = get_event(conn, event_id)
     if row is None or row["status"] not in ACTIVE:
         raise NoEvent("Пункта нет.")
     try:

@@ -218,6 +218,75 @@ def test_post_other_path_is_404(port: int) -> None:
     assert post(port, {}, path="/api/day")[0] == 404
 
 
+def test_post_unknown_api_path_is_404(port: int) -> None:
+    assert post(port, {}, path="/api/nothing")[0] == 404
+
+
+def event_body(event_id: int, **fields: Any) -> dict[str, Any]:
+    day = datetime.now().date().isoformat()
+    return {"action": "move", "id": event_id, "date": day} | fields
+
+
+def test_post_event_without_origin_is_403_and_moves_nothing(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    start = (datetime.now() + timedelta(days=1)).replace(microsecond=0).isoformat()
+    status, _ = post(port, event_body(event_id, start_at=start), path="/api/event", origin=None)
+    assert status == 403
+    conn = open_db(db_path)
+    try:
+        row = conn.execute("SELECT start_at FROM coach_events WHERE id = ?", (event_id,)).fetchone()
+    finally:
+        conn.close()
+    assert row[0] != start
+
+
+def test_post_event_move_draft_moves_it_and_answers_times(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    start = (datetime.now() + timedelta(days=1)).replace(microsecond=0)
+    status, answer = post(port, event_body(event_id, start_at=start.isoformat()), path="/api/event")
+    assert status == 200
+    reply = json.loads(answer)
+    assert reply["start_at"] == start.isoformat()
+    assert reply["date"] == start.date().isoformat()
+    conn = open_db(db_path)
+    try:
+        row = conn.execute("SELECT start_at FROM coach_events WHERE id = ?", (event_id,)).fetchone()
+    finally:
+        conn.close()
+    assert row[0] == start.isoformat()
+
+
+def test_post_event_resize_changes_end(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    conn = open_db(db_path)
+    try:
+        row = conn.execute("SELECT start_at FROM coach_events WHERE id = ?", (event_id,)).fetchone()
+    finally:
+        conn.close()
+    end = (datetime.fromisoformat(row[0]) + timedelta(minutes=45)).isoformat()
+    status, answer = post(
+        port, event_body(event_id, action="resize", end_at=end), path="/api/event"
+    )
+    assert status == 200
+    assert json.loads(answer)["end_at"] == end
+
+
+def test_post_event_error_is_400_with_text(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path)
+    status, answer = post(
+        port, event_body(event_id, action="resize", end_at="2000-01-01T00:00:00"), path="/api/event"
+    )
+    assert status == 400
+    assert answer.decode() != ""
+
+
+def test_post_event_missing_is_404(port: int) -> None:
+    start = (datetime.now() + timedelta(days=1)).replace(microsecond=0).isoformat()
+    status, answer = post(port, event_body(999, start_at=start), path="/api/event")
+    assert status == 404
+    assert answer.decode() == "События 999 нет."
+
+
 def test_post_mark_error_is_400_with_text(port: int, db_path: Path) -> None:
     event_id = add_task(db_path)
     status, answer = post(port, mark_body(event_id, mark="slip", text=""))

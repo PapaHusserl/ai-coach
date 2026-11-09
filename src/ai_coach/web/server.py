@@ -1,7 +1,7 @@
 """HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
 (неделя Пн-Вс и нагрузка вкладки «Тренировки»); пишет в базу
-только POST /api/mark (отметки пункта, Origin = Host, Р1 = 2 П2), на каждый запрос своё
-соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
+только POST из таблицы POST_ROUTES (/api/mark, /api/event; Origin = Host, Р1 = 2 П2),
+на каждый запрос своё соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
 import socket
@@ -23,6 +23,7 @@ from ai_coach.web import training
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.marks import save_mark
+from ai_coach.web.plan import apply_event
 
 MAX_BODY = 64 * 1024
 STATIC_PREFIX = "/static/"
@@ -55,7 +56,7 @@ def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
     """Ответ-отказ до чтения тела: не тот путь, чужой Origin, нет или слишком большое тело."""
     origin = headers.get("Origin")
     length = headers.get("Content-Length", "")
-    if urlsplit(path).path != "/api/mark":
+    if urlsplit(path).path not in POST_ROUTES:
         return HTTPStatus.NOT_FOUND, "Не найдено."
     if origin is None or urlsplit(origin).netloc != headers.get("Host"):
         return HTTPStatus.FORBIDDEN, "Запись только со страницы пульта."
@@ -66,10 +67,20 @@ def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
     return None
 
 
-def mark_reply(
+def _mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) -> dict[str, Any]:
+    return {"id": save_mark(conn, payload, now)}
+
+
+POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], dict[str, Any]]] = {
+    "/api/mark": _mark,
+    "/api/event": apply_event,
+}
+
+
+def post_reply(
     db: str | Path | None, path: str, headers: Message, rfile: BufferedIOBase
 ) -> tuple[int, str]:
-    """POST /api/mark: (статус, тело ответа). Пишет отметку пункта в базу."""
+    """POST по таблице POST_ROUTES: (статус, тело ответа). Общая проверка и разбор JSON."""
     refusal = _refusal(path, headers)
     if refusal:
         return refusal
@@ -82,13 +93,14 @@ def mark_reply(
     conn = open_db(db)
     try:
         with conn:
-            mark_id = save_mark(conn, cast(dict[str, Any], payload), datetime.now())
+            route = POST_ROUTES[urlsplit(path).path]
+            reply = route(conn, cast(dict[str, Any], payload), datetime.now())
     except MarkError as error:
         status = HTTPStatus.NOT_FOUND if isinstance(error, NoEvent) else HTTPStatus.BAD_REQUEST
         return status, str(error)
     finally:
         conn.close()
-    return HTTPStatus.OK, json.dumps({"id": mark_id})
+    return HTTPStatus.OK, json.dumps(reply)
 
 
 def week_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, Any]:
@@ -154,7 +166,7 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
             self.text(HTTPStatus.METHOD_NOT_ALLOWED, "Только GET.")
 
         def do_POST(self) -> None:
-            status, body = mark_reply(db, self.path, self.headers, self.rfile)
+            status, body = post_reply(db, self.path, self.headers, self.rfile)
             if status != HTTPStatus.OK:
                 print(f"POST {self.path} {int(status)} {body}", file=sys.stderr)
             self.send(status, body.encode(), "application/json" if status == 200 else "text/plain")

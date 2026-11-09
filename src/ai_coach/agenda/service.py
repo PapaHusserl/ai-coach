@@ -215,29 +215,42 @@ def remove_event(conn: sqlite3.Connection, event_id: int, writer: EventWriter) -
 
 
 def shifted(
-    conn: sqlite3.Connection, row: dict[str, Any], start_at: str, today: date | None
+    conn: sqlite3.Connection,
+    row: dict[str, Any],
+    start_at: str,
+    today: date | None,
+    end_at: str | None = None,
 ) -> dict[str, Any]:
-    """Проверенные start_at, end_at, date события при новом начале; длительность сохраняется.
-    Повторяющееся не двигается."""
+    """Проверенные start_at, end_at, date события при новом начале; без end_at длительность
+    сохраняется, с end_at - меняется. Повторяющееся не двигается."""
     if row["repeat"] is not None:
         raise AgendaError(
             f"Событие {row['id']} повторяющееся: снять (event remove) и поставить заново."
         )
     start = _moment(start_at, "start_at")
-    length = datetime.fromisoformat(row["end_at"]) - datetime.fromisoformat(row["start_at"])
-    values = {**row, "start_at": start.isoformat(), "end_at": (start + length).isoformat()}
+    if end_at is None:
+        length = datetime.fromisoformat(row["end_at"]) - datetime.fromisoformat(row["start_at"])
+        end = start + length
+    else:
+        end = _moment(end_at, "end_at")
+    values = {**row, "start_at": start.isoformat(), "end_at": end.isoformat()}
     checked = validate_draft(conn, values, today)
     return {k: checked[k] for k in ("start_at", "end_at", "date")}
 
 
 def move_draft(
-    conn: sqlite3.Connection, event_id: int, start_at: str, today: date | None = None
+    conn: sqlite3.Connection,
+    event_id: int,
+    start_at: str,
+    today: date | None = None,
+    end_at: str | None = None,
 ) -> dict[str, Any]:
-    """Двигает черновик на новое начало (длительность та же), возвращает start_at, end_at, date."""
+    """Двигает черновик на новое начало (длительность та же, с end_at - новая), возвращает
+    start_at, end_at, date."""
     row = _get(conn, event_id)
     if row["status"] != "draft":
         raise AgendaError(f"Это не черновик: событие {event_id} — {row['status']}.")
-    values = shifted(conn, row, start_at, today)
+    values = shifted(conn, row, start_at, today, end_at)
     update_event(conn, event_id, values)
     return values
 
@@ -248,16 +261,17 @@ def move_event(
     start_at: str,
     writer: EventWriter,
     today: date | None = None,
+    end_at: str | None = None,
 ) -> dict[str, Any]:
     """Двигает записанное событие (сначала календарь, потом база) на новое начало, длительность
-    та же. Сбой календаря базу не меняет; сбой базы после переноса - AgendaError с uid.
-    Возвращает start_at, end_at, date. Черновик двигает move_draft."""
+    та же (с end_at - новая). Сбой календаря базу не меняет; сбой базы после переноса -
+    AgendaError с uid. Возвращает start_at, end_at, date. Черновик двигает move_draft."""
     row = _get(conn, event_id)
     if row["status"] != "written":
         raise AgendaError(
             f"Двигать можно записанное, а {event_id} — {row['status']} (черновик — move_draft)."
         )
-    values = shifted(conn, row, start_at, today)
+    values = shifted(conn, row, start_at, today, end_at)
     uid = row["calendar_uid"]
     writer.move(uid, values["start_at"], values["end_at"])
     try:
