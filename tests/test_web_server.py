@@ -596,3 +596,41 @@ def test_post_over_limit_text(port: int) -> None:
 def test_post_not_object_text(port: int) -> None:
     status, answer = post(port, b"[1]")
     assert (status, answer.decode()) == (400, "Нужен JSON-объект.")
+
+
+def test_api_week_returns_seven_days_and_load(port: int) -> None:
+    status, body = request(port, "/api/week?date=2026-11-11")
+    assert status == 200
+    data = json.loads(body)
+    assert [d["date"] for d in data["days"]] == [f"2026-11-{n:02d}" for n in range(9, 16)]
+    assert set(data["load"]) == {"rows", "error"}
+
+
+def test_api_week_empty_base_has_load_error_not_500(port: int) -> None:
+    _, body = request(port, "/api/week?date=2026-11-11")
+    load = json.loads(body)["load"]
+    assert load["rows"] is None
+    assert "пульса покоя" in load["error"]
+
+
+def test_api_week_shows_planned_workout(port: int, db_path: Path) -> None:
+    conn = open_db(db_path)
+    spec = {"name": "Бег", "estimated_duration_secs": 600, "steps": []}
+    values = {"date": "2026-11-12", "sport": "run", "name": "Бег", "workout_json": spec}
+    add_planned_workout(conn, values)
+    conn.commit()
+    conn.close()
+    _, body = request(port, "/api/week?date=2026-11-11")
+    assert json.loads(body)["days"][3]["planned"][0]["name"] == "Бег"
+
+
+def test_api_week_without_date_is_today(port: int) -> None:
+    status, body = request(port, "/api/week")
+    assert status == 200
+    assert len(json.loads(body)["days"]) == 7
+
+
+def test_api_week_garbage_date_is_400_with_text(port: int) -> None:
+    status, body = request(port, "/api/week?date=" + quote("мусор"))
+    assert status == 400
+    assert "date" in body.decode()

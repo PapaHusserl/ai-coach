@@ -286,3 +286,147 @@ def test_no_average_heart_rate_row(conn: sqlite3.Connection) -> None:
     result = done_fact(conn)
     assert result["avg_hr"] == 140
     assert row_of(result, "Пульс") is None
+
+
+# Партия 5: неделя и нагрузка. Имена week/load — через модуль, чтобы файл собирался до кода.
+WEDNESDAY = "2026-11-11"
+WEEK_DAYS = [f"2026-11-{n:02d}" for n in range(9, 16)]  # Пн 9 - Вс 15
+
+
+def planned_on(
+    conn: sqlite3.Connection, day: str, status: str = "pushed", name: str = "Бег"
+) -> int:
+    spec = {**RUN_SPEC, "name": name}
+    values = {"date": day, "sport": "run", "name": name, "status": status, "workout_json": spec}
+    workout_id = add_planned_workout(conn, values)
+    conn.commit()
+    return workout_id
+
+
+def week_of(conn: sqlite3.Connection, day: str = WEDNESDAY) -> dict[str, Any]:
+    from ai_coach.web import training
+
+    return training.week(conn, day)
+
+
+def test_week_has_seven_days_monday_to_sunday(conn: sqlite3.Connection) -> None:
+    days = week_of(conn)["days"]
+    assert [d["date"] for d in days] == WEEK_DAYS
+
+
+@pytest.mark.parametrize("day", ["2026-11-09", "2026-11-15"])
+def test_week_edges_give_the_same_week(conn: sqlite3.Connection, day: str) -> None:
+    assert [d["date"] for d in week_of(conn, day)["days"]] == WEEK_DAYS
+
+
+def test_week_empty_days_have_no_planned_and_no_fact(conn: sqlite3.Connection) -> None:
+    for entry in week_of(conn)["days"]:
+        assert entry["planned"] == []
+        assert entry["fact"] == []
+
+
+def test_week_planned_has_id_name_sport_status(conn: sqlite3.Connection) -> None:
+    wid = planned_on(conn, "2026-11-10", "approved", "Лёгкий бег")
+    entry = week_of(conn)["days"][1]
+    assert entry["planned"] == [
+        {"id": wid, "name": "Лёгкий бег", "sport": "run", "status": "approved"}
+    ]
+
+
+def test_week_keeps_statuses_of_several_workouts_of_one_day(conn: sqlite3.Connection) -> None:
+    planned_on(conn, "2026-11-12", "draft", "А")
+    planned_on(conn, "2026-11-12", "pushed", "Б")
+    planned = week_of(conn)["days"][3]["planned"]
+    assert [(p["name"], p["status"]) for p in planned] == [("А", "draft"), ("Б", "pushed")]
+
+
+def test_week_ignores_workouts_outside_the_week(conn: sqlite3.Connection) -> None:
+    planned_on(conn, "2026-11-08")
+    planned_on(conn, "2026-11-16")
+    assert all(d["planned"] == [] for d in week_of(conn)["days"])
+
+
+def test_week_fact_done_has_kind_and_activity_id(conn: sqlite3.Connection) -> None:
+    wid = planned_on(conn, "2026-11-10")
+    number = activity(conn, 7, start_time_local="2026-11-10 09:00:00")
+    actual(conn, wid, date="2026-11-10", activity_id=number)
+    facts = week_of(conn)["days"][1]["fact"]
+    assert [(f["kind"], f["activity_id"]) for f in facts] == [("done", 7)]
+    assert facts[0]["planned_id"] == wid
+
+
+def test_week_fact_skipped_has_no_activity(conn: sqlite3.Connection) -> None:
+    wid = planned_on(conn, "2026-11-10")
+    actual(conn, wid, "skipped", date="2026-11-10")
+    facts = week_of(conn)["days"][1]["fact"]
+    assert [(f["kind"], f["activity_id"]) for f in facts] == [("skipped", None)]
+
+
+def test_week_activity_without_plan_is_extra_with_its_name(conn: sqlite3.Connection) -> None:
+    activity(conn, 9, start_time_local="2026-11-13 18:00:00", name="Прогулка")
+    facts = week_of(conn)["days"][4]["fact"]
+    assert facts == [{"kind": "extra", "name": "Прогулка", "activity_id": 9, "planned_id": None}]
+
+
+def test_week_extra_row_from_plan_actual_takes_activity_name(conn: sqlite3.Connection) -> None:
+    activity(conn, 9, start_time_local="2026-11-13 18:00:00", name="Прогулка")
+    actual(conn, None, "extra", date="2026-11-13", activity_id=9)  # type: ignore[arg-type]
+    facts = week_of(conn)["days"][4]["fact"]
+    assert facts == [{"kind": "extra", "name": "Прогулка", "activity_id": 9, "planned_id": None}]
+
+
+def test_week_activity_matched_to_plan_is_not_duplicated_as_extra(conn: sqlite3.Connection) -> None:
+    wid = planned_on(conn, "2026-11-10")
+    number = activity(conn, 7, start_time_local="2026-11-10 09:00:00")
+    actual(conn, wid, date="2026-11-10", activity_id=number)
+    facts = week_of(conn)["days"][1]["fact"]
+    assert [f["kind"] for f in facts] == ["done"]
+
+
+def test_week_activity_outside_the_week_is_ignored(conn: sqlite3.Connection) -> None:
+    activity(conn, 1, start_time_local="2026-11-08 23:00:00")
+    activity(conn, 2, start_time_local="2026-11-16 00:30:00")
+    assert all(d["fact"] == [] for d in week_of(conn)["days"])
+
+
+def load_of(conn: sqlite3.Connection, day: str = WEDNESDAY) -> dict[str, Any]:
+    from ai_coach.web import training
+
+    return training.load(conn, day)
+
+
+def heart_data(conn: sqlite3.Connection, rest_day: str = "2026-11-05") -> None:
+    from ai_coach.store.garmin_data import upsert_daily_metrics, upsert_threshold
+
+    upsert_daily_metrics(conn, {"date": rest_day, "raw_json": {"sleep": {"restingHeartRate": 50}}})
+    threshold = {
+        "sport": "run",
+        "source": "garmin_lt",
+        "calendar_date": "2026-11-01",
+        "lthr": 170,
+        "raw_json": {},
+    }
+    upsert_threshold(conn, threshold)
+    conn.commit()
+
+
+def test_load_without_rest_hr_is_error_text_and_no_rows(conn: sqlite3.Connection) -> None:
+    result = load_of(conn)
+    assert result["rows"] is None
+    assert "пульса покоя" in result["error"]
+
+
+def test_load_has_fourteen_days_ending_on_the_day(conn: sqlite3.Connection) -> None:
+    heart_data(conn)
+    result = load_of(conn)
+    assert result["error"] is None
+    dates = [r["date"] for r in result["rows"]]
+    assert dates[0] == "2026-10-29"
+    assert dates[-1] == WEDNESDAY
+    assert len(dates) == 14
+
+
+def test_load_rows_have_tss_ctl_atl(conn: sqlite3.Connection) -> None:
+    heart_data(conn)
+    row = load_of(conn)["rows"][-1]
+    assert {"date", "tss", "ctl", "atl"} <= set(row)

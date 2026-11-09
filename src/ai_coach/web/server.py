@@ -1,10 +1,13 @@
-"""HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=; пишет в базу
+"""HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
+(неделя Пн-Вс и нагрузка вкладки «Тренировки»); пишет в базу
 только POST /api/mark (отметки пункта, Origin = Host, Р1 = 2 П2), на каждый запрос своё
 соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
 import socket
+import sqlite3
 import sys
+from collections.abc import Callable
 from datetime import date, datetime
 from email.message import Message
 from http import HTTPStatus
@@ -16,6 +19,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from ai_coach.store.db import open_db
+from ai_coach.web import training
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.marks import save_mark
@@ -87,6 +91,11 @@ def mark_reply(
     return HTTPStatus.OK, json.dumps({"id": mark_id})
 
 
+def week_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, Any]:
+    """GET /api/week: неделя Пн-Вс дня day и нагрузка за 14 дней до него (now не нужен)."""
+    return training.week(conn, day.isoformat()) | {"load": training.load(conn, day.isoformat())}
+
+
 def make_server(host: str, port: int, db: str | Path | None = None) -> ThreadingHTTPServer:
     """Сервер пульта; порт 0 - любой свободный. db - путь к базе (по умолчанию как у coach)."""
 
@@ -109,13 +118,16 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
             if parts.path == "/":
                 self.static("index.html")
             elif parts.path == "/api/day":
-                self.api_day(parse_qs(parts.query))
+                self.api(parse_qs(parts.query), day_view)
+            elif parts.path == "/api/week":
+                self.api(parse_qs(parts.query), week_view)
             elif parts.path.startswith(STATIC_PREFIX):
                 self.static(parts.path[len(STATIC_PREFIX) :])
             else:
                 self.text(HTTPStatus.NOT_FOUND, "Не найдено.")
 
-        def api_day(self, query: dict[str, list[str]]) -> None:
+        def api(self, query: dict[str, list[str]], build: Callable[..., dict[str, Any]]) -> None:
+            """GET с ?date= (нет - сегодня): build(conn, day, now) JSON-ом; кривая дата - 400."""
             now = datetime.now()
             try:
                 day = date.fromisoformat(query["date"][0]) if "date" in query else now.date()
@@ -124,12 +136,11 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
                 return
             conn = open_db(db)
             try:
-                view = day_view(conn, day, now)
+                view = build(conn, day, now)
             finally:
                 conn.close()
-            self.send(
-                HTTPStatus.OK, json.dumps(view, ensure_ascii=False).encode(), "application/json"
-            )
+            body = json.dumps(view, ensure_ascii=False).encode()
+            self.send(HTTPStatus.OK, body, "application/json")
 
         def static(self, name: str) -> None:
             file = resources.files("ai_coach.web").joinpath("static", name)

@@ -2,16 +2,22 @@
 
 import json
 import sqlite3
+from datetime import date, timedelta
 from typing import Any
 
-from ai_coach.store.garmin_data import get_activity
-from ai_coach.store.plans import get_planned_workout, list_plan_actual
+from mcp.server.mcpserver.exceptions import ToolError
+
+from ai_coach.mcp_server import tools
+from ai_coach.store.garmin_data import get_activity, list_activities
+from ai_coach.store.plans import get_planned_workout, list_plan_actual, list_planned_workouts
 from ai_coach.workouts.phone import exercise_title, player_payload
 
 OK_PERCENT = 90  # факт от плана, начиная с которого длительность и дистанция «ок» (Р8)
 SECONDS_IN_MINUTE = 60
 METERS_IN_KM = 1000
 ZONES = range(1, 6)
+DAYS_IN_WEEK = 7
+LOAD_DAYS = 14  # окно графика нагрузки (Р4)
 
 
 def _spec(workout: dict[str, Any]) -> dict[str, Any]:
@@ -127,3 +133,43 @@ def fact(conn: sqlite3.Connection, workout_id: int, day: str) -> dict[str, Any] 
             "missing": _missing_titles(spec, details.get("missing_exercises")),
         }
     )
+
+
+def week(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Неделя Пн-Вс дня day: по дням план (все статусы) и факт (plan_actual и вне плана)."""
+    given = date.fromisoformat(day)
+    monday = given - timedelta(days=given.weekday())
+    dates = [(monday + timedelta(days=n)).isoformat() for n in range(DAYS_IN_WEEK)]
+    first, last = dates[0], dates[-1]
+    days: dict[str, dict[str, Any]] = {d: {"date": d, "planned": [], "fact": []} for d in dates}
+    workouts = list_planned_workouts(conn, first, last)
+    for w in workouts:
+        days[w["date"]]["planned"].append({k: w[k] for k in ("id", "name", "sport", "status")})
+    activities = {a["activity_id"]: a for a in list_activities(conn, first, last)}
+    plans = {w["id"]: w["name"] for w in workouts}
+    seen: set[int | None] = set()
+    for row in list_plan_actual(conn, first, last):
+        name = plans.get(row["planned_id"]) or activities[row["activity_id"]]["name"]
+        entry = {"kind": row["kind"], "name": name, "activity_id": row["activity_id"]}
+        days[row["date"]]["fact"].append(entry | {"planned_id": row["planned_id"]})
+        seen.add(row["activity_id"])
+    for number, act in activities.items():
+        if number not in seen:
+            extra = {
+                "kind": "extra",
+                "name": act["name"],
+                "activity_id": number,
+                "planned_id": None,
+            }
+            days[act["start_time_local"][:10]]["fact"].append(extra)
+    return {"days": list(days.values())}
+
+
+def load(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Нагрузка CTL/ATL за 14 дней до day включительно; ToolError (нет пульса покоя) - текстом."""
+    start = (date.fromisoformat(day) - timedelta(days=LOAD_DAYS - 1)).isoformat()
+    try:
+        rows = tools.load(conn, start, day)["rows"]
+    except ToolError as error:
+        return {"rows": None, "error": str(error)}
+    return {"rows": rows, "error": None}

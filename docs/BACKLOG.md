@@ -236,3 +236,12 @@ updated: 2026-11-08
 
 `coach-help/day-plan.md` 7498 из 8192 Б; темы пульта просятся в `coach-help/pult.md`, иглы
 `tests/test_skills_help.py:123` переедут (docs/plan-p3.md, «Побочные находки»).
+
+## 65. «Пропущено» у сегодняшней тренировки до её времени
+status: idea
+priority: medium
+updated: 2026-11-09
+
+`rebuild_plan_actual` при синке пишет `skipped` плану текущего дня, хотя тренировка ещё впереди
+(`load/plan_actual.py:79`, `garmin_sync.py:271`): окно и вкладка «Тренировки» показывают «пропущено»
+до вечера (docs/plan-p3.md, Р31).

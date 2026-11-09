@@ -16,7 +16,10 @@ import {
 	shiftDay,
 } from "./pult-model.js";
 
+import { loadWeek } from "./week-pane.js";
+
 export * from "./pult-model.js";
+export * from "./week-model.js";
 
 const REFRESH_MS = 60000;
 
@@ -133,6 +136,8 @@ if (typeof document !== "undefined") {
 			message.hidden = true;
 			render(view);
 			document.body.dataset.day = view.date;
+			document.body.dataset.today = view.now.slice(0, 10);
+			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, view.now.slice(0, 10));
 		} catch (error) {
 			message.textContent = `Не удалось загрузить: ${error.message}`;
 			message.hidden = false;
@@ -152,6 +157,9 @@ if (typeof document !== "undefined") {
 			for (const other of tabs) other.setAttribute("aria-selected", String(other === tab));
 			for (const panel of document.querySelectorAll("[data-panel]")) {
 				panel.hidden = panel.dataset.panel !== tab.dataset.tab;
+			}
+			if (tab.dataset.tab === "train" && document.body.dataset.day) {
+				loadWeek(document.body.dataset.day, document.body.dataset.today);
 			}
 		});
 	}

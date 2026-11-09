@@ -3,7 +3,7 @@
 import { isFuture, isPast, markSummary, tabsFor } from "./marks-model.js";
 
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
-const MONTHS = [
+export const MONTHS = [
 	"января", "февраля", "марта", "апреля", "мая", "июня",
 	"июля", "августа", "сентября", "октября", "ноября", "декабря",
 ];

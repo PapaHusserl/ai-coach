@@ -357,3 +357,182 @@ test("rowStatus: прошедшая тренировка без факта и о
 	const row = trainRow({ plan, fact: null });
 	assert.deepEqual(rowStatus(row, NOW, false), { text: "тренировка", tone: "" });
 });
+
+// Партия 5: вкладка «Тренировки». Имена новые — импорт внутри теста.
+const pultModel = () => import("../../src/ai_coach/web/static/pult.js");
+const planned = (status, id = 1, name = "Бег") => ({ id, name, sport: "run", status });
+// Факт плана связан с ним по planned_id; активность вне плана ключа не имеет.
+const fact = (kind, plannedId = 1) => ({
+	kind,
+	name: "Бег",
+	activity_id: kind === "skipped" ? null : 5,
+	...(kind === "extra" ? {} : { planned_id: plannedId }),
+});
+const WEEK_DATES = ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"];
+const weekOf = (byDate) => ({
+	days: WEEK_DATES.map((date) => ({ date, planned: [], fact: [], ...byDate[date] })),
+});
+const pillTexts = (rows, index) => rows[index].items.map((item) => item.pill.text);
+const titles = (rows, index) => rows[index].items.map((item) => item.title);
+
+test("weekRows: семь строк по датам недели", async () => {
+	const { weekRows } = await pultModel();
+	assert.deepEqual(weekRows(weekOf({})).map((r) => r.date), WEEK_DATES);
+});
+
+test("weekRows: сегодня помечен только сегодняшний день", async () => {
+	const { weekRows } = await pultModel();
+	const rows = weekRows(weekOf({}), "2026-11-13");
+	assert.deepEqual(rows.map((r) => r.today), [false, false, false, false, true, false, false]);
+});
+
+test("weekRows: день без плана и факта — «отдых»", async () => {
+	const { weekRows } = await pultModel();
+	assert.deepEqual(pillTexts(weekRows(weekOf({})), 0), ["отдых"]);
+});
+
+test("weekRows: отправленная на часы — «на часах»", async () => {
+	const { weekRows } = await pultModel();
+	const rows = weekRows(weekOf({ "2026-11-12": { planned: [planned("pushed")] } }));
+	assert.deepEqual(pillTexts(rows, 3), ["на часах"]);
+});
+
+test("weekRows: черновик и утверждённая — «в плане»", async () => {
+	const { weekRows } = await pultModel();
+	const week = weekOf({
+		"2026-11-12": { planned: [planned("draft")] },
+		"2026-11-13": { planned: [planned("approved")] },
+	});
+	const rows = weekRows(week);
+	assert.deepEqual(pillTexts(rows, 3), ["в плане"]);
+	assert.deepEqual(pillTexts(rows, 4), ["в плане"]);
+});
+
+test("weekRows: отменённая тренировка не считается — «отдых»", async () => {
+	const { weekRows } = await pultModel();
+	const rows = weekRows(weekOf({ "2026-11-12": { planned: [planned("cancelled")] } }));
+	assert.deepEqual(pillTexts(rows, 3), ["отдых"]);
+});
+
+test("weekRows: факт done заменяет плашку плана — «сделано»", async () => {
+	const { weekRows } = await pultModel();
+	const day = { planned: [planned("pushed")], fact: [fact("done")] };
+	assert.deepEqual(pillTexts(weekRows(weekOf({ "2026-11-10": day })), 1), ["сделано"]);
+});
+
+test("weekRows: факт different — «выполнено иначе», тон warn", async () => {
+	const { weekRows } = await pultModel();
+	const day = { planned: [planned("pushed")], fact: [fact("different")] };
+	const rows = weekRows(weekOf({ "2026-11-10": day }));
+	assert.deepEqual(rows[1].items[0].pill, { text: "выполнено иначе", tone: "warn" });
+});
+
+test("weekRows: факт done — плашка «сделано», тон good", async () => {
+	const { weekRows } = await pultModel();
+	const day = { planned: [planned("pushed")], fact: [fact("done")] };
+	const rows = weekRows(weekOf({ "2026-11-10": day }));
+	assert.deepEqual(rows[1].items[0].pill, { text: "сделано", tone: "good" });
+});
+
+test("weekRows: подпись дня — «Пн 9»", async () => {
+	const { weekRows } = await pultModel();
+	assert.equal(weekRows(weekOf({}))[0].label, "Пн 9");
+});
+
+test("weekRows: факт skipped — «пропущено»", async () => {
+	const { weekRows } = await pultModel();
+	const day = { planned: [planned("pushed")], fact: [fact("skipped")] };
+	assert.deepEqual(pillTexts(weekRows(weekOf({ "2026-11-10": day })), 1), ["пропущено"]);
+});
+
+test("weekRows: активность без плана — «вне плана»", async () => {
+	const { weekRows } = await pultModel();
+	const day = { fact: [fact("extra")] };
+	assert.deepEqual(pillTexts(weekRows(weekOf({ "2026-11-14": day })), 5), ["вне плана"]);
+});
+
+test("weekRows: план без факта и вне плана рядом — обе плашки", async () => {
+	const { weekRows } = await pultModel();
+	const day = { planned: [planned("pushed")], fact: [fact("extra")] };
+	assert.deepEqual(pillTexts(weekRows(weekOf({ "2026-11-10": day })), 1), ["на часах", "вне плана"]);
+});
+
+test("weekRows: у каждой тренировки своя строка — имя и плашка; вне плана тоже строкой", async () => {
+	const { weekRows } = await pultModel();
+	const day = {
+		planned: [planned("pushed", 1, "Бег"), planned("pushed", 2, "Растяжка")],
+		fact: [{ ...fact("extra"), name: "Прогулка" }],
+	};
+	const rows = weekRows(weekOf({ "2026-11-10": day }));
+	assert.deepEqual(titles(rows, 1), ["Бег", "Растяжка", "Прогулка"]);
+	assert.deepEqual(pillTexts(rows, 1), ["на часах", "на часах", "вне плана"]);
+});
+
+test("weekRows: пустой день — строка «—» с плашкой «отдых»", async () => {
+	const { weekRows } = await pultModel();
+	const rows = weekRows(weekOf({}));
+	assert.deepEqual(titles(rows, 0), ["—"]);
+	assert.deepEqual(pillTexts(rows, 0), ["отдых"]);
+});
+
+test("weekRows: [черновик, отправленная], факт у второй — «в плане», «сделано»", async () => {
+	const { weekRows } = await pultModel();
+	const day = {
+		planned: [planned("draft", 1, "А"), planned("pushed", 2, "Б")],
+		fact: [fact("done", 2)],
+	};
+	const rows = weekRows(weekOf({ "2026-11-10": day }));
+	assert.deepEqual(titles(rows, 1), ["А", "Б"]);
+	assert.deepEqual(pillTexts(rows, 1), ["в плане", "сделано"]);
+});
+
+test("weekRows: два плана, факты в другом порядке — плашка по planned_id", async () => {
+	const { weekRows } = await pultModel();
+	const day = {
+		planned: [planned("pushed", 1, "А"), planned("pushed", 2, "Б")],
+		fact: [fact("done", 2), fact("skipped", 1)],
+	};
+	const rows = weekRows(weekOf({ "2026-11-10": day }));
+	assert.deepEqual(pillTexts(rows, 1), ["пропущено", "сделано"]);
+});
+
+test("weekTitle: внутри месяца — «Неделя 9–15 ноября»", async () => {
+	const { weekTitle } = await pultModel();
+	assert.equal(weekTitle(weekOf({})), "Неделя 9–15 ноября");
+});
+
+test("weekTitle: через границу месяца — «Неделя 26 октября – 1 ноября»", async () => {
+	const { weekTitle } = await pultModel();
+	const dates = ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"];
+	assert.equal(weekTitle({ days: dates.map((date) => ({ date })) }), "Неделя 26 октября – 1 ноября");
+});
+
+const BOX = { x0: 10, x1: 110, y0: 0, y1: 100, min: 0, max: 16 };
+
+test("chartPoints: первая точка на x0, последняя на x1, значения по высоте", async () => {
+	const { chartPoints } = await pultModel();
+	assert.deepEqual(chartPoints([0, 8, 16], BOX), [
+		[10, 100],
+		[60, 50],
+		[110, 0],
+	]);
+});
+
+test("chartPoints: верх рамки y0 не ноль — отсчёт от y1 вверх до y0", async () => {
+	const { chartPoints } = await pultModel();
+	assert.deepEqual(chartPoints([16, 0], { ...BOX, y0: 10 }), [
+		[10, 10],
+		[110, 100],
+	]);
+});
+
+test("chartPoints: равные шаги по x для четырёх точек", async () => {
+	const { chartPoints } = await pultModel();
+	const xs = chartPoints([1, 2, 3, 4], BOX).map((p) => p[0]);
+	assert.deepEqual(xs, [10, 10 + 100 / 3, 10 + 200 / 3, 110]);
+});
+
+test("chartPoints: пустой ряд — пусто", async () => {
+	const { chartPoints } = await pultModel();
+	assert.deepEqual(chartPoints([], BOX), []);
+});

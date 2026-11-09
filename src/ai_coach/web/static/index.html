@@ -32,7 +32,17 @@
 			<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
 			<ul id="rows" class="rows"></ul>
 		</section>
-		<section data-panel="train" class="card" hidden><p class="empty">скоро</p></section>
+		<section data-panel="train" class="cards" hidden>
+			<div class="card">
+				<div class="plan-h"><h2 id="week-title">Неделя</h2> <span class="bar-label">план / факт</span></div>
+				<div id="week" class="week"></div>
+			</div>
+			<div class="card">
+				<div class="plan-h"><h2>Нагрузка <span class="bar-label"><span class="ctl">CTL</span> · <span class="atl">ATL</span></span></h2></div>
+				<svg id="load-chart" class="chart" viewBox="0 0 320 140"></svg>
+				<p id="load-error" class="hint" hidden></p>
+			</div>
+		</section>
 		<section data-panel="food" class="card" hidden><p class="empty">скоро</p></section>
 		<section data-panel="state" class="card" hidden><p class="empty">скоро</p></section>
 	</div>

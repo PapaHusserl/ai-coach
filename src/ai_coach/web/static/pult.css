@@ -194,9 +194,94 @@ nav button[aria-selected="true"] {
 	padding: 10px 12px;
 }
 
+.plan-h {
+	align-items: baseline;
+	display: flex;
+	gap: 8px;
+}
+
 .plan-h h2 {
 	font-size: 14px;
 	margin: 0;
+}
+
+.cards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.week {
+	display: grid;
+	gap: 5px;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.week .day {
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-height: 70px;
+	font-size: 11px;
+	min-width: 0;
+	padding: 6px;
+}
+
+.week .day.today {
+	border-color: var(--accent);
+}
+
+.week .day b {
+	color: var(--muted);
+	font-size: 10px;
+	text-transform: uppercase;
+}
+
+.week .pill {
+	align-self: flex-start;
+}
+
+.chart {
+	display: block;
+	font: 10px var(--f-mono);
+	height: auto;
+	width: 100%;
+}
+
+.chart text {
+	fill: var(--muted);
+}
+
+.chart .ctl {
+	stroke: var(--accent);
+}
+
+.chart .atl {
+	stroke: var(--warn);
+}
+
+.chart circle.ctl {
+	fill: var(--accent);
+}
+
+.chart circle.atl {
+	fill: var(--warn);
+}
+
+.plan-h .ctl {
+	color: var(--accent);
+}
+
+.plan-h .atl {
+	color: var(--warn);
+}
+
+@media (max-width: 640px) {
+	.week {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .bar {
@@ -461,6 +546,7 @@ nav button[aria-selected="true"] {
 .pill {
 	border: 1px solid var(--line);
 	border-radius: 10px;
+	font-size: 10px;
 	font-weight: 600;
 	padding: 1px 8px;
 }
