@@ -42,5 +42,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n27.md](plan-n27.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие Н27); metrics.py: 5,05 $. Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 6f06d64 (закрытие Н27); metrics.py: 5,05 $. Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-11-n27.md`.
