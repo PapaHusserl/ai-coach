@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fake_clock import freeze
 from typer.testing import CliRunner
 from workload_fakes import FakeCalendarWriter, FlakyCommitConn, coach_event, write_config
 
@@ -197,7 +198,10 @@ def test_cancel_written_fails(isolated: Path) -> None:
     assert state(isolated, event_id)["status"] == "written"
 
 
-def test_list_shows_events_with_ids_and_statuses(isolated: Path) -> None:
+def test_list_shows_events_with_ids_and_statuses(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, "2026-10-10 12:00:00")
     first = seed(isolated, title="Первая синтетика")
     second = seed(isolated, title="Вторая синтетика", status="written", calendar_uid="u1")
     result = run("list")

@@ -244,16 +244,6 @@ updated: 2026-11-10
 строже ко всему, кроме прямого отдыха. Тренеру нужно этим пользоваться: решения о встречах и тяжёлых делах приносить
 утром, вечером предлагать только отдых. Ресёрч — docs/research-morning-decisions.md.
 
-## 70. Тест списка событий зависит от сегодняшней даты
-status: idea
-priority: high
-updated: 2026-11-10
-
-`tests/test_cli_agenda.py::test_list_shows_events_with_ids_and_statuses` красный с 2026-11-10: событие из
-`coach_event` (`tests/workload_fakes.py:112`, дата 2026-10-10) вышло из окна `coach event list` «30 дней назад»
-(`cli/agenda.py:78`, `date.today()`). Найдено полным прогоном перед коммитом партии 2 П4 (Python в партии не менялся).
-Нужно зафиксировать «сегодня» в тесте или передать `--from`.
-
 ## 71. Туду в пульте: правка и перенос в календарь
 status: idea
 priority: medium
