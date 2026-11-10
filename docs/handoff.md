@@ -44,5 +44,5 @@
 ## Ссылки
 
 - Документ шага: [plan-p4.md](plan-p4.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет (закрытие П4); metrics.py на коммите: пока нет. Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 8739caa (закрытие П4); metrics.py на коммите: 114,28 $. Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-10-p4.md`.
