@@ -20,6 +20,7 @@ import {
 import { headerBusy, renderHeader } from "./header-pane.js";
 import { loadPantry, pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
+import { loadState } from "./state-pane.js";
 import { loadWeek } from "./week-pane.js";
 
 export * from "./pult-model.js";
@@ -147,6 +148,7 @@ if (typeof document !== "undefined") {
 			const today = view.now.slice(0, 10);
 			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, today);
 			if (!document.querySelector('[data-panel="food"]').hidden) loadPantry(view.date, today);
+			if (!document.querySelector('[data-panel="state"]').hidden) loadState(view.date);
 		} catch (error) {
 			message.textContent = `Не удалось загрузить: ${error.message}`;
 			message.hidden = false;
@@ -173,6 +175,7 @@ if (typeof document !== "undefined") {
 			if (tab.dataset.tab === "food" && document.body.dataset.day) {
 				loadPantry(document.body.dataset.day, document.body.dataset.today);
 			}
+			if (tab.dataset.tab === "state" && document.body.dataset.day) loadState(document.body.dataset.day);
 		});
 	}
 	document.getElementById("prev").addEventListener("click", () => move(-1));

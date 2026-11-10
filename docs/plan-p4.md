@@ -171,7 +171,7 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 | `src/ai_coach/web/day.py` | `day_view` += `"header": header_view(...)` | ~3 |
 | `src/ai_coach/web/server.py` | `POST_ROUTES = {"/api/mark": save_mark-путь, "/api/event": apply_event, "/api/weight": save_weight, "/api/pantry": save_pantry}`; `/api/sync` — отдельная ветка `post_reply` (`SYNC_PATH`, `sync_reply(db)`: 202/409; «Правки по ревью», партия 3); `_refusal(path, headers)` — путь из `POST_PATHS`; `post_reply(db, path, headers, rfile)` — общий разбор JSON и ошибок, `mark_reply` переименована в него (обёртки нет); GET `/api/pantry`, `/api/state`, `/api/sync` через `api(query, build)`; `do_POST` → `post_reply`, JSON при `status < 300` | ~45 |
 | `src/ai_coach/web/static/dom.js` | новый: `el`, `svgNode` — одна копия; шесть старых копий `el` удаляются (BACKLOG 66) | ~12, −30 |
-| `src/ai_coach/web/static/chart.js` | новый: `chartPoints` (из `week-model.js`), `chartAxes`, `lineChart(svg, rows, keys)` из `week-pane.js:38-80`; `week-pane.js` импортирует | ~50, −35 |
+| `src/ai_coach/web/static/chart.js` | новый: `chartPoints` (из `week-model.js:54`), `chartAxes` (из `week-pane.js:24`; в `line`/`text` — `box` аргумента, не модульный `BOX`, см. «Правки», партия 5), `lineChart(svg, rows, keys)` из `week-pane.js:41-66`; чистые `chartSegments(values, box)` (разрыв на `null`, при Р25 = 1) и `valueRange(values)` (при Р24 = 1); `week-pane.js` импортирует | ~70, −35 |
 | `src/ai_coach/web/static/scale-model.js` | новый (чистые, тесты `node --test`): `frameOf(view)` (Р1), `minuteAt(x, width, frame)`, `snap(min, 5)`, `blockBox(row, frame)` (left/width в %), `dragOutcome(mode, row, deltaMin)` → `{start_at, end_at}` с границами (конец > начала, ≥ 5 мин), `newSpan(min, frame)` (30 мин), `locked(row)` (повтор, встреча) | ~70 |
 | `src/ai_coach/web/static/scale-pane.js` | новый (DOM): `renderScale(view)` под `#bar-label`; Pointer Events (`pointerdown` → `setPointerCapture`, порог 4 px, `pointermove` → подсказка времени, `pointerup` → `POST /api/event`); правый край 12 px (у блоков уже 36 px — правая треть) — `resize`; клик в пустоту — форма нового пункта (Р5); при ошибке — текст под шкалой (П2 Р11), блок на место; `dragging` — таймер `pult.js` не перерисовывает | ~130 |
 | `src/ai_coach/web/static/header-pane.js` | новый: показатели, вес («записать» → поле + «OK»), «Обновить» → `POST /api/sync`, опрос `/api/sync` раз в 5 с пока `running`, затем `load()`; `headerBusy()` для `typing()` | ~55 |
@@ -179,7 +179,7 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 | `src/ai_coach/store/journal.py`, `src/ai_coach/cli/journal.py` | `MIN_WEIGHT_KG`, `MAX_WEIGHT_KG` переезжают из `cli/journal.py:39-40` в `store/journal.py`, CLI импортирует их (имена в `cli.journal` остаются; `grep -rn MIN_WEIGHT_KG tests/` — пусто) | ~4 |
 | `src/ai_coach/web/static/pantry-model.js`, `pantry-pane.js` | новые: `stepFor(unit)` (Р6), `parseDelta("+200" \| "-50" \| "120")` → `{op, qty}`, `pantryRows(view, today)` → `[{item, qty, unit, step, until, state, spoil}]` («Правки по ревью», партия 4); DOM — таблица «Продукт · Остаток · Годен до», кнопки «−»/«+», поле, «Списать просроченное», форма добавления, блок КБЖУ (Р7); `loadPantry(day, today)` и `pantryBusy()` — как `loadWeek`/`headerBusy` | ~45 + ~110 |
 | `src/ai_coach/web/static/toast.js`, `post.js` | новые (партия 4, отступления кабана — «Правки по ревью»): `toast(text)` — узел и таймер из `marks.js:48` без смены поведения (третий потребитель, предложение из партии 3); `postJson(url, payload)` — из `header-pane.js`, ответ += `body` (текст 200 — `warning` кладовой); потребители — `marks.js`, `header-pane.js`, `pantry-pane.js` | 18 + 19 (`wc -l`) |
-| `src/ai_coach/web/static/state-model.js`, `state-pane.js` | новые: `SIGNAL_WORDS` (слова из справки — Р10), `signalRows(state)`, `trendSeries(state)`; DOM — список сигналов («сигналов нет»), пять графиков через `chart.js` | ~40 + ~70 |
+| `src/ai_coach/web/static/state-model.js`, `state-pane.js` | новые: `SIGNAL_WORDS` (18 кодов → слова Р10 = 1), `signalRows(state)` → `[{kind, source, word, detail}]` (порядок сервера; `word` — `SIGNAL_WORDS[kind] ?? kind`, `detail` — Р23), `trendSeries(state)` → `[{key, label, dates, values}]` (пять рядов по порядку `sleep_h, hrv, rhr, readiness, weight`; у веса `dates`/`values` — из `trends.weight`); DOM — `loadState(day, today)` как `loadPantry`, список сигналов («сигналов нет»), «нет данных: …» при `load_error`, пять графиков через `chart.js` («Правки», партия 5) | ~50 + ~70 |
 | `src/ai_coach/web/static/pult.js`, `pult-model.js` | `render` зовёт `renderScale`, `renderHeader`; вкладки `food`/`state` грузят `/api/pantry`, `/api/state` (как `train` → `loadWeek`, `:140, :161`); `typing()` += `dragging` | ~25 |
 | `src/ai_coach/web/static/index.html`, `pult.css` | `#scale` под баром; шапка — строка показателей и кнопок под `#now` (Р2); панели `food`, `state` вместо «скоро»; стили `.scale`, `.blk-ev`, `.handle`, `.tip`, `.chips`, `.pantry`, `.sig`, `.trend`; `touch-action: none`, `user-select: none` у шкалы; телефон — кнопки 44 px (П2в Р3 = 2) | ~15 + ~150 |
 | `tests/test_agenda_service.py` | `shifted`/`move_*` с `end_at`: длительность меняется; `end <= start` → ошибка; без `end_at` — как раньше (регресс). `tests/test_cli_agenda.py` не меняется: CLI без `end_at`, регресс — прогон файла | ~40 |
@@ -289,7 +289,8 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 - JS (`node --test "tests/web/*.test.mjs"` — `make player-test`, `Makefile:37`; каталог без маски падает, П2в факт 9): `frameOf`,
   `minuteAt`, `snap`, `blockBox`, `dragOutcome` (сдвиг, резайз ≥ 5 мин, конец >
   начала), `newSpan`, `locked`; `stepFor`, `parseDelta` («+200», «-50», «120», «abc» → null); `signalRows` (слова по
-  `SIGNAL_WORDS`), `trendSeries`; `chartPoints` из `chart.js`.
+  `SIGNAL_WORDS`, 18 кодов, неизвестный → код), `trendSeries` (`key`, `label`, `dates`, `values`); `chartPoints`,
+  `chartSegments`, `valueRange` из `chart.js` («Правки», партия 5).
 - Регресс области: `uv run pytest tests/test_web_*.py tests/test_cli_web.py tests/test_agenda_service.py tests/test_cli_agenda.py
   tests/test_mcp_agenda.py tests/test_pantry_service.py tests/test_cli_pantry.py tests/test_store_journal.py tests/test_skills_help.py`
   — зелёные (ожидание); `make check`.
@@ -427,6 +428,28 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   третья не влезает; клавиша «ввод» есть и на телефонной клавиатуре; при Р17 = 2 коммит партии не ждёт — если на
   чек-листе Enter окажется неочевидным, «OK» — партия 4б (~6 строк). Решает Влад. **Решено: 1** — кто решил: Влад, окно
   2026-11-10, по рекомендации папы.
+- **Р23. Строка сигнала на вкладке «Состояние»** (партия 5; Р10 = 1 задал слова «с числом `value` и порогом `limit`», форму
+  строки — нет; у двух из 18 сигналов `value`/`limit` не числа: `hrv` — статус строкой и список статусов
+  (`load/deviations.py:46`), `recovery_drop` — словари по показателям (`load/overload.py:140`)). (1) «<слово> · <value>
+  (порог <limit>)»: числа и строки как есть — «короткая ночь · 2 (порог 1)», «HRV · LOW (порог LOW, UNBALANCED, BELOW)»;
+  список — через запятую, словарь — «ключ значение» через запятую: «восстановление хуже · readiness 12, mood 1.5 (порог
+  readiness 10, mood 1, stress 1)»; источник (`sleep`, `overload`…) не показывается. (2) Только «<слово> · <value>», порог —
+  во всплывающей подсказке строки. (3) Только слово, цифры — в подсказке. Рекомендую 1 — буква Р10 = 1 («с числом и
+  порогом»), подсказок на телефоне нет (П2в Р3 = 2); грубая форма у двух редких сигналов приемлема, их словарь — тот же,
+  что видит тренер в `get_overload`/`get_deviations`. Решает Влад.
+  Решено: 1 — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
+- **Р24. Шкала Y графиков состояния** (партия 5; Р11 = 1 задал пять графиков «как CTL · ATL», у того шкала от 0 —
+  `week-pane.js:60`). (1) От минимума до максимума ряда (`null` не считаются); ряд ровный — ±1; ряд пустой — графика нет,
+  подпись «нет данных»; (2) от 0 до максимума, как CTL · ATL. Рекомендую 1 — HRV 55–65 и пульс 48–54 на шкале от 0 —
+  прямая у верха, тренд не виден; CTL · ATL от 0 — потому что это накопление. Решает Влад.
+  Решено: 1 — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
+- **Р25. Пропуски в рядах и даты веса** (партия 5; сервер отдаёт `null` за день без метрик — «Тесты», вес — только дни
+  записей за 30 дней). (1) `null` — разрыв линии (одиночное значение между пропусками — кружок); вес — точки по записям
+  равным шагом (как `chartPoints`), под осью — числа дней записей, как у недели (`chartAxes`: даты через одну). (2) `null` —
+  соединять соседей линией через пропуск; вес — так же. (3) Вес — по календарю 30 дней с `null` между записями (при (1)
+  каждая запись — одиночная точка, линии нет; осмысленно только с соединением (2)). Рекомендую 1 — разрыв честнее:
+  «данных нет» не рисуется как значение; вес 8 записей за 30 дней — равный шаг читается как ряд замеров. Решает Влад.
+  Решено: 1 — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
 
 Риски:
 - EventKit из потока HTTP-обработчика (`CalendarWriter._open` → `_request_access`, `calendar_eventkit.py:48`,
@@ -437,6 +460,9 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 - Перетаскивание на телефоне: точность 0,46 px/мин (Р1 = 1), конфликт с прокруткой; смягчение — `touch-action: none`
   только у шкалы, порог 4 px, снап.
 - Ctrl-C серверу во время синка — поток гибнет, строки «ok» в `sync_log` нет; следующий `coach sync` всё перепишет.
+- `coach-help/pult.md` (Р9 = 1): переезжающий раздел `day-plan.md:14-22` — 4562 Б (`wc -c` 2026-11-10), предел темы
+  `HELP_TOPIC_LIMIT = 8192` (`tests/test_skills_help.py:48`) — на четыре новых раздела 3630 Б (~900 Б на раздел,
+  измерено); не влезает — сокращать переезжающий текст (не разносить по темам — Р9 = 1), кабан меряет `wc -c` до коммита.
 - `pult.css` 885 → ~1035 строк, `server.py` 164 → ~210: `qlty smells` может дать новые пункты при `SMELLS_MAX = 0`
   (BACKLOG 58 уже красный) — выносы в `*-model.js`/`web/*.py` по образцу П3.
 - Пульт без пароля (П1 Р6 = 1): теперь любой в сети может двигать план, писать вес и кладовую, запускать синк —
@@ -484,9 +510,27 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   строкой под таблицей. Поля ввода кладовой лежат вне `.pane` — `typing()` их не видит (`pult.js:128`): `pantryBusy()`
   (фокус в поле или идёт POST), `typing()` += `|| pantryBusy()`, как `headerBusy()`. `toast` — третий потребитель: вынос в
   `static/toast.js` в этой партии (предложение из «Правок», партия 3; `marks.js`, `header-pane.js` импортируют оттуда).
-- `state_view.signals` — пять источников по дню просмотра: `sleep_report(day, now)`, `illness_report(day, tss, sleep)`,
-  `overload_report(day, tss)` (`tss` из `tools.load(day-13, day)`, `ToolError` → `{}` и `load_error`), `who5_report`,
-  `find_deviations`; `trends` — `list_daily_metrics`/`list_recovery_days` за 14 дней, `list_weights` за 30.
+- `state_view.signals` — пять источников по дню просмотра, порядок строк и значения `source`: `sleep` (`sleep_report(day,
+  now)`), `illness` (`illness_report(day, tss, sleep)`), `overload` (`overload_report(day, tss)`), `who5` (`who5_report(day)`),
+  `deviations` (`day_deviations(conn, day, load_row)`, `mcp_server/tools.py:234`); один вызов `tools.load(day-13, day)` даёт
+  и `tss` (`{date: tss}` по `rows`, как `snapshot.py:167`), и `load_row` (последняя строка); `ToolError` → `tss = {}`,
+  `load_row = None`, `load_error = str(error)` («В базе нет свежего … пульса покоя из сна. Сделай coach sync.»,
+  `tools.py:342`), сон, болезнь, WHO-5 и отклонения без нагрузки всё равно считаются (как `deviations()`, `tools.py:252`).
+  Отчёты импортируются в `web/state.py` по имени как атрибуты модуля (`from ai_coach.load.illness import illness_report`) —
+  тесты доебы подменяют `ai_coach.web.state.illness_report`/`overload_report` (прецедент — `syncer.load_client`, партия 3).
+  `source` пользователю не показывается (при Р23 = 1). `trends` — `list_daily_metrics`/`list_recovery_days` за 14 дней,
+  `list_weights` за 30 (граница как у шапки: `day − 30` входит, `day − 31` — нет).
+- `state-model.js` (партия 5): `SIGNAL_WORDS` — 18 кодов, слова Р10 = 1 (`short_night` «короткая ночь», `sleep_debt`
+  «долг сна», `illness_risk` «возможно, заболеваешь», `total_streak` «нагрузка три дня подряд», `evening_streak` «работа
+  по вечерам три дня», `weekend_work` «работа в выходные», `recovery_drop` «восстановление хуже», `todo_growth` «туду
+  растёт», `who5_low` «WHO-5 низкий», `who5_reduced` «WHO-5 снижен», `who5_drop` «WHO-5 упал», `wellbeing` «самочувствие»,
+  `mood` «настроение», `stress` «стресс», `readiness` «готовность», `hrv` «HRV», `sleep` «сон», `atl_over_ctl` «ATL выше
+  CTL»); неизвестный код → сам код (сервер добавил сигнал — строка не пропадает). `trendSeries` — `label` по словам Р11 = 1:
+  «сон, ч», «HRV», «пульс покоя», «готовность», «вес, кг»; `dates` у четырёх рядов — `trends.dates`, у веса — даты записей.
+- `state-pane.js`: `loadState(day, today)` по образцу `loadPantry` (вызов при открытии вкладки и из `load()` таймера у
+  видимой панели, `pult.js:148-149, :173`); полей ввода нет — `stateBusy()` не нужен; ошибка запроса — строкой под
+  сигналами (П2 Р11 = 1). Пять графиков — `lineChart` из `chart.js`, размер и оси как у CTL · ATL (320×140, `PAD`,
+  `chartAxes`), одна линия и кружок на последнем непустом значении; `.sig`, `.trend` — в обеих темах.
 - `dom.js` снимает шесть копий `el` (BACKLOG 66 закрывается партией 2); `chart.js` — вынос из `week-*` без смены поведения
   (тест `chartPoints` меняет импорт).
 - Таймер `pult.js` при `dragging` и при открытом поле веса не перерисовывает: `typing()` ловит `INPUT` только внутри
@@ -516,6 +560,10 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
    тесты доебы по Python и `stepFor`/`parseDelta` от них не зависят — кабан начинает с них); решает Влад окнами.
 9. Р22 — поле «+N/−N» только Enter, форма добавления без «Отмена» (`pantry-pane.js:rowNode`, `:addProduct`); рекомендую 1;
    коммит партии 4 не блокирует (Р17 = 2), окно — вместе с чек-листом браузера; решает Влад.
+10. Р23–Р25 — строка сигнала, шкала Y графиков, пропуски и даты веса (`state-model.js:signalRows`, `chart.js:valueRange`,
+    `:chartSegments` — новые); рекомендую 1 во всех; разблокируют `state-model.js`, `chart.js` и тесты доебы к ним
+    (`state.test.mjs` дописка); сервер `web/state.py`, `test_web_state.py`, Справка от них не зависят — кабан начинает с них;
+    решает Влад окнами. Строка allow `Bash(cat .claude/agents/coach-help/pult.md)` — Влад, до коммита партии 5 («Вне ai-coach»).
 
 ## Правки по ревью
 
@@ -785,6 +833,93 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 медиаблок `@media (max-width: 520px)` с 44 px для `.pantry button, .pf button` в `pult.css` дублировал общий блок «Телефон
 (Р3)» — кабан удалил (техническое, по ревью мамы), node 195/195, `make lint` чист. BACKLOG не заводился.
 
+Партия 5, тесты доебы (`tests/test_web_state.py` — 19 функций, `tests/web/state.test.mjs` — 8, `tests/test_web_server.py` +3,
+`tests/test_skills_help.py` +6, `tests/web/pult.test.mjs` — четыре теста `chartPoints` импортируют `chart.js`; разбор папы
+2026-11-10 по коду; техническое — решил папа, видимое сверх плана — Р23–Р25 Владу). Красные (прогон папы 2026-11-10):
+`test_web_state.py` — сборкой файла (`ModuleNotFoundError: ai_coach.web.state`), поштучно не подтверждены; серверные — 3 из 3
+`FAILED` поштучно (`-k state`: маршрута нет); справка — 6 из 6 `FAILED` поштучно (`pult.md` нет, индекс без строки);
+`state.test.mjs` 0/8, `pult.test.mjs` 4 красных из 77 (`chart.js` нет), `node --test "tests/web/*.test.mjs"` — 191/203; ruff —
+I001 на `test_web_state.py` (та же причина, что у партии 4 (5): модуля в `src` ещё нет, пройдёт сам), `ruff format` чист.
+
+- **(1) `signalRows(state)` — массив строк в порядке сервера, строка со словом, `value` и `limit`** — принято, контракт
+  задан в «Файлах»: `[{kind, source, word, detail}]`, `word = SIGNAL_WORDS[kind] ?? kind`, `detail` — по Р23 (тест доебы
+  проверяет через `JSON.stringify` — любой вариант Р23 с числами в строке его проходит). Порядок — порядок `signals` сервера
+  («Умолчания»: `sleep`, `illness`, `overload`, `who5`, `deviations`), без группировки по источнику.
+- **(2) `trendSeries(state)` → `[{key, values}]`, ключи `sleep_h, hrv, rhr, readiness, weight`, у веса — числа kg** —
+  принято; сверх того у ряда `label` (слова Р11 = 1) и `dates` (у веса — даты записей): графику нужны подписи оси, а
+  `chartAxes` читает `row.date` (`week-pane.js:33`). Тесты доебы на `key`/`values` совместимы.
+- **(3) `SIGNAL_WORDS.short_night == "короткая ночь"`, `.sleep_debt == "долг сна"`** — принято, это Р10 = 1 (Влад
+  2026-11-09); полный словарь 18 кодов — «Умолчания» (сверено по `load/*.py`: `sleep` 2, `illness` 1, `overload` 5,
+  `who5` 3, `deviations` 7 — `grep -n '"kind"'`).
+- **(4) `source` только на непустоту** — принято как минимум; значения `source` — имена отчётов («Умолчания»), доебе
+  добить `== "sleep"` у `short_night` (одна строка).
+- **Не покрыто (DOM `state-pane.js`, темы, графики)** — по правилу П2в (DOM — руками): чек-лист партии 5 в «Открыто»,
+  коммит не блокирует (Р17 = 2). Графики — чистая часть выносится в `chart.js` и тестируется: `chartSegments(values, box)` и
+  `valueRange(values)` («Файлы»; при Р24/Р25 = 1), DOM `lineChart` — руками.
+- **Сигналы `illness`/`overload`/`who5`/`deviations` не тестируются** — не принято как есть: `state_view` под mutmut
+  (`ai_coach.web.state:*`, «Тесты») — пропущенный вызов отчёта выжил бы. Доебе дописать (ниже).
+- **Иглы `tests/test_skills_help.py:123-133`** — не принято, поправить: `test_day_plan_topic_describes_pult_marks` и
+  `test_day_plan_topic_points_pult_windows_to_food_and_training` читают `day-plan.md` («дозаполн», «истори», «в сети», точная
+  строка «Еда и тренировка - окна в …»), а новый `test_day_plan_topic_points_pult_to_pult_md` требует, чтобы раздела в
+  `day-plan.md` не было — вместе не пройдут. По плану («Справка», Р9 = 1: «иглы `:123-137` читают `pult.md`») обе иглы
+  переводятся на `topic("pult.md")` (имена — `test_pult_topic_…`), `:135` (индекс) остаётся.
+- **`test_allow_has_every_topic_file` (`:65`)** — красный с появлением `pult.md` до строки allow Влада («Вне ai-coach»,
+  прецедент П3); строка нужна до коммита партии 5 — иначе `make check` красный в `main`. Напоминание — «Открытые вопросы» 10.
+- **Дубль `chartPoints` в `state.test.mjs:67`** — то же поведение, что `pult.test.mjs:514` (первая точка на `x0`, последняя
+  на `x1`) — снять, одно поведение — один тест; четыре теста в `pult.test.mjs` с импортом из `chart.js` — как написаны.
+- **`chartAxes` при переезде** — регресс в области (правило 9): `week-pane.js:29-30` рисует линии и подписи по модульному
+  `BOX`, а не по аргументу `box`; в `chart.js` графики состояния другого размера сломались бы — кабан переводит на `box`
+  (при том же `BOX` у «Тренировок» поведение не меняется). DOM — тестом не покрыть, проверка — чек-лист (е).
+- **Доебе дописать** (до кода, тем же стилем): `test_web_state.py` — отклонение дня из данных: `put(conn, DAY, 4)` → в
+  `kinds` есть `sleep` (4 ч < `SLEEP_MIN_HOURS = 6`, `load/deviations.py:11`), `source == "deviations"`; `put(conn, DAY, 7,
+  readiness=30)` → `readiness` (`READINESS_MIN = 33`); WHO-5 — `add_who5` (`store/journal.py:207`) с баллом ≤ 28 на `DAY` →
+  `who5_low`, `source == "who5"`; подмена `monkeypatch.setattr("ai_coach.web.state.illness_report", …)` и `…overload_report`
+  функциями, отдающими `{"signals": [{"kind": "illness_risk", "value": 2, "limit": 2}]}` / `{"signals": [{"kind":
+  "total_streak", …}]}` → оба в `kinds` с `source` `illness`/`overload`; порядок источников при сигналах сна и отклонений
+  одновременно (`nights(conn, 4, rhr=50)` даёт и `short_night`, и `sleep`): сначала `sleep`, потом `deviations`; `load_error`
+  содержит «coach sync» (текст `tools.py:342`); вес ровно 30 дней назад (`2026-10-08`) в `trends.weight` есть, 31
+  (`2026-10-07`) — нет (граница как у шапки, константа под mutmut). `state.test.mjs` — `Object.keys(SIGNAL_WORDS)` —
+  18 кодов из «Умолчаний» (deepEqual списка); `signalRows` с неизвестным `kind: "x"` → `word === "x"`; `trendSeries` —
+  `label` пяти рядов и `dates` веса `["2026-10-20", "2026-11-07"]`; при Р23 = 1 — `detail` для `DEBT` → `"3.5 (порог 3)"`,
+  для `hrv` со строкой и списком, для `recovery_drop` со словарями; при Р24 = 1 — `valueRange([60, 64, null])` → `{min: 60,
+  max: 64}`, `valueRange([5, 5])` → `{min: 4, max: 6}`, `valueRange([null])` → `null`; при Р25 = 1 — `chartSegments([1, null,
+  3], box)` → два отрезка по одной точке, `[1, 2, null, 3, 4]` → два по две, `[null, null]` → `[]`, x — по индексу во всём
+  ряду (как `chartPoints`). Тесты к Р23–Р25 — после окон Влада, остальные — сразу. Поштучный прогон красных — как в партии 3.
+
+Партия 5, отступления кабана (разбор папы 2026-11-10 по `git diff HEAD` от 010ae0c и новым файлам; техническое решил папа,
+видимого сверх Р23–Р25 нет):
+
+- **`loadState(day)` без `today`** (`state-pane.js:44`) — принято: флагов по дню просмотра у вкладки нет, `today` не читался
+  бы; «Файлы» (`loadState(day, today)`) — описка плана, контракт — по коду.
+- **Общий класс `value`, `.chart .value` / `circle.value`** (`pult.css:831`, `:835`) — принято: каждый из пяти графиков — свой
+  SVG с одним рядом, различать цвета внутри графика нечего; цвет у ряда один на все графики — видимое только в теме,
+  проверка — чек-лист (д).
+- **`GET_VIEWS` вместо elif-веток GET** (`server.py:127`, `:157`) — принято: тот же стиль, что `POST_ROUTES`, поведение
+  маршрутов не меняется (серверные тесты `/api/day`, `week`, `pantry`, `state`, `sync` — гарантия), снимает smell
+  `make_server`.
+- **`week-pane.js` через `lineChart` из `chart.js`** — принято, это план («Файлы»); DOM — чек-лист (е), коммит не блокирует
+  (Р17 = 2), красное — партия 5б.
+- **Одиночная точка — малый кружок, последнее значение — кружок r 3.5** — принято: одиночная точка — следствие Р25 = 1
+  (отрезок из одной точки линией не виден), кружок на последнем — план (чек-лист (в)); радиусы — внутреннее.
+- **smells 5 → 5** (замер оркестратора: ушёл `server.py:make_server`, пришёл `static/pult.js`, total 50, +3 строки) — принято
+  без резки: число не выросло, порог превышен на HEAD (BACKLOG 58, «Партии»: «smells — красный и до шага»); резка `pult.js`
+  — рефакторинг вне задачи, место ему — BACKLOG 58.
+- **pyright — 2 ошибки `web/pantry.py:25`, `:63`** (партия 4, в коммите 010ae0c) — регресс в области шага, `make check`
+  (`types`) красный → в эту партию (правило 9), не BACKLOG. `:25` — `rows: list[dict[str, Any]] = []` (тип у списка);
+  `:63` — `unit` в `PantryEntry` строкой: `unit if isinstance(unit, str) else ""` — `record` отвечает тем же `ValueError`
+  «Единица должна быть из …» → 400 (проверено разбором партии 4, `:821`), поведение не меняется. Проверка —
+  `uv run pyright` 0 ошибок, `tests/test_web_pantry*` зелёные.
+
+Партия 5, ревью мамы и аудит свекрови (круг 1):
+
+- **Справка `pult.md`, «Шкала и правка плана»: «черновик, потом `coach event write`»** (свекровь, «решить») — решил папа:
+  правка справки под Р4 = 2 (`web/plan.py:70-76` пишет сразу в календарь), не вопрос Владу. Новая формулировка: пункт
+  сразу пишется в календарь; при недоступном календаре остаётся черновиком «записан черновиком: …», записать —
+  `coach event write`.
+- **Справка `pult.md`, «Состояние»: нет `get_who5` в источниках сигналов** (мама) — кабан добавляет.
+- **Счёт тестов доебы** (мама) — пересчёт доебы по дереву: +66 (итог доебы «82» — ошибка сложения, поправила мама) — `test_web_state.py` 29, `state.test.mjs` 28,
+  `test_web_server.py` +3, `test_skills_help.py` +6 и 2 переименования; `pult.test.mjs` — 0 новых (импорт `chartPoints`).
+
 ## Открыто: стенд / аналитик
 
 - Прототип (артефакт claude.ai) папе недоступен — развилки Р1, Р2, Р5–Р7, Р11 составлены без него; Влад сверяет с
@@ -825,6 +960,15 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   (г) «Списать просроченное» у просроченной строки → строка исчезает; «+ продукт» → форма, `g · ml · pcs`, дата, «Добавить»;
   (д) блок КБЖУ: строка остатка как в окне еды, записи дня «время · текст · ккал», «Записей еды за день нет.»;
   (е) ввод в поле не сбивается таймером; телефон — кнопки 44 px, таблица не ломает вёрстку.
+- Партия 5, `state-pane.js` и `lineChart` — только руками; коммит не блокирует (Р17 = 2), красное — партия 5б; Влад
+  добавляет строку allow `pult.md` до коммита:
+  (а) вкладка «Состояние»: сигналы дня словами Р10 = 1 в форме Р23; день без сигналов — «сигналов нет»;
+  (б) база без свежего пульса покоя (или день до первого синка) — «нет данных: …» под сигналами, сигналы сна видны;
+  (в) пять графиков с подписями «сон, ч» … «вес, кг», шкала по Р24, пропуски по Р25, кружок на последнем значении;
+  (г) листание дней стрелками обновляет сигналы и графики; таймер не трогает вкладку, пока она скрыта;
+  (д) обе темы (светлая/тёмная) — линии, оси и подписи читаются; телефон — графики не вылезают за карточку;
+  (е) вкладка «Тренировки»: график CTL · ATL как до партии (`chartAxes` через `box`), окна и отметки — как раньше;
+  (ж) справка: `cat .claude/agents/coach-help/pult.md` из тренера проходит (allow), `day-plan.md` ссылается на `pult.md`.
 
 ## Смета (кабан-тесть, режим 1)
 

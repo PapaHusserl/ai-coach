@@ -19,7 +19,7 @@ def pantry_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str,
     """Остатки с флагами expired/soon на день просмотра, остаток КБЖУ и еда дня (now не нужен)."""
     iso = day.isoformat()
     late = {row["item"]: row for row in expiring(conn, iso, SOON_DAYS)}
-    rows = []
+    rows: list[dict[str, Any]] = []
     for row in stock(conn):
         found = late.get(row["item"])
         rows.append(
@@ -60,7 +60,9 @@ def save_pantry(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime
             until = payload.get("until")
             if until is not None and not isinstance(until, str):
                 raise MarkError("until: нужна дата YYYY-MM-DD.")
-            entry = PantryEntry(op, item, float(qty or 0), unit, moment, until)
+            entry = PantryEntry(
+                op, item, float(qty or 0), unit if isinstance(unit, str) else "", moment, until
+            )
             warning = record(conn, entry)
     except ValueError as error:
         raise MarkError(str(error)) from None

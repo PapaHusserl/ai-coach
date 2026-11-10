@@ -120,14 +120,14 @@ def test_wellbeing_topic_has_scale_poles() -> None:
         assert pole in text, pole
 
 
-def test_day_plan_topic_describes_pult_marks() -> None:
-    text = topic("day-plan.md")
+def test_pult_topic_describes_pult_marks() -> None:
+    text = topic("pult.md")
     for needle in ("окно", "сделал", "дозаполн", "истори", "coach web", "чек-ин", "в сети"):
         assert needle in text, needle
 
 
-def test_day_plan_topic_points_pult_windows_to_food_and_training() -> None:
-    text = topic("day-plan.md")
+def test_pult_topic_points_pult_windows_to_food_and_training() -> None:
+    text = topic("pult.md")
     assert "Еда и тренировка - окна в `food.md` и `training.md`" in text
     assert "тренировок в окнах пока нет" not in text
 
@@ -135,6 +135,43 @@ def test_day_plan_topic_points_pult_windows_to_food_and_training() -> None:
 def test_coach_help_index_mentions_pult_food_and_training() -> None:
     text = (ROOT / ".claude" / "agents" / "coach-help.md").read_text(encoding="utf-8")
     assert "еда и тренировки" in text
+
+
+def test_pult_topic_has_the_sections_of_the_pult() -> None:
+    text = topic("pult.md")
+    for heading in ("Шкала и правка плана", "Еда: кладовая и КБЖУ", "Шапка", "Состояние"):
+        assert heading in text, heading
+
+
+def test_pult_topic_has_the_moved_day_plan_section() -> None:
+    text = topic("pult.md")
+    for needle in ("coach web", "Окно пункта", "Красное и дозаполнение"):
+        assert needle in text, needle
+
+
+def test_pult_topic_describes_state_signals_and_charts() -> None:
+    text = topic("pult.md").lower()
+    for needle in ("сигнал", "график", "короткая ночь", "долг сна", "пульс покоя", "готовность"):
+        assert needle in text, needle
+
+
+def test_pult_topic_describes_weight_and_sync_button() -> None:
+    text = topic("pult.md")
+    for needle in ("вес", "обновить", "coach sync"):
+        assert needle in text, needle
+
+
+def test_day_plan_topic_points_pult_to_pult_md() -> None:
+    text = topic("day-plan.md")
+    assert "pult.md" in text
+    assert "## Пульт: план дня в браузере" not in text
+    assert "Правки плана в пульте пока нет" not in text
+
+
+def test_help_index_mentions_pult_topic_and_state() -> None:
+    text = HELP.read_text(encoding="utf-8")
+    assert "`pult.md`" in text
+    assert "правка плана, кладовая, состояние" in text
 
 
 def test_training_topic_describes_pult_window() -> None:

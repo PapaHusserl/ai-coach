@@ -26,6 +26,7 @@ from ai_coach.web.header import save_weight, sync_view
 from ai_coach.web.marks import save_mark
 from ai_coach.web.pantry import pantry_view, save_pantry
 from ai_coach.web.plan import apply_event
+from ai_coach.web.state import state_view
 
 MAX_BODY = 64 * 1024
 SYNC_PATH = "/api/sync"
@@ -123,6 +124,15 @@ def week_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, A
     return training.week(conn, day.isoformat()) | {"load": training.load(conn, day.isoformat())}
 
 
+GET_VIEWS: dict[str, Callable[..., dict[str, Any]]] = {
+    "/api/day": day_view,
+    "/api/week": week_view,
+    "/api/pantry": pantry_view,
+    "/api/state": state_view,
+    SYNC_PATH: sync_view,
+}
+
+
 def make_server(host: str, port: int, db: str | Path | None = None) -> ThreadingHTTPServer:
     """Сервер пульта; порт 0 - любой свободный. db - путь к базе (по умолчанию как у coach)."""
 
@@ -144,14 +154,8 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
             parts = urlsplit(self.path)
             if parts.path == "/":
                 self.static("index.html")
-            elif parts.path == "/api/day":
-                self.api(parse_qs(parts.query), day_view)
-            elif parts.path == "/api/week":
-                self.api(parse_qs(parts.query), week_view)
-            elif parts.path == "/api/pantry":
-                self.api(parse_qs(parts.query), pantry_view)
-            elif parts.path == SYNC_PATH:
-                self.api(parse_qs(parts.query), sync_view)
+            elif parts.path in GET_VIEWS:
+                self.api(parse_qs(parts.query), GET_VIEWS[parts.path])
             elif parts.path.startswith(STATIC_PREFIX):
                 self.static(parts.path[len(STATIC_PREFIX) :])
             else:

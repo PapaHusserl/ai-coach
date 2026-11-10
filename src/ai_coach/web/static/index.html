@@ -81,7 +81,18 @@
 				<p id="food-empty" class="empty" hidden>Записей еды за день нет.</p>
 			</div>
 		</section>
-		<section data-panel="state" class="card" hidden><p class="empty">скоро</p></section>
+		<section data-panel="state" class="cards" hidden>
+			<div class="card">
+				<div class="plan-h"><h2>Сигналы дня</h2></div>
+				<p id="state-empty" class="empty" hidden>сигналов нет</p>
+				<ul id="state-signals" class="rows"></ul>
+				<p id="state-note" class="hint" hidden></p>
+			</div>
+			<div class="card">
+				<div class="plan-h"><h2>Показатели</h2></div>
+				<div id="state-trends"></div>
+			</div>
+		</section>
 	</div>
 	<noscript><p class="error">Нужен включённый JavaScript.</p></noscript>
 	<script type="module" src="/static/pult.js"></script>

@@ -507,10 +507,12 @@ test("weekTitle: через границу месяца — «Неделя 26 о
 	assert.equal(weekTitle({ days: dates.map((date) => ({ date })) }), "Неделя 26 октября – 1 ноября");
 });
 
+// Партия 5 П4: chartPoints переехала в chart.js (общий с «Состоянием»). Импорт внутри теста.
+const chartModule = () => import("../../src/ai_coach/web/static/chart.js");
 const BOX = { x0: 10, x1: 110, y0: 0, y1: 100, min: 0, max: 16 };
 
 test("chartPoints: первая точка на x0, последняя на x1, значения по высоте", async () => {
-	const { chartPoints } = await pultModel();
+	const { chartPoints } = await chartModule();
 	assert.deepEqual(chartPoints([0, 8, 16], BOX), [
 		[10, 100],
 		[60, 50],
@@ -519,7 +521,7 @@ test("chartPoints: первая точка на x0, последняя на x1, 
 });
 
 test("chartPoints: верх рамки y0 не ноль — отсчёт от y1 вверх до y0", async () => {
-	const { chartPoints } = await pultModel();
+	const { chartPoints } = await chartModule();
 	assert.deepEqual(chartPoints([16, 0], { ...BOX, y0: 10 }), [
 		[10, 10],
 		[110, 100],
@@ -527,12 +529,12 @@ test("chartPoints: верх рамки y0 не ноль — отсчёт от y1
 });
 
 test("chartPoints: равные шаги по x для четырёх точек", async () => {
-	const { chartPoints } = await pultModel();
+	const { chartPoints } = await chartModule();
 	const xs = chartPoints([1, 2, 3, 4], BOX).map((p) => p[0]);
 	assert.deepEqual(xs, [10, 10 + 100 / 3, 10 + 200 / 3, 110]);
 });
 
 test("chartPoints: пустой ряд — пусто", async () => {
-	const { chartPoints } = await pultModel();
+	const { chartPoints } = await chartModule();
 	assert.deepEqual(chartPoints([], BOX), []);
 });

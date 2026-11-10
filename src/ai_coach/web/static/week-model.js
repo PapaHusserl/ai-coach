@@ -48,13 +48,3 @@ export function weekTitle(week) {
 	if (monthA === monthB) return `Неделя ${dayA}–${dayB} ${monthA}`;
 	return `Неделя ${dayA} ${monthA} – ${dayB} ${monthB}`;
 }
-
-// Точки графика [x, y] для ряда values в рамке box {x0, x1, y0, y1, min, max}: x равными шагами от x0 до x1,
-// y0 — верх рамки (max), y1 — низ (min).
-export function chartPoints(values, box) {
-	const steps = Math.max(values.length - 1, 1);
-	return values.map((value, index) => [
-		box.x0 + (index * (box.x1 - box.x0)) / steps,
-		box.y1 - ((value - box.min) / (box.max - box.min)) * (box.y1 - box.y0),
-	]);
-}

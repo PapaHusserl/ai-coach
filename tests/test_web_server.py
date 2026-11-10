@@ -914,3 +914,23 @@ def test_post_pantry_without_origin_is_403_and_writes_nothing(port: int, db_path
 def test_post_pantry_array_body_is_400_json_object_needed(port: int) -> None:
     status, answer = post(port, b"[1]", path="/api/pantry")
     assert (status, answer.decode()) == (400, "Нужен JSON-объект.")
+
+
+# Партия 5: вкладка «Состояние».
+def test_get_state_has_signals_trends_and_load_error(port: int) -> None:
+    status, body = request(port, "/api/state?date=2026-11-07")
+    assert status == 200
+    data = json.loads(body)
+    assert data["signals"] == []
+    assert set(data) == {"signals", "trends", "load_error"}
+    assert data["trends"]["dates"][-1] == "2026-11-07"
+
+
+def test_get_state_without_date_is_today(port: int) -> None:
+    assert request(port, "/api/state")[0] == 200
+
+
+def test_get_state_garbage_date_is_400_with_text(port: int) -> None:
+    status, body = request(port, "/api/state?date=" + quote("мусор"))
+    assert status == 400
+    assert body.decode() == "date: нужна дата YYYY-MM-DD."

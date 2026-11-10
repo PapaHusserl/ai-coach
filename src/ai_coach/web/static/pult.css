@@ -807,6 +807,35 @@ nav button[aria-selected="true"] {
 	opacity: 1;
 }
 
+/* Вкладка «Состояние»: сигналы дня и графики (Р10, Р11, Р23). */
+.sig {
+	border-top: 1px solid var(--line);
+	padding: 6px 0;
+}
+
+.sig:first-child {
+	border-top: 0;
+}
+
+.sig span {
+	color: var(--muted);
+}
+
+.trend h3 {
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 600;
+	margin: 10px 0 2px;
+}
+
+.chart .value {
+	stroke: var(--accent);
+}
+
+.chart circle.value {
+	fill: var(--accent);
+}
+
 /* Вкладка «Еда»: кладовая (Р18 = 1, Р19 = 3). */
 .pantry {
 	border-collapse: collapse;
