@@ -59,6 +59,13 @@ function place(node, box) {
 	node.style.width = `${box.width}%`;
 }
 
+// Подсказка над полосой: «09:35–10:20 Название» над блоком с рамкой box.
+function showTip(row, box) {
+	ui.tip.style.left = `${Math.min(Math.max(box.left, 0), 80)}%`;
+	ui.tip.textContent = `${formatClock(row.start_at)}–${formatClock(row.end_at)} ${row.title || "Встреча"}`;
+	ui.tip.hidden = false;
+}
+
 function startDrag(event, node, row, ctx) {
 	if (dragging()) return;
 	const rect = node.getBoundingClientRect();
@@ -90,9 +97,7 @@ function startDrag(event, node, row, ctx) {
 		outcome = dragOutcome(mode, row, delta);
 		const box = blockBox(outcome, ctx.frame);
 		place(node, box);
-		ui.tip.style.left = `${Math.min(Math.max(box.left, 0), 80)}%`;
-		ui.tip.textContent = `${formatClock(outcome.start_at)}–${formatClock(outcome.end_at)}`;
-		ui.tip.hidden = false;
+		showTip({ ...row, ...outcome }, box);
 	}
 	// Жест отменён системой: ничего не пишем, блок на место.
 	function onCancel() {
@@ -102,7 +107,10 @@ function startDrag(event, node, row, ctx) {
 	}
 	async function onUp() {
 		release();
-		if (!drag.active) return;
+		if (!drag.active) {
+			ctx.open(row.id); // нажали и отпустили без сдвига — это клик по блоку
+			return;
+		}
 		drag.active = false;
 		if (delta === 0) return;
 		drag.saving = true;
@@ -120,16 +128,31 @@ function startDrag(event, node, row, ctx) {
 
 function blockNode(row, ctx) {
 	const node = el("div", `blk-ev${row.source === "meeting" ? " meet" : ""}${locked(row) ? " lock" : ""}`);
-	node.title = `${formatClock(row.start_at)} ${row.title || "Встреча"}`;
 	node.append(el("span", "", row.title || "Встреча"));
 	place(node, blockBox(row, ctx.frame));
+	// Подсказка: мышь наводит, палец нажимает; пока тянут, её ведёт перетаскивание.
+	const show = () => showTip(row, blockBox(row, ctx.frame));
+	const hide = () => {
+		if (!dragging()) ui.tip.hidden = true;
+	};
+	node.addEventListener("pointerenter", () => {
+		if (!dragging()) show();
+	});
+	node.addEventListener("pointerleave", hide);
+	node.addEventListener("pointerup", hide);
+	node.addEventListener("pointercancel", hide);
 	if (!locked(row)) {
 		node.append(el("i", "handle"));
 		node.addEventListener("pointerdown", (event) => {
 			if (event.button !== 0 || !event.isPrimary) return;
 			event.stopPropagation();
+			show();
 			startDrag(event, node, row, ctx);
 		});
+	} else {
+		node.addEventListener("pointerdown", show);
+		// Повтор не двигается, но раскрывается; встреча — нет.
+		if (row.source === "item") node.addEventListener("click", () => ctx.open(row.id));
 	}
 	return node;
 }
@@ -204,7 +227,12 @@ function openForm(min, ctx) {
 		ctx.reload();
 	});
 	formOpen = true;
-	ui.form.replaceChildren(kinds, categories, title, start, end, save, cancel);
+	title.className = "wide";
+	const times = el("div", "frow");
+	times.append("с ", start, " до ", end);
+	const actions = el("div", "frow");
+	actions.append(save, cancel);
+	ui.form.replaceChildren(kinds, categories, title, times, actions);
 	ui.form.hidden = false;
 	title.focus();
 }
@@ -224,15 +252,15 @@ function mount(box) {
 	ui.track = el("div", "scale");
 	ui.tip = el("div", "tip");
 	ui.tip.hidden = true;
-	ui.form = el("div", "chips");
+	ui.form = el("div", "sform");
 	ui.form.hidden = true;
 	ui.error = el("p", "error");
 	ui.error.hidden = true;
 	box.append(ui.track, ui.form, ui.error);
 }
 
-// view — ответ /api/day; reload — перечитать день после правки.
-export function renderScale(view, reload) {
+// view — ответ /api/day; reload — перечитать день после правки; open(id) — раскрыть пункт в списке.
+export function renderScale(view, reload, open) {
 	const box = document.getElementById("scale");
 	if (!ui.track) mount(box);
 	if (dragging() && shownDay === view.date) return; // открытая форма перерисовке не мешает
@@ -245,7 +273,7 @@ export function renderScale(view, reload) {
 		fail("");
 	}
 	shownDay = view.date;
-	const ctx = { frame: frameOf(view), day: view.date, reload };
+	const ctx = { frame: frameOf(view), day: view.date, reload, open };
 	const rows = [
 		...view.items.map((row) => ({ ...row, source: "item" })),
 		...view.meetings.map((row) => ({ ...row, source: "meeting" })),

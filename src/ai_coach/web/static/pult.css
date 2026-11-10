@@ -935,6 +935,10 @@ nav button[aria-selected="true"] {
 	opacity: 0.7;
 }
 
+.blk-ev.lock:not(.meet) {
+	cursor: pointer;
+}
+
 .blk-ev.meet {
 	background: var(--line);
 	border-color: var(--line);
@@ -979,8 +983,41 @@ nav button[aria-selected="true"] {
 	margin-top: 8px;
 }
 
-.chips[hidden] {
+.chips[hidden],
+.sform[hidden] {
 	display: none;
+}
+
+/* Форма нового пункта: вид / категория / название / время / кнопки — пять строк на любой ширине. */
+.sform {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+	margin-top: 8px;
+}
+
+.sform .chips {
+	flex: 1 1 100%;
+	margin-top: 0;
+}
+
+.sform .wide {
+	box-sizing: border-box;
+	flex: 1 1 100%;
+	min-width: 0;
+}
+
+.frow {
+	align-items: center;
+	color: var(--muted);
+	display: flex;
+	flex: 1 1 100%;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.frow input {
+	min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

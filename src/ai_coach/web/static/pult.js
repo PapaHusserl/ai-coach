@@ -98,6 +98,14 @@ function rowNode(row, view, next, openId) {
 	return item;
 }
 
+// Клик по блоку шкалы раскрывает пункт тренера так же, как клик по строке (без окна — ничего).
+function openRow(id) {
+	const row = dayRows(lastView).find((r) => r.source === "item" && r.id === id);
+	if (!row || !hasWindow(row)) return;
+	choice = id;
+	render(lastView);
+}
+
 function render(view) {
 	lastView = view;
 	document.getElementById("date").textContent = formatDate(view.date);
@@ -130,7 +138,7 @@ if (typeof document !== "undefined") {
 			const view = await response.json();
 			message.hidden = true;
 			render(view);
-			renderScale(view, load);
+			renderScale(view, load, openRow);
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
 			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, view.now.slice(0, 10));
