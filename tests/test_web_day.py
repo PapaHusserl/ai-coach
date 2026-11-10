@@ -83,6 +83,14 @@ def test_empty_day(conn: sqlite3.Connection) -> None:
     assert (result["elapsed_min"], result["left_min"]) == (0, 0)
 
 
+def test_day_view_has_header_with_weight_of_the_day(conn: sqlite3.Connection) -> None:
+    assert view(conn, "12:00")["header"]["weight"] is None
+    add_weight(conn, {"measured_at": "2026-11-07 07:00:00", "weight_kg": 81.7})
+    header = view(conn, "12:00")["header"]
+    assert header["weight"] == {"kg": 81.7, "measured_at": "2026-11-07 07:00:00"}
+    assert set(header) == {"weight", "sync", "metrics"}
+
+
 def three(conn: sqlite3.Connection) -> list[int]:
     return [
         item(conn, "09:00", "10:00"),

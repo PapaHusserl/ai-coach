@@ -19,13 +19,15 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from ai_coach.store.db import open_db
-from ai_coach.web import training
+from ai_coach.web import syncer, training
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
+from ai_coach.web.header import save_weight, sync_view
 from ai_coach.web.marks import save_mark
 from ai_coach.web.plan import apply_event
 
 MAX_BODY = 64 * 1024
+SYNC_PATH = "/api/sync"
 STATIC_PREFIX = "/static/"
 TYPES = {
     ".html": "text/html",
@@ -56,7 +58,7 @@ def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
     """Ответ-отказ до чтения тела: не тот путь, чужой Origin, нет или слишком большое тело."""
     origin = headers.get("Origin")
     length = headers.get("Content-Length", "")
-    if urlsplit(path).path not in POST_ROUTES:
+    if urlsplit(path).path not in POST_PATHS:
         return HTTPStatus.NOT_FOUND, "Не найдено."
     if origin is None or urlsplit(origin).netloc != headers.get("Host"):
         return HTTPStatus.FORBIDDEN, "Запись только со страницы пульта."
@@ -74,7 +76,16 @@ def _mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) -> d
 POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], dict[str, Any]]] = {
     "/api/mark": _mark,
     "/api/event": apply_event,
+    "/api/weight": save_weight,
 }
+POST_PATHS = frozenset(POST_ROUTES) | {SYNC_PATH}
+
+
+def sync_reply(db: str | Path | None) -> tuple[int, str]:
+    """POST /api/sync: запуск синка в фоне (202) или отказ, если он уже идёт (409)."""
+    if syncer.start(db):
+        return HTTPStatus.ACCEPTED, json.dumps({"started": True})
+    return HTTPStatus.CONFLICT, "Синхронизация уже идёт."
 
 
 def post_reply(
@@ -90,6 +101,8 @@ def post_reply(
         payload = None
     if not isinstance(payload, dict):
         return HTTPStatus.BAD_REQUEST, "Нужен JSON-объект."
+    if urlsplit(path).path == SYNC_PATH:
+        return sync_reply(db)
     conn = open_db(db)
     try:
         with conn:
@@ -133,6 +146,8 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
                 self.api(parse_qs(parts.query), day_view)
             elif parts.path == "/api/week":
                 self.api(parse_qs(parts.query), week_view)
+            elif parts.path == SYNC_PATH:
+                self.api(parse_qs(parts.query), sync_view)
             elif parts.path.startswith(STATIC_PREFIX):
                 self.static(parts.path[len(STATIC_PREFIX) :])
             else:
@@ -169,7 +184,7 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
             status, body = post_reply(db, self.path, self.headers, self.rfile)
             if status != HTTPStatus.OK:
                 print(f"POST {self.path} {int(status)} {body}", file=sys.stderr)
-            self.send(status, body.encode(), "application/json" if status == 200 else "text/plain")
+            self.send(status, body.encode(), "application/json" if status < 300 else "text/plain")
 
         do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
 

@@ -7,6 +7,8 @@ from typing import Any
 from ai_coach.store.db import fetch_all, fetch_one, insert
 
 EVENING_CUTOFF = time(4, 0)  # чек-ин раньше этого времени относится к прошедшему вечеру
+MIN_WEIGHT_KG = 20
+MAX_WEIGHT_KG = 300
 
 
 def add_weight(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

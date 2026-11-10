@@ -45,7 +45,7 @@ function paneNode() {
 }
 
 // Всплывающее «Записано» (Р9).
-function toast(text) {
+export function toast(text) {
 	if (!ui.toast) {
 		ui.toast = el("div", "toast");
 		ui.toast.setAttribute("role", "status");

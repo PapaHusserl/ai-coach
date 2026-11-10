@@ -12,6 +12,8 @@ from ai_coach.pvt import format_summary
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import (
     EVENING_CUTOFF,
+    MAX_WEIGHT_KG,
+    MIN_WEIGHT_KG,
     add_focus,
     add_food,
     add_slip,
@@ -36,8 +38,6 @@ log_app = typer.Typer(
     help="Записи веса, еды, оценок и тестов реакции за день (id веса и еды — для edit/delete)",
     no_args_is_help=True,
 )
-MIN_WEIGHT_KG = 20
-MAX_WEIGHT_KG = 300
 MIN_SCORE = 1
 MAX_SCORE = 5
 

@@ -12,12 +12,25 @@
 			<div>
 				<h1 id="date"></h1>
 				<div id="now" class="sub"></div>
+				<div id="metrics" class="sub"></div>
+				<div class="sub hline">
+					<span id="weight-line"></span>
+					<button id="weight-btn" class="link" type="button">записать</button>
+					<span id="weight-form" hidden>
+						<input id="weight-input" inputmode="decimal" size="5" aria-label="Вес, кг">
+						<button id="weight-ok" type="button">OK</button>
+					</span>
+					<span>·</span>
+					<span id="sync-line"></span>
+					<button id="sync-btn" class="link" type="button">обновить</button>
+				</div>
 			</div>
 			<span class="days">
 				<button id="prev" aria-label="Предыдущий день">‹</button>
 				<button id="next" aria-label="Следующий день">›</button>
 			</span>
 		</header>
+		<p id="header-error" class="error" hidden></p>
 		<div class="bar"><i id="fill"></i></div>
 		<p id="bar-label" class="bar-label"></p>
 		<div id="scale"></div>

@@ -11,6 +11,7 @@ from ai_coach.store.journal import evening_done
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
 from ai_coach.web.food import meal_view, offers_view
+from ai_coach.web.header import header_view
 from ai_coach.web.marks import COOKING, due, empty_marks, marks_for_day
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.training import fact, plan_view
@@ -127,4 +128,5 @@ def day_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, An
         "current": [{"source": s, "id": i} for _, s, i in sorted(current)],
         "elapsed_min": elapsed,
         "left_min": left,
+        "header": header_view(conn, day, now),
     }

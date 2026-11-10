@@ -4,6 +4,7 @@ import http.client
 import json
 import socket
 import threading
+import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any, NamedTuple
 from urllib.parse import quote
 
 import pytest
+from garmin_fakes import FakeGarmin
 from workload_fakes import coach_event
 
 from ai_coach.store.agenda import add_event
@@ -735,3 +737,116 @@ def test_api_week_garbage_date_is_400_with_text(port: int) -> None:
     status, body = request(port, "/api/week?date=" + quote("мусор"))
     assert status == 400
     assert "date" in body.decode()
+
+
+# Партия 3: шапка - вес и синк.
+def test_api_day_contains_header(port: int) -> None:
+    _, body = request(port, "/api/day?date=2026-11-07")
+    header = json.loads(body)["header"]
+    assert set(header) == {"weight", "sync", "metrics"}
+    assert header["weight"] is None
+
+
+def test_post_weight_writes_record_and_answers_id(port: int, db_path: Path) -> None:
+    status, answer = post(port, {"kg": 81.7}, path="/api/weight")
+    assert status == 200
+    conn = open_db(db_path)
+    try:
+        [row] = conn.execute("SELECT * FROM weight_log").fetchall()
+    finally:
+        conn.close()
+    assert json.loads(answer) == {"id": row["id"]}
+    assert row["weight_kg"] == 81.7
+
+
+def test_post_weight_shows_in_api_day_header(port: int) -> None:
+    post(port, {"kg": 81.7}, path="/api/weight")
+    _, body = request(port, "/api/day")
+    assert json.loads(body)["header"]["weight"]["kg"] == 81.7
+
+
+def test_post_weight_out_of_range_is_400_and_writes_nothing(port: int, db_path: Path) -> None:
+    status, answer = post(port, {"kg": 301}, path="/api/weight")
+    assert status == 400
+    assert answer.decode()
+    conn = open_db(db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM weight_log").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_post_weight_without_origin_is_403(port: int) -> None:
+    assert post(port, {"kg": 81.7}, path="/api/weight", origin=None)[0] == 403
+
+
+WAIT_SYNC = 5
+REAL_SLEEP = (
+    time.sleep
+)  # настоящий: ниже time.sleep подменяется, а ожидание без паузы душит поток синка
+
+
+@pytest.fixture
+def slow_sync(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Синк пульта не ходит в Garmin: клиент ждёт, пока тест его не отпустит."""
+    from ai_coach.web import syncer
+
+    release = threading.Event()
+
+    def slow(*a: object, **k: object) -> FakeGarmin:
+        release.wait(WAIT_SYNC)
+        return FakeGarmin()
+
+    monkeypatch.setattr(syncer, "load_client", slow)
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    yield
+    release.set()
+    deadline = time.monotonic() + WAIT_SYNC
+    while syncer.status()["running"] and time.monotonic() < deadline:
+        REAL_SLEEP(0.01)
+
+
+def test_post_weight_array_body_is_400_json_object_needed(port: int) -> None:
+    status, answer = post(port, b"[]", path="/api/weight")
+    assert status == 400
+    assert answer.decode() == "Нужен JSON-объект."
+
+
+def test_get_sync_on_empty_base_has_status_keys_and_no_last(port: int) -> None:
+    status, body = request(port, "/api/sync")
+    assert status == 200
+    data = json.loads(body)
+    assert set(data) == {"running", "started_at", "error", "last"}
+    assert data["last"] is None
+
+
+@pytest.mark.usefixtures("slow_sync")
+def test_post_sync_202_is_json_content_type(port: int) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        headers = {"Content-Length": "2", "Origin": f"http://127.0.0.1:{port}"}
+        conn.request("POST", "/api/sync", body=b"{}", headers=headers)
+        response = conn.getresponse()
+        response.read()
+        assert response.status == 202
+        assert response.getheader("Content-Type", "").startswith("application/json")
+    finally:
+        conn.close()
+
+
+@pytest.mark.usefixtures("slow_sync")
+def test_post_sync_twice_is_202_then_409(port: int) -> None:
+    status, answer = post(port, {}, path="/api/sync")
+    assert status == 202
+    assert json.loads(answer) == {"started": True}
+    status, answer = post(port, {}, path="/api/sync")
+    assert status == 409
+    assert answer.decode() == "Синхронизация уже идёт."
+
+
+@pytest.mark.usefixtures("slow_sync")
+def test_post_sync_without_origin_is_403_and_starts_nothing(port: int) -> None:
+    from ai_coach.web import syncer
+
+    assert post(port, {}, path="/api/sync", origin=None)[0] == 403
+    assert syncer.status()["running"] is False

@@ -117,6 +117,31 @@ h1 {
 	gap: 4px;
 }
 
+.hline {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+}
+
+button.link {
+	background: none;
+	border: 0;
+	color: var(--accent);
+	font-family: inherit;
+	font-size: inherit;
+	min-height: 0;
+	min-width: 0;
+	padding: 0;
+	text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+	button.link {
+		min-height: 44px;
+	}
+}
+
 button,
 input,
 textarea {

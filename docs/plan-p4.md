@@ -169,12 +169,14 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 | `src/ai_coach/web/pantry.py` | новый: `pantry_view(conn, day)` — `stock` + флаги `expired/expiring` из `expiring`, при Р7 = 1 `remaining` и `food` дня (как `meal_view`); `save_pantry(conn, payload, now, today)` — `op: add \| use \| set \| spoil`, `record`/`spoil`, `ValueError` → `MarkError`, предупреждение в ответ | ~60 |
 | `src/ai_coach/web/state.py` | новый: `state_view(conn, day, now)` — `signals` (пять отчётов, `kind/value/limit` + источник), `trends` (14 дней: `sleep_h`, `hrv`, `rhr`, `readiness`; вес 30 дней), `load_error` при `ToolError` (overload без `tss`) | ~70 |
 | `src/ai_coach/web/day.py` | `day_view` += `"header": header_view(...)` | ~3 |
-| `src/ai_coach/web/server.py` | `POST_ROUTES = {"/api/mark": save_mark-путь, "/api/event": apply_event, "/api/weight": save_weight, "/api/pantry": save_pantry, "/api/sync": syncer.start}`; `_refusal(path, headers)` — путь из таблицы; `post_reply(db, path, headers, rfile)` — общий разбор JSON и ошибок, `mark_reply` переименована в него (обёртки нет); GET `/api/pantry`, `/api/state`, `/api/sync` через `api(query, build)`; `do_POST` → `post_reply` | ~45 |
+| `src/ai_coach/web/server.py` | `POST_ROUTES = {"/api/mark": save_mark-путь, "/api/event": apply_event, "/api/weight": save_weight, "/api/pantry": save_pantry}`; `/api/sync` — отдельная ветка `post_reply` (`SYNC_PATH`, `sync_reply(db)`: 202/409; «Правки по ревью», партия 3); `_refusal(path, headers)` — путь из `POST_PATHS`; `post_reply(db, path, headers, rfile)` — общий разбор JSON и ошибок, `mark_reply` переименована в него (обёртки нет); GET `/api/pantry`, `/api/state`, `/api/sync` через `api(query, build)`; `do_POST` → `post_reply`, JSON при `status < 300` | ~45 |
 | `src/ai_coach/web/static/dom.js` | новый: `el`, `svgNode` — одна копия; шесть старых копий `el` удаляются (BACKLOG 66) | ~12, −30 |
 | `src/ai_coach/web/static/chart.js` | новый: `chartPoints` (из `week-model.js`), `chartAxes`, `lineChart(svg, rows, keys)` из `week-pane.js:38-80`; `week-pane.js` импортирует | ~50, −35 |
 | `src/ai_coach/web/static/scale-model.js` | новый (чистые, тесты `node --test`): `frameOf(view)` (Р1), `minuteAt(x, width, frame)`, `snap(min, 5)`, `blockBox(row, frame)` (left/width в %), `dragOutcome(mode, row, deltaMin)` → `{start_at, end_at}` с границами (конец > начала, ≥ 5 мин), `newSpan(min, frame)` (30 мин), `locked(row)` (повтор, встреча) | ~70 |
 | `src/ai_coach/web/static/scale-pane.js` | новый (DOM): `renderScale(view)` под `#bar-label`; Pointer Events (`pointerdown` → `setPointerCapture`, порог 4 px, `pointermove` → подсказка времени, `pointerup` → `POST /api/event`); правый край 12 px (у блоков уже 36 px — правая треть) — `resize`; клик в пустоту — форма нового пункта (Р5); при ошибке — текст под шкалой (П2 Р11), блок на место; `dragging` — таймер `pult.js` не перерисовывает | ~130 |
-| `src/ai_coach/web/static/header-pane.js` | новый: показатели, вес («записать» → поле + «OK»), «Обновить» → `POST /api/sync`, опрос `/api/sync` раз в 5 с пока `running`, затем `load()` | ~70 |
+| `src/ai_coach/web/static/header-pane.js` | новый: показатели, вес («записать» → поле + «OK»), «Обновить» → `POST /api/sync`, опрос `/api/sync` раз в 5 с пока `running`, затем `load()`; `headerBusy()` для `typing()` | ~55 |
+| `src/ai_coach/web/static/header-model.js`, `tests/web/header.test.mjs` | новые (партия 3, решил папа 2026-11-10): чистые `metricsLine(metrics)`, `weightLine(weight)`, `syncLine(sync, status)` — тексты строк шапки по Р2 = 1; тесты `node --test` | ~25 + ~40 |
+| `src/ai_coach/store/journal.py`, `src/ai_coach/cli/journal.py` | `MIN_WEIGHT_KG`, `MAX_WEIGHT_KG` переезжают из `cli/journal.py:39-40` в `store/journal.py`, CLI импортирует их (имена в `cli.journal` остаются; `grep -rn MIN_WEIGHT_KG tests/` — пусто) | ~4 |
 | `src/ai_coach/web/static/pantry-model.js`, `pantry-pane.js` | новые: `stepFor(unit)` (Р6), `parseDelta("+200" \| "-50" \| "120")` → `{op, qty}`, `pantryRows(view, today)`; DOM — таблица «Продукт · Остаток · Годен до», кнопки «−»/«+», поле, «Списать просроченное», форма добавления, блок КБЖУ (Р7) | ~40 + ~110 |
 | `src/ai_coach/web/static/state-model.js`, `state-pane.js` | новые: `SIGNAL_WORDS` (слова из справки — Р10), `signalRows(state)`, `trendSeries(state)`; DOM — список сигналов («сигналов нет»), пять графиков через `chart.js` | ~40 + ~70 |
 | `src/ai_coach/web/static/pult.js`, `pult-model.js` | `render` зовёт `renderScale`, `renderHeader`; вкладки `food`/`state` грузят `/api/pantry`, `/api/state` (как `train` → `loadWeek`, `:140, :161`); `typing()` += `dragging` | ~25 |
@@ -255,8 +257,8 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 - `POST /api/weight {kg}` → `{id}`; `measured_at = now` (Р3). `POST /api/sync {}` → 202 `{started: true}` или 409
   «Синхронизация уже идёт.»; `GET /api/sync` → `{running, started_at, error, last: {started_at, finished_at, status,
   message}}`. `POST /api/pantry {op, item, qty, unit[, until]}` → `{warning}`; `op: spoil` без `qty` — весь просроченный.
-- `GET /api/day` += `header: {weight: {kg, measured_at} | null, sync: {finished_at, status, running}, metrics: {readiness,
-  sleep_h, hrv, rhr} | null}`; `GET /api/pantry?date=` → `{rows: [{item, qty, unit, expires_on, opened, expired, soon}],
+- `GET /api/day` += `header: {weight: {kg, measured_at} | null, sync: {finished_at, status, running, error}, metrics: {readiness,
+  sleep_h, hrv, rhr} | null}` (`error` — «Правки по ревью», партия 3, отступления); `GET /api/pantry?date=` → `{rows: [{item, qty, unit, expires_on, opened, expired, soon}],
   remaining, food}` (Р7); `GET /api/state?date=` → `{signals: [{source, kind, value, limit}], trends: {dates, sleep_h, hrv,
   rhr, readiness, weight: [{date, kg}]}, load_error}`.
 - Шкала: рамка — Р1; блоки `items` (повтор — замок, встречи — серые, без захвата); px ↔ минуты по ширине `#scale`;
@@ -283,7 +285,8 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   подряд, пропуск дня → `null`.
 - Сервер: `POST /api/event` без Origin → 403 (общая проверка); `POST /api/weight` 200 и запись; `POST /api/sync` дважды →
   202, 409; `GET /api/pantry`, `/api/state` 200, мусорная дата 400; `/api/day` содержит `header`.
-- JS (`node --test tests/web/`): `frameOf`, `minuteAt`, `snap`, `blockBox`, `dragOutcome` (сдвиг, резайз ≥ 5 мин, конец >
+- JS (`node --test "tests/web/*.test.mjs"` — `make player-test`, `Makefile:37`; каталог без маски падает, П2в факт 9): `frameOf`,
+  `minuteAt`, `snap`, `blockBox`, `dragOutcome` (сдвиг, резайз ≥ 5 мин, конец >
   начала), `newSpan`, `locked`; `stepFor`, `parseDelta` («+200», «-50», «120», «abc» → null); `signalRows` (слова по
   `SIGNAL_WORDS`), `trendSeries`; `chartPoints` из `chart.js`.
 - Регресс области: `uv run pytest tests/test_web_*.py tests/test_cli_web.py tests/test_agenda_service.py tests/test_cli_agenda.py
@@ -359,6 +362,38 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   (3) Рамка от текущего часа: сегодня — now − 1 ч … now + 3 ч, другой день — как (1). Рекомендую 1 — пульт «рука Влада»
   (Р4), пустой день и есть случай, когда нужен первый пункт; (3) — две рамки на один экран, прыгает по часам. При Р13 = 1
   тест доебы: `frameOf(view([]))` → `[480, 1320]`, день только с `all_day` — то же. Решает Влад.
+- **Р14. Строка синка в шапке при ошибке и во время синка** (партия 3; текст ошибки без токенов Garmin —
+  «Токенов Garmin нет. Выполни: coach login», `garmin/client.py`). (1) «синк 17:13 · обновить» всегда по `finished_at`
+  последней записи `sync_log` любого статуса; при `status != ok` — «синк 17:13 ошибка · обновить», а текст ошибки —
+  строкой под шапкой (как под шкалой, П2 Р11), пока следующий синк не пройдёт; во время синка — «синк идёт…», кнопка
+  неактивна, по окончании `load()`. (2) То же, но без слова «ошибка» в строке — только текст под шапкой. (3) Время
+  последнего *успешного* синка (отдельный запрос по `status = ok`), ошибка — только текстом под шапкой. Рекомендую 1 —
+  одна запись `last_sync_log` (`store/journal.py:240`), видно и когда, и что не так. Решено: 1 (кто решил: Влад,
+  окно 2026-11-10, по рекомендации папы).
+- **Р15. Десятичный разделитель в шапке.** Р2 = 1 записан как «сон 7,2 ч» (запятая); в пульте числа сегодня с точкой —
+  «12.3 км» (`training-model.js:79`, `toFixed(1)`). (1) Точка, как везде в пульте («сон 7.5 ч»); (2) запятая по тексту Р2,
+  только в шапке; (3) запятая везде — правка `training-model.js`, `week-pane.js:30` и тестов П3 (вне партии 3).
+  Рекомендую 1 — один стиль, ввод веса «81,7» запятой сервер принимает в любом случае (как `parse_kg`). Решено: 1
+  — точка (кто решил: Влад, окно 2026-11-10, по рекомендации папы).
+- **Р16. Строки шапки без данных** (партия 3, отступление кабана — план текст не задавал; `header-model.js:12-33`).
+  Вес не записан за 30 дней, синков в `sync_log` нет, у дня нет строки `daily_metrics` (будущий день, день до первого
+  синка). (1) Как у кабана: «веса нет · записать», «синка не было · обновить», строка показателей пустая — ряд исчезает,
+  шапка на день без данных ниже на одну строку. (2) Те же слова у веса и синка, у показателей — «показателей нет»: три
+  ряда всегда, шапка не прыгает при листании дней. (3) Тире: «вес — · записать», «синк — · обновить», «показатели —».
+  Решено: 2 (кто решил: Влад, окно 2026-11-10, по рекомендации папы).
+  Рекомендую 2 — слова в манере «На этот день ничего нет.» / «сигналов нет» (Р10), ряд на месте; тесты доебы
+  `header.test.mjs` (`metricsLine(null)` без `null`/`NaN`) зелёные при любом варианте. Решает Влад.
+- **Р17. Когда коммитить партию с DOM-кодом (партии 4, 5; партия 3 — чек-лист пройден Владом 2026-11-10 14:03, «всё работает
+  чётко», вопрос по ней снят).** Правило для партии 2 Влад дал окном 2026-11-10 («коммит после браузера», `:78-81`) и там же
+  смягчил («коммитится сейчас, красное — партия 2б», `:90`); для партии 3 отдельного правила не было — папа вывел его из
+  партии 2 по ошибке (свекровь, круг 4). (1) Коммит после чек-листа Влада в браузере: красное правится до коммита, в `main`
+  только проверенное; минус — Влад на критическом пути каждой партии, большой дифф партий 4–5 (~210/~230 строк) висит в
+  дереве до его окна. (2) Коммит после ревью мамы и аудита свекрови, до браузера; чек-лист блокирует только закрытие шага
+  (как партия 1, `:581-582`); красное в браузере — партия «Nб» со своим ревью (как 2б); минус — в `main` может лечь
+  непроверенный DOM, правка — отдельным коммитом. (3) Коммит после чек-листа на Mac, телефон — до закрытия шага.
+  Рекомендую 2 — так партия 2 и прошла по факту (`:90`): красное всё равно стало партией 2б, конвейер не ждёт Влада,
+  история по партиям чище; `main` — рабочий репо Влада без релизов, цена непроверенного коммита — один коммит-правка.
+  Решает Влад. **Решено: 2** — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
 
 Риски:
 - EventKit из потока HTTP-обработчика (`CalendarWriter._open` → `_request_access`, `calendar_eventkit.py:48`,
@@ -403,7 +438,8 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   `find_deviations`; `trends` — `list_daily_metrics`/`list_recovery_days` за 14 дней, `list_weights` за 30.
 - `dom.js` снимает шесть копий `el` (BACKLOG 66 закрывается партией 2); `chart.js` — вынос из `week-*` без смены поведения
   (тест `chartPoints` меняет импорт).
-- Таймер `pult.js` при `dragging` и при открытом поле веса (`typing()` уже ловит `INPUT`) не перерисовывает.
+- Таймер `pult.js` при `dragging` и при открытом поле веса не перерисовывает: `typing()` ловит `INPUT` только внутри
+  `.pane` (`pult.js:124`), для шапки — `headerBusy()` («Правки по ревью», партия 3).
 - Тесты JS — чистые функции в `*-model.js`, DOM — руками (правило П2в).
 
 ## Открытые вопросы
@@ -419,6 +455,11 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 4. Р2, Р3, Р5–Р8, Р10–Р12 — рекомендую 1 во всех, кроме Р4 = 2; решает Влад окнами по одному (okna.md).
 5. Р13 — шкала пустого дня (`scale-model.js:frameOf`, новая); рекомендую 1; разблокирует тест `frameOf` пустого дня и
    партию 2 (2026-11-10); решает Влад.
+6. Р14, Р15 — строка синка при ошибке и десятичный разделитель (`header-model.js:syncLine`, `:metricsLine`, новые);
+   рекомендую 1 в обоих; разблокируют `header-model.js` и тесты `tests/web/header.test.mjs` партии 3 (сервер и тесты
+   доебы по Python от них не зависят — кабан начинает с них); решает Влад.
+7. Р16 — строки шапки без данных (`header-model.js:metricsLine`, `:weightLine`, `:syncLine`); рекомендую 2; разблокирует
+   коммит партии 3 (код кабана = вариант 1, правка ~2 строки); решает Влад.
 
 ## Правки по ревью
 
@@ -458,6 +499,144 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   широком окне вставали в один ряд, выходило четыре) — аудит свекрови, окно Влада 2026-11-10 «пять строк
   всегда» (рекомендация папы).
 
+Партия 3, тесты доебы (`tests/test_web_header.py`, `tests/test_web_syncer.py`, правки `tests/test_web_server.py`,
+`tests/test_web_day.py`; разбор папы 2026-11-10 по коду, техническое — решил папа; Р14, Р15 — Владу):
+
+- **Syncer: подмена `syncer.load_client`, настоящие `run_sync`/`run_workload`** — принято, лучше плана: так идёт
+  `tests/test_cli_sync_workload.py:64` (`main.load_client` → `FakeGarmin()`), `run_sync` с `FakeGarmin` пишет `sync_log`
+  сам, `time.sleep` подменён. Безопасно: autouse `tests/conftest.py:11 no_real_workload` даёт конфиг без календарей и
+  tmp-пути → `sync_workload` (`workload_sync.py:237 config.has_calendar` False) к `CalendarReader`/EventKit не ходит;
+  подмена `workload_sync.CalendarReader` в `db`-фикстуре лишней не мешает. Контракт `syncer.py`: `from
+  ai_coach.garmin.client import load_client`, `from ai_coach.sync import sync as run_sync, sync_workload as
+  run_workload` — атрибутами модуля (иначе подмена не сработает). Поток: `conn = open_db(db)`; `GarminError` (в т. ч.
+  `GarminAuthError`) → `error = str(e)`, **нагрузка всё равно идёт** (как `cli/main.py:150-156`); любое другое `Exception`
+  → `error = str(e)` + traceback в stderr (поток-демон молча падать не должен); `running = False` в `finally`;
+  `started_at` — `datetime.now().isoformat(timespec="seconds")` (формат `sync_log.started_at`); новый `start` сбрасывает
+  `error` (тест `test_successful_run_clears_previous_error`). Тест `wait_idle` при подменённом `time.sleep` крутится
+  вхолостую до 5 с — принято, не блокирует.
+- **`save_weight(conn, payload, now) → {"id"}`** — принято, как в «API и модель». `measured_at = now.isoformat(sep=" ",
+  timespec="seconds")` — формат CLI `now()` (`cli/journal.py:60`). Разбор `kg`: число или строка, запятая → точка,
+  `float`; `bool`, `None`, «abc», отсутствие ключа → `MarkError` «Вес должен быть числом…»; вне 20–300 (19.9, 301) →
+  `MarkError` «Вес должен быть от 20 до 300 кг.» — тексты `parse_kg` (`cli/journal.py:98`), саму `parse_kg` не звать
+  (`fail` → `typer.Exit`). `web` из `cli` не импортирует (прецедента нет): `MIN_WEIGHT_KG`, `MAX_WEIGHT_KG` переезжают в
+  `store/journal.py`, `cli/journal.py` импортирует их оттуда — «Файлы».
+- **`header_view`** — принято: `metrics` из `get_daily_metrics(conn, d)` (`readiness ← readiness_score`, `sleep_h ←
+  round(sleep_seconds / 3600, 1)`, `hrv ← hrv_last_night`) и `rhr` из `list_recovery_days(conn, d, d)` (`garmin_data.py:66`,
+  `_REST_HR_SQL` — `$.sleep.restingHeartRate` или метрика HR импорта; тест доебы с `raw_json.sleep.restingHeartRate` ему
+  соответствует); нет строки дня → `metrics: None`, есть строка без поля → поле `null`. Вес — `list_weights(conn,
+  (day − 30 дн).isoformat(), day.isoformat())[-1]` (`store/journal.py:17`, по дате `measured_at`): 30 дней назад — ещё
+  показывается, 31 — уже нет; тесты доебы 29 и 37 дней верны, границу 30/31 добить (ниже). `sync` — всегда
+  `last_sync_log` (`:240`, по id, любой `kind` и статус) + `syncer.status()["running"]`; **без записей `sync_log`** —
+  `{"finished_at": None, "status": None, "running": False}` (форма постоянна, `running` осмыслен всегда), не `None`.
+- **`POST /api/sync`: 202 JSON `{"started": true}`, 409 текст «Синхронизация уже идёт.»** — принято, как в «API и
+  модель». Исполнение в `server.py`: маршруты `POST_ROUTES` остаются `(conn, payload, now) → dict` и 200 (`/api/weight`
+  → `save_weight` входит туда); синк — отдельная ветка `post_reply`: после `_refusal` и разбора JSON (тело `{}` — объект,
+  проходит) `if name == SYNC_PATH: return sync_reply(db)` — ему нужен путь `db`, а не `conn` (поток открывает свою
+  базу), и статусы не 200/400. `_refusal` проверяет `name in POST_PATHS` (`frozenset(POST_ROUTES) | {SYNC_PATH}`).
+  `do_POST`: Content-Type JSON при `status < 300` (сейчас `== 200`, `server.py:172` — 202 ушёл бы `text/plain`).
+  Строка плана «`"/api/sync": syncer.start` в `POST_ROUTES`» снята.
+- **`GET /api/sync`** — через `api(query, build)` с `sync_view(conn, day, now)` в `header.py` (`day`, `now` не
+  читаются): `syncer.status() | {"last": {started_at, finished_at, status, message} | None}`. Тест доебы нужен (ниже).
+- **`header-pane.js` без чистых функций** — не принято: тексты строк шапки по Р2 = 1 — чистые функции, выносятся в
+  `header-model.js` (`metricsLine`, `weightLine`, `syncLine`), тесты `tests/web/header.test.mjs` (правило П2в: чистое —
+  `node --test`, DOM — руками). Виды строк при ошибке и разделитель — Р14, Р15 (Владу). Поправка к «Умолчаниям»:
+  `typing()` (`pult.js:124`) ловит ввод только внутри `.pane`; поле веса в `<header>` оно не увидит — `header-pane.js`
+  экспортирует `headerBusy()` (поле веса открыто или идёт опрос синка), `typing()` += `|| headerBusy()`, как `scaleBusy()`.
+  Опрос `/api/sync` раз в 5 с запускается и когда страница открылась при `header.sync.running` (синк запущен из другой
+  вкладки или `curl`).
+- **Тесты доебы — дополнить** (до кода, тем же стилем): `test_web_header.py` — вес ровно 30 дней назад (2026-10-08)
+  показывается, 31 (2026-10-07) → `None` (константа под mutmut); `sync` без записей → `{"finished_at": None, "status":
+  None, "running": False}`; строка дня без `readiness_score` → `metrics["readiness"] is None`, остальное на месте;
+  `save_weight(conn, {"kg": True}, NOW)` → `MarkError` (bool — как `id` в партии 1); `sync_view` без логов → `last is None`,
+  с логом — четыре ключа. `test_web_syncer.py` — `GarminAuthError` не отменяет нагрузку: после `wait_idle`
+  `last_sync_log(conn)["kind"] == "workload"` (`workload_sync.py:36 KIND`) и `status()["error"]` — текст Garmin. `test_web_server.py` — `GET /api/sync` → 200, ключи `{running, started_at,
+  error, last}`, `last is None` на пустой базе; `POST /api/sync` → заголовок `Content-Type: application/json` при 202;
+  `POST /api/weight` с телом `[]` → 400 «Нужен JSON-объект.» (общая проверка, регресс области). Остальные тесты доебы
+  — как написаны.
+
+Партия 3, отступления кабана (разбор папы 2026-11-10 по `git diff HEAD`; техническое — решил папа, видимое — Р16 Владу):
+
+- **Строки без данных** («веса нет», «синка не было», `metricsLine(null)` → `""`; `header-model.js:12-33`) — видимое
+  Владу, развилка Р16 («Развилки»), код кабана = вариант 1; до окна не менять.
+- **Текст ошибки под шапкой** (`#header-error`, `header-pane.js:errorText`, `:poll`, `:renderHeader`) — место и смысл
+  приняты: исполнение Р14 = 1 (Влад 2026-11-10: «текст ошибки — строкой под шапкой, пока следующий синк не пройдёт»).
+  Источник текста — **не принято, поправить**: найден регресс области. Без токенов Garmin `load_client` падает до
+  `run_sync` (`syncer.py:39`), записи `sync` в `sync_log` нет, `run_workload` пишет `workload`/`ok`
+  (`workload_sync.py:265`) → `last_sync_log` = `ok` → `header.sync.status == "ok"`; `poll()` показывает `status.error`
+  и зовёт `reload()`, а `renderHeader` по `status == "ok"` тут же делает `showError("")` (`header-pane.js:105`) — текст
+  Garmin стирается через один запрос; при открытии страницы его нет вовсе, строка — «синк 17:13» без слова «ошибка».
+  Выход партии 3 «без токенов Garmin — текст ошибки» не выполняется. Правка (техническое, папа): один источник —
+  `header_view` отдаёт `sync.error` = `syncer.status()["error"]`, иначе `last["message"]` при `last["status"] != "ok"`,
+  иначе `None` (`web/header.py:header_view`, ~4 строки); `syncLine` пишет «ошибка», если `sync.status !== "ok" ||
+  sync.error` (`header-model.js:syncLine` — исполнение Р14 = 1: сбой Garmin — тоже ошибка синка, видно «и когда, и что
+  не так»); `renderHeader` показывает `header.sync.error` всегда (`showError(header.sync.error || "")`), `errorText`,
+  `fetchStatus` при загрузке и ветка `status !== "ok"` в `renderHeader` снимаются, `poll()` после `running: false` —
+  только `clearInterval` + `reload()` (ошибку принесёт `/api/day`). `GET /api/sync` остаётся только для опроса
+  `running`. Тесты (доеба, до кода): `tests/test_web_header.py` — `test_header_sync_without_logs_has_constant_shape`
+  и `test_header_sync_is_last_log_not_by_day` += `"error": None`; новые: `syncer._state["error"]` (monkeypatch) при
+  последней записи `ok` → `sync["error"]` — текст Garmin; последняя запись `status: "error"`, `message: "…"` без ошибки
+  потока → `sync["error"] == message`; обе — приоритет у потока. `tests/web/header.test.mjs` — `syncLine({finished_at,
+  status: "ok", error: "Токенов Garmin нет…"}, idle)` → `/ошибка/`; `error: null` — без. `tests/test_web_server.py:746`
+  (`set(header)`) не меняется. mutmut: `ai_coach.web.header:header_view` уже в списке («Тесты»).
+- **`size="5"`, `inputmode="decimal"` у поля веса** (`index.html:20`) — принято: `inputmode` даёт цифровую клавиатуру на
+  телефоне (П2в Р3 = 2), `size` — ширина под «81.7» без правила в `pult.css`; прецедентов `size`/`inputmode` в пульте нет
+  (grep), первый — здесь.
+- Прочее по диффу без замечаний: `headerBusy()` = поле веса открыто или идёт опрос (как в «Правках», партия 3);
+  `button.link` 44 px на телефоне (П2в Р3 = 2); `Escape` закрывает поле веса, `Enter` пишет — умолчание кабана, принято
+  (клавиши в пульте: `Enter` раскрывает строку, `pult.js:59`; `Escape` — первый случай, сверх кнопки «OK» и клика мимо,
+  поведение по умолчанию у текстового поля браузера — не видимое решение, а горячая клавиша).
+
+Партия 3, ревью мамы и аудит свекрови (2026-11-10; что исправлено — чьё решение):
+
+- Открытое поле веса больше не останавливает таймер навсегда: `headerBusy()` — идёт опрос синка или фокус внутри
+  `#weight-form` (`form.contains(document.activeElement)`, `header-pane.js:93`); клик мимо снимает занятость — мама (п. 1),
+  её второй вариант, принял папа.
+- Отказ `POST /api/sync` кроме 409 (403, 5xx, обрыв) — текст под шапкой, кнопка снова активна, опроса нет; 409 — опрос как
+  при 202 (`startSync`, `header-pane.js:79`) — мама (п. 2), принял папа.
+- Строка `daily_metrics` есть, все четыре поля `null` → «показателей нет» (`metricsLine`, `header-model.js:20`) — мама
+  (п. 3) и свекровь, исполнение Р16 = 2 (Влад 2026-11-10); тест к этому — кабана, принят (отступления ниже).
+- «Записано» после записи веса — `toast("Записано")` в `saveWeight` (`header-pane.js:74`) — свекровь, исполнение Р3 = 1
+  («“Записано” всплывает», Влад 2026-11-09; П2в Р9 = 1); экспорт `toast` — отступления ниже.
+- Счёт тестов доебы (замечание мамы, уточнение оркестратора 2026-11-10; папа проверил `grep -c '^def test_'` по новым файлам и
+  `git diff 017262c | grep -c '^+def test_'`, снятых `^-def test_` нет): новых тестовых функций Python 39 — `test_web_header.py` 21,
+  `test_web_syncer.py` 7, `test_web_server.py` 10, `test_web_day.py` 1; JS 16 в `header.test.mjs` (в файле 17 — семнадцатый
+  кабана). Число 38 в записи оркестратора было неверным. Красная проверка (по записи оркестратора, папа не перепроверял):
+  ранние порции красные только сборкой файла (`ImportError`, `ERR_MODULE_NOT_FOUND` — модулей ещё не было), поштучно
+  подтверждены последние 5 из 5 и 7 из 7.
+- `node --test tests/web/` в «Тестах» → `node --test "tests/web/*.test.mjs"` (`make player-test`, `Makefile:37`; каталог без
+  маски на node 26 падает — П2в факт 9, docs/plan-p2v.md:190) — свекровь, поправил папа.
+- Ручная проверка шапки и синка из пульта (EventKit из потока, телефон) — чек-лист партии 3 в «Открыто» (а)–(д): пройден
+  Владом 2026-11-10 14:03 («всё работает чётко»), коммит партии 3 не блокирует. Правило «коммит после браузера» папа вывел
+  из окна по партии 2 ошибочно — Влад его для партии 3 не давал, а по партии 2 смягчил (`:90`); свекровь, круги 2 и 4.
+  Правило для партий 4–5 — развилка Р17 («Развилки»), окно Владу.
+
+Партия 3, отступления кабана после ревью (разбор папы 2026-11-10 по `git diff 017262c`; техническое — решил папа):
+
+- **`toast` экспортирован из `marks.js:48`, `header-pane.js:4` импортирует** — принято. Одна копия всплывашки: узел `ui.toast`,
+  таймер и стиль `.toast` (`pult.css:791`) общие, вторая копия была бы BACKLOG 66 заново. Прецедент импорта панели из
+  панели — `offers-pane.js:4` (`table` из `training-pane.js`); цикла нет (`marks.js` шапку не импортирует), `marks.js` уже
+  загружен `pult.js:4`. В `dom.js` не переносить: там функции без состояния (`el`, `svgNode`), у `toast` — узел и таймер.
+  Предложение, не требование: третий потребитель («Записано» кладовой, партия 4) — вынести `toast` в `static/toast.js`
+  в той же партии; до него — как есть.
+- **Тест `metricsLine` «строка дня, все поля пустые» (`header.test.mjs:94`) написал кабан** — принять, доебе не отдавать.
+  Прецедент — партии 1 и 2: тесты по замечаниям мамы (чужой `kind`, большой `id`; зажим `dragOutcome`, круг 2 мамы) писал
+  кабан, принял папа; по family.md:84 правки по замечаниям мамы идут кабану тому же id, доеба на круге ревью не зовётся.
+  Тест в форме доебы (`assert.equal` на слово Р16 = 2), проверяет поведение, не код; отдельный вызов доебы ради одного
+  assert — расход без пользы. Граница: кабан дописывает тест только по замечанию ревью к уже написанному доебой файлу;
+  новые сценарии «Тестов» — доеба, до кода.
+
+Партия 3, полный pytest (оркестратор 2026-11-10, режим «долго», `taskpolicy -b`):
+
+- Упали 4 теста синка («синк не закончился»: потолок ожидания 5 с меньше длительности синка под фоновым приоритетом,
+  27–54 с) и `test_cli_agenda` (BACKLOG 70, не от шага). Без `taskpolicy` — зелёные. Правка доебы: `WAIT` 5 → 60 с в
+  `tests/test_web_syncer.py`, `WAIT_SYNC = 60` в `tests/test_web_server.py`; это потолки ожидания по готовности, проверки
+  не ослаблены; прод-код не менялся. Под `taskpolicy -b` оба файла зелёные. Вопрос доебы, почему синк на `FakeGarmin`
+  под фоновым приоритетом идёт 30–50 с, — открыт, на ревью мамы.
+- Ревью мамы, круг 3: медленный синк — от тестов, не от кода: фикстуры `db` и `slow_sync` подменяют `time.sleep` пустой
+  функцией, циклы ожидания крутятся без паузы и отнимают GIL у потока синка. Правка доебы по ревью мамы: `REAL_SLEEP =
+  time.sleep` до подмены, ожидание через `REAL_SLEEP(0.01)` в `wait_idle` и teardown `slow_sync`; потолки `WAIT` и
+  `WAIT_SYNC` вернулись к 5 с. Под `taskpolicy -b` оба файла зелёные, самый долгий тест 0,6 с.
+
 ## Открыто: стенд / аналитик
 
 - Прототип (артефакт claude.ai) папе недоступен — развилки Р1, Р2, Р5–Р7, Р11 составлены без него; Влад сверяет с
@@ -482,6 +661,13 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   события должно быть раньше конца.», ничего не создано (рецепт папы 2026-11-10; жестом диапазон дней не нарушить);
   (д) перенос записанного события из шкалы виден в приложении Календарь;
   (е) касание не прокручивает страницу и не выделяет текст.
+- Партия 3, `header-pane.js` — только руками; чек-лист (аудит свекрови 2026-11-10) пройден Владом 2026-11-10 14:03 —
+  «всё работает чётко», коммит не блокирует; правило коммита для партий 4–5 — Р17:
+  (а) шапка: строки показателей, веса и синка; при пустых данных — «показателей нет», «веса нет», «синка не было»;
+  (б) запись веса из шапки → «Записано», вес в строке, `coach` видит запись;
+  (в) «Синк» из пульта → «синк идёт…», затем время; данные Garmin и Календаря (EventKit из потока сервера) обновились;
+  (г) без токенов Garmin — «синк HH:MM ошибка» и текст ошибки под шапкой, кнопка снова активна;
+  (д) открытое поле веса не останавливает обновление дня; на телефоне шапка не ломает вёрстку.
 
 ## Смета (кабан-тесть, режим 1)
 
