@@ -1,13 +1,7 @@
 // Пульт: поля формы отметки (шкалы, часы, погружение), только DOM (зовётся в браузере).
 // Значения живут в форме вкладки; таблицы и чистые функции — marks-model.js.
+import { el } from "./dom.js";
 import { FIELDS, FLOW_CHOICES, HOURS, REQUIRED, canSave } from "./marks-model.js";
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
 
 // Шкала name вкладки tab; form — форма вкладки, save — кнопка «Сохранить».
 export function scale(tab, form, name, save) {

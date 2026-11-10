@@ -1,25 +1,11 @@
 // Пульт: вкладка «Тренировки», только DOM (зовётся в браузере). Чистые функции — week-model.js.
+import { el, svgNode } from "./dom.js";
 import { chartPoints, weekRows, weekTitle } from "./week-model.js";
 
-const SVG = "http://www.w3.org/2000/svg";
 const WIDTH = 320;
 const HEIGHT = 140;
 const PAD = { left: 28, right: 10, top: 10, bottom: 20 };
 const BOX = { x0: PAD.left, x1: WIDTH - PAD.right, y0: PAD.top, y1: HEIGHT - PAD.bottom };
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
-
-function svgNode(tag, attrs, text) {
-	const node = document.createElementNS(SVG, tag);
-	for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, String(value));
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
 
 function renderWeek(week, today) {
 	document.getElementById("week-title").textContent = weekTitle(week);

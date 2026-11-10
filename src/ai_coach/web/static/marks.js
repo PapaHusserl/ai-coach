@@ -15,18 +15,12 @@ import {
 	tabLabel,
 	tabsFor,
 } from "./marks-model.js";
+import { el } from "./dom.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
 import { offersBlock } from "./offers-pane.js";
 import { fillTraining } from "./training-pane.js";
 
 export * from "./marks-model.js";
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
 
 const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.

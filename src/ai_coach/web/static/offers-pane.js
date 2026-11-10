@@ -1,15 +1,9 @@
 // Пульт: варианты блюд в окне еды, только DOM (зовётся в браузере). Строки таблицы — marks-model.js.
+import { el } from "./dom.js";
 import { offerRows } from "./marks-model.js";
 import { table } from "./training-pane.js";
 
 const HEAD = ["Что", "Сколько", "Ккал", "Б", "Ж", "У"];
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
 
 // Блок вариантов: вкладки «Вариант N» (если их больше одного), таблица выбранного, «Съел вариант N».
 // picked — номер выбранного варианта; onPick(index) — выбрать другой; onTake(offer) — съел (null — кнопки нет).

@@ -1,5 +1,6 @@
 // Пульт: план дня, DOM (в браузере). Чистые функции — pult-model.js, здесь реэкспорт для тестов (tests/web).
 
+import { el } from "./dom.js";
 import { isPast, mountMarks, setupMarks, unmountMarks } from "./marks.js";
 import {
 	barLabel,
@@ -16,24 +17,17 @@ import {
 	shiftDay,
 } from "./pult-model.js";
 
+import { renderScale, scaleBusy } from "./scale-pane.js";
 import { loadWeek } from "./week-pane.js";
 
 export * from "./pult-model.js";
 export * from "./week-model.js";
-
 const REFRESH_MS = 60000;
 
 function rowText(row) {
 	const time = row.all_day ? "весь день" : formatClock(row.start_at);
 	const draft = row.status === "draft" ? " (черновик)" : "";
 	return [time, `${row.title || "Встреча"}${draft}`];
-}
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
 }
 
 function progressNode(progress) {
@@ -120,6 +114,7 @@ function render(view) {
 
 // Таймер не перерисовывает список, пока в окне пункта идёт ввод (прототип :513).
 function typing() {
+	if (scaleBusy()) return true;
 	const active = document.activeElement;
 	return Boolean(active?.closest(".pane")) && ["INPUT", "TEXTAREA"].includes(active.tagName);
 }
@@ -135,6 +130,7 @@ if (typeof document !== "undefined") {
 			const view = await response.json();
 			message.hidden = true;
 			render(view);
+			renderScale(view, load);
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
 			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, view.now.slice(0, 10));

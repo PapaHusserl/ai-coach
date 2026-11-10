@@ -877,6 +877,112 @@ nav button[aria-selected="true"] {
 	white-space: nowrap;
 }
 
+/* Шкала дня (П4): полоса 56 px, блоки тренера — ряд сверху, встречи — тонкий серый ряд снизу. */
+#scale {
+	margin: 8px 0;
+}
+
+.scale {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	cursor: pointer;
+	height: 56px;
+	position: relative;
+	touch-action: none;
+	user-select: none;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+}
+
+.scale .tick {
+	border-left: 1px solid var(--line);
+	bottom: 0;
+	color: var(--muted);
+	font-family: var(--f-mono);
+	font-size: 10px;
+	padding-left: 2px;
+	pointer-events: none;
+	position: absolute;
+	top: 0;
+}
+
+.blk-ev {
+	align-items: center;
+	background: var(--accent-soft);
+	border: 1px solid var(--accent);
+	border-radius: 4px;
+	box-sizing: border-box;
+	cursor: grab;
+	display: flex;
+	font-size: 12px;
+	height: 26px;
+	overflow: hidden;
+	position: absolute;
+	top: 6px;
+}
+
+.blk-ev span {
+	overflow: hidden;
+	padding: 0 6px;
+	pointer-events: none;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.blk-ev.lock {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.blk-ev.meet {
+	background: var(--line);
+	border-color: var(--line);
+	color: var(--muted);
+	cursor: default;
+	height: 12px;
+	top: 38px;
+}
+
+.blk-ev.meet span {
+	display: none;
+}
+
+.blk-ev .handle {
+	background: var(--accent);
+	cursor: ew-resize;
+	height: 100%;
+	opacity: 0.5;
+	position: absolute;
+	right: 0;
+	width: 6px;
+}
+
+.tip {
+	background: var(--fg);
+	border-radius: 4px;
+	color: var(--bg);
+	font-family: var(--f-mono);
+	font-size: 11px;
+	padding: 1px 6px;
+	pointer-events: none;
+	position: absolute;
+	top: -22px;
+	white-space: nowrap;
+	z-index: 2;
+}
+
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.chips[hidden] {
+	display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	* {
 		animation: none !important;

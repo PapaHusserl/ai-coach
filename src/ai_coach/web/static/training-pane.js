@@ -1,4 +1,5 @@
 // Пульт: окно тренировки, только DOM (зовётся в браузере). Чистые функции — training-model.js.
+import { el } from "./dom.js";
 import {
 	factNumbers,
 	factPill,
@@ -10,13 +11,6 @@ import {
 
 const NO_FACT_HINT = "Факт Garmin появится после coach sync; сделал без часов - жми „Сделал“.";
 const ZONE_LABEL_FROM = 8; // подпись внутри полоски зоны — от стольких процентов
-
-function el(tag, className, text) {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
 
 function bodyRows(section, rows) {
 	for (const cells of rows) {
