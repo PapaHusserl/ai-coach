@@ -17,9 +17,8 @@
 
 ## Открытые вопросы
 
-- Остаток фейка в боевой базе (sync_log 204, profile_log 19–22, `thresholds` с `userProfilePK` 1000000) — удаляет
-  Влад; строки 21:08 (вес и профиль manual) — подтвердить у Влада (plan-p4 «Открыто»).
-- Бэкапы `~/.local/share/ai-coach/coach.db.bak-20261110-testleak` и `-testleak2` — оставить или удалить.
+- Бэкапы `~/.local/share/ai-coach/coach.db.bak-20261110-testleak` и `-testleak2` — Влад оставил (окно 2026-11-10);
+  фейк удалён Владом, строки 21:08 — его.
 - П5 (BACKLOG 71, 72): объём 72 — только смотреть события не тренера или ещё и править — решает Влад.
 - Тест BACKLOG 70 падает в полном pytest — mutmut гонять с `--deselect` до Н27.
 - `make smells` на HEAD 5 при пороге 0 (BACKLOG 58); повторы в `coach event list` (BACKLOG 57).
