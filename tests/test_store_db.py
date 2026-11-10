@@ -66,6 +66,11 @@ def test_db_path_accepts_str(tmp_path: Path) -> None:
     assert db_path(str(tmp_path / "s.db")) == tmp_path / "s.db"
 
 
+def test_db_path_without_argument_in_tests_is_not_the_real_database(tmp_path: Path) -> None:
+    assert db_path() == tmp_path / "default-coach.db"
+    assert db_path() != DEFAULT_DB_PATH
+
+
 def test_db_path_empty_env_means_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(DB_ENV, "")
     assert db_path() == DEFAULT_DB_PATH

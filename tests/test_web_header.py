@@ -209,3 +209,33 @@ def test_header_sync_error_thread_wins_over_log_message(
     monkeypatch.setitem(syncer._state, "error", "ошибка потока")  # pyright: ignore[reportPrivateUsage]
     put_log(conn, "error", "Garmin 429")
     assert header_view(conn, DAY, NOW)["sync"]["error"] == "ошибка потока"
+
+
+def test_header_metrics_without_sleep_has_no_sleep_hours(conn: sqlite3.Connection) -> None:
+    put_metrics(conn, D, readiness_score=77, hrv_last_night=55)
+    metrics = header_view(conn, DAY, NOW)["metrics"]
+    assert metrics["sleep_h"] is None
+    assert metrics["readiness"] == 77
+
+
+def test_header_sleep_hours_rounded_to_one_decimal(conn: sqlite3.Connection) -> None:
+    put_metrics(conn, D, sleep_seconds=27123)
+    assert header_view(conn, DAY, NOW)["metrics"]["sleep_h"] == 7.5
+
+
+def test_save_weight_not_a_number_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
+        save_weight(conn, {"kg": "abc"}, NOW)
+    assert str(raised.value) == "Вес должен быть числом, получено: 'abc'"
+
+
+def test_save_weight_out_of_range_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
+        save_weight(conn, {"kg": 301}, NOW)
+    assert str(raised.value) == "Вес должен быть от 20 до 300 кг."
+
+
+def test_save_weight_cuts_microseconds_from_moment(conn: sqlite3.Connection) -> None:
+    save_weight(conn, {"kg": 81.7}, datetime(2026, 11, 7, 9, 30, 15, 123456))
+    [row] = list_weights(conn, D, D)
+    assert row["measured_at"] == f"{D} 09:30:15"

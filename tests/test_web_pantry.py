@@ -305,3 +305,72 @@ def test_save_error_text_goes_to_user(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError) as caught:
         save_pantry(conn, {"op": "use", "item": "нет такого", "qty": 1, "unit": "g"}, NOW)
     assert "нет дома" in str(caught.value)
+
+
+def test_view_remaining_counts_activity_calories_of_viewed_day(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.garmin_data import upsert_activity
+
+    for key, value in [("sex", "m"), ("birth_date", "1990-01-15"), ("height_cm", "180")]:
+        set_value(conn, key, value, "manual", "2026-10-01T10:00:00")
+    add_weight(conn, {"measured_at": "2026-11-06 07:00:00", "weight_kg": 80.0})
+    conn.commit()
+    before = pantry_view(conn, DAY, NOW)["remaining"]["kcal"]
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 1,
+            "start_time_local": f"{D} 07:00:00",
+            "type_key": "running",
+            "duration_s": 3600,
+            "calories": 900,
+            "raw_json": "{}",
+        },
+    )
+    conn.commit()
+    assert pantry_view(conn, DAY, NOW)["remaining"]["kcal"] > before
+
+
+def test_save_qty_missing_on_add_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as caught:
+        save_pantry(conn, {"op": "add", "item": "рис", "unit": "g"}, NOW)
+    assert str(caught.value) == "qty: нужно число."
+
+
+def test_save_qty_not_a_number_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as caught:
+        save_pantry(conn, {"op": "add", "item": "рис", "qty": "abc", "unit": "g"}, NOW)
+    assert str(caught.value) == "qty: нужно число."
+
+
+def test_save_bad_op_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as caught:
+        save_pantry(conn, {"op": "eat", "item": "рис", "qty": 1, "unit": "g"}, NOW)
+    assert str(caught.value) == "op: add, use, set или spoil."
+
+
+def test_save_non_string_item_error_text(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as caught:
+        save_pantry(conn, {"op": "add", "item": 5, "qty": 1, "unit": "g"}, NOW)
+    assert str(caught.value) == "item: нужно название."
+
+
+def test_save_non_string_until_error_text(conn: sqlite3.Connection) -> None:
+    fields = {"op": "add", "item": "рис", "qty": 1, "unit": "g", "until": 5}
+    with pytest.raises(MarkError) as caught:
+        save_pantry(conn, fields, NOW)
+    assert str(caught.value) == "until: нужна дата YYYY-MM-DD."
+
+
+@pytest.mark.parametrize("unit", [None, 5])
+def test_save_missing_or_non_string_unit_is_reported_as_empty(
+    conn: sqlite3.Connection, unit: Any
+) -> None:
+    fields = {"op": "add", "item": "рис", "qty": 1} | ({} if unit is None else {"unit": unit})
+    with pytest.raises(MarkError, match=r"получено: ''$"):
+        save_pantry(conn, fields, NOW)
+
+
+def test_save_cuts_microseconds_from_moment(conn: sqlite3.Connection) -> None:
+    now = datetime(2026, 11, 7, 9, 30, 15, 123456)
+    save_pantry(conn, {"op": "add", "item": "рис", "qty": 200, "unit": "g"}, now)
+    assert [e["logged_at"] for e in list_entries(conn, "рис")] == [LOGGED]

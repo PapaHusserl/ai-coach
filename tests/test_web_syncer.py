@@ -140,3 +140,42 @@ def test_successful_run_clears_previous_error(db: Path, monkeypatch: pytest.Monk
     syncer.start(db)
     wait_idle()
     assert syncer.status()["error"] is None
+
+
+def test_sync_runs_over_week_with_pause(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def spy(conn: object, client: object, days: int, **kwargs: object) -> None:
+        seen["days"] = days
+        seen.update(kwargs)
+
+    monkeypatch.setattr(syncer, "run_sync", spy)
+    syncer.start(db)
+    wait_idle()
+    assert seen == {"days": 7, "pause": 0.5}
+
+
+def test_unexpected_failure_goes_to_status_error(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*a: object, **k: object) -> None:
+        raise RuntimeError("сбой воркера")
+
+    monkeypatch.setattr(syncer, "run_workload", boom)
+    syncer.start(db)
+    wait_idle()
+    status = syncer.status()
+    assert status["running"] is False
+    assert status["error"] == "сбой воркера"
+
+
+def test_sync_thread_is_daemon(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    kwargs_seen: list[dict[str, object]] = []
+    real_thread = threading.Thread
+
+    def spy(*a: object, **k: object) -> threading.Thread:
+        kwargs_seen.append(k)
+        return real_thread(*a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(syncer.threading, "Thread", spy)
+    syncer.start(db)
+    wait_idle()
+    assert [k.get("daemon") for k in kwargs_seen] == [True]

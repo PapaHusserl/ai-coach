@@ -934,3 +934,22 @@ def test_get_state_garbage_date_is_400_with_text(port: int) -> None:
     status, body = request(port, "/api/state?date=" + quote("мусор"))
     assert status == 400
     assert body.decode() == "date: нужна дата YYYY-MM-DD."
+
+
+def test_post_sync_starts_syncer_on_the_server_base(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    from email.message import Message
+
+    from ai_coach.web import syncer
+
+    started: list[object] = []
+    monkeypatch.setattr(syncer, "start", lambda db: started.append(db) or True)
+    headers = Message()
+    headers["Origin"] = "http://pult"
+    headers["Host"] = "pult"
+    headers["Content-Length"] = "2"
+    status, _ = server_module.post_reply(db_path, "/api/sync", headers, io.BytesIO(b"{}"))
+    assert status == 202
+    assert started == [db_path]

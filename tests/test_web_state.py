@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from ai_coach.mcp_server.tools import ToolError
 from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.journal import add_weight, add_who5
 from ai_coach.web.state import state_view
@@ -253,3 +254,100 @@ def test_view_follows_the_viewed_day(conn: sqlite3.Connection) -> None:
     earlier = state_view(conn, DAY - timedelta(days=3), NOW)
     assert "short_night" not in kinds(earlier)
     assert earlier["trends"]["dates"][-1] == "2026-11-04"
+
+
+def test_trends_first_day_of_window_is_filled(conn: sqlite3.Connection) -> None:
+    put(conn, DAY - timedelta(days=TREND_DAYS - 1), 7, rhr=55, hrv=66, readiness=44)
+    trends = state_view(conn, DAY, NOW)["trends"]
+    assert trends["dates"][0] == "2026-10-25"
+    assert (trends["sleep_h"][0], trends["rhr"][0], trends["hrv"][0]) == (7, 55, 66)
+    assert trends["readiness"][0] == 44
+
+
+def test_trends_sleep_hours_rounded_to_one_decimal(conn: sqlite3.Connection) -> None:
+    upsert_daily_metrics(conn, {"date": DAY.isoformat(), "sleep_seconds": 27123, "raw_json": {}})
+    assert state_view(conn, DAY, NOW)["trends"]["sleep_h"][-1] == 7.5
+
+
+ROWS = [
+    {"date": "2026-11-05", "tss": 10.0},
+    {"date": "2026-11-06", "tss": 20.0},
+    {"date": "2026-11-07", "tss": 30.0},
+]
+
+
+def spy_collaborators(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    calls: dict[str, Any] = {}
+    sleep = {"signals": []}
+
+    def load(conn: Any, start: str, end: str) -> dict[str, Any]:
+        calls["load"] = (start, end)
+        return {"rows": ROWS}
+
+    def sleep_report(*args: Any) -> dict[str, Any]:
+        calls["sleep"] = args[1:]
+        return sleep
+
+    def illness(*args: Any) -> dict[str, Any]:
+        calls["illness"] = args[1:]
+        return {"signals": []}
+
+    def deviations(*args: Any) -> list[dict[str, Any]]:
+        calls["deviations"] = args[1:]
+        return []
+
+    calls["sleep_value"] = sleep
+    monkeypatch.setattr("ai_coach.web.state.tools.load", load)
+    monkeypatch.setattr("ai_coach.web.state.sleep_report", sleep_report)
+    monkeypatch.setattr("ai_coach.web.state.illness_report", illness)
+    monkeypatch.setattr("ai_coach.web.state.day_deviations", deviations)
+    return calls
+
+
+def test_load_is_asked_for_14_days_ending_on_the_day(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = spy_collaborators(monkeypatch)
+    state_view(conn, DAY, NOW)
+    assert calls["load"] == ("2026-10-25", "2026-11-07")
+
+
+def test_sleep_report_gets_the_day_and_now(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = spy_collaborators(monkeypatch)
+    state_view(conn, DAY, NOW)
+    assert calls["sleep"] == ("2026-11-07", NOW)
+
+
+def test_illness_report_gets_tss_by_date_and_the_sleep_report(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = spy_collaborators(monkeypatch)
+    state_view(conn, DAY, NOW)
+    tss = {"2026-11-05": 10.0, "2026-11-06": 20.0, "2026-11-07": 30.0}
+    assert calls["illness"][0] == "2026-11-07"
+    assert calls["illness"][1] == tss
+    assert calls["illness"][2] is calls["sleep_value"]
+    assert len(calls["illness"]) == 3
+
+
+def test_deviations_get_the_last_load_row(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = spy_collaborators(monkeypatch)
+    state_view(conn, DAY, NOW)
+    assert calls["deviations"] == ("2026-11-07", ROWS[-1])
+
+
+def test_deviations_get_no_load_row_when_load_fails(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = spy_collaborators(monkeypatch)
+
+    def failing(*args: Any) -> dict[str, Any]:
+        raise ToolError("нагрузка не считается")
+
+    monkeypatch.setattr("ai_coach.web.state.tools.load", failing)
+    state_view(conn, DAY, NOW)
+    assert calls["deviations"] == ("2026-11-07", None)

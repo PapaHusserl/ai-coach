@@ -796,3 +796,21 @@ def test_commit_error_after_remove_reports_uid(conn: sqlite3.Connection) -> None
     event_id = stored(conn, status="written", calendar_uid="u7")
     with pytest.raises(AgendaError, match="u7"):
         remove_event(FlakyCommitConn(conn), event_id, FakeCalendarWriter())  # type: ignore[arg-type]
+
+
+def test_move_draft_bad_start_names_start_at_field(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    with pytest.raises(AgendaError, match=r"^start_at: нужно YYYY-MM-DDTHH:MM, получено: 'завтра'"):
+        move_draft(conn, event_id, "завтра", TODAY)
+
+
+def test_move_draft_bad_end_names_end_at_field(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    with pytest.raises(AgendaError, match=r"^end_at: нужно YYYY-MM-DDTHH:MM, получено: 'вечером'"):
+        move_draft(conn, event_id, NEW_START, TODAY, end_at="вечером")
+
+
+def test_move_draft_end_with_timezone_names_end_at_field(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    with pytest.raises(AgendaError, match=r"^end_at: время местное, без часового пояса\."):
+        move_draft(conn, event_id, NEW_START, TODAY, end_at="2026-10-12T17:30:00+05:00")

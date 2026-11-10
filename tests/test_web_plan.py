@@ -274,6 +274,70 @@ def test_non_integer_id_is_plain_mark_error_not_no_event(
     assert get_event(conn, 1) == before
 
 
-def test_unknown_action_is_mark_error(conn: sqlite3.Connection) -> None:
-    with pytest.raises(MarkError):
+def test_default_writer_config_error_has_exact_text() -> None:
+    from ai_coach.web.plan import default_writer
+
+    with pytest.raises(WorkloadConfigError) as raised:
+        default_writer()
+    assert str(raised.value) == "Календарь коуча не задан: добавь [coach] calendar в workload.toml."
+
+
+def test_id_equal_to_sqlite_limit_is_no_event_not_mark_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(NoEvent):
+        apply(conn, move(2**63 - 1, "2026-10-11T15:30:00"))
+
+
+def test_huge_id_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
+        apply(conn, move(2**70, "2026-10-11T15:30:00"))
+    assert str(raised.value) == "id: нужен номер события."
+
+
+def test_move_ignores_end_at_from_payload(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    before = get_event(conn, event_id)
+    assert before is not None
+    length = datetime.fromisoformat(before["end_at"]) - datetime.fromisoformat(before["start_at"])
+    payload = move(event_id, "2026-10-11T15:30:00") | {"end_at": "2026-10-11T23:00:00"}
+    apply(conn, payload)
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert datetime.fromisoformat(row["end_at"]) == datetime(2026, 10, 11, 15, 30) + length
+
+
+def test_move_without_start_at_reports_empty_value(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    with pytest.raises(MarkError) as raised:
+        apply(conn, {"action": "move", "id": event_id, "date": DAY})
+    assert str(raised.value) == "start_at: нужно YYYY-MM-DDTHH:MM, получено: ''"
+
+
+def test_resize_without_end_at_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn)
+    with pytest.raises(MarkError) as raised:
+        apply(conn, {"action": "resize", "id": event_id, "date": DAY})
+    assert str(raised.value) == "end_at: нужно время конца."
+
+
+def test_create_bad_kind_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
+        apply(conn, create(kind="training", category=None), FakeCalendarWriter())
+    assert str(raised.value) == "kind: задача, фокус, отдых или еда."
+
+
+def test_create_bad_title_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
+        apply(conn, create(title=5), FakeCalendarWriter())
+    assert str(raised.value) == "title: нужна строка."
+
+
+def test_create_checks_date_window_against_now_not_real_today(conn: sqlite3.Connection) -> None:
+    payload = create(start_at="2026-09-20T15:00:00", end_at="2026-09-20T15:30:00")
+    apply(conn, payload, FakeCalendarWriter())
+    assert len(list_events(conn, "2026-01-01", "2027-12-31")) == 1
+
+
+def test_unknown_action_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError) as raised:
         apply(conn, {"action": "delete", "id": 1, "date": DAY})
+    assert str(raised.value) == "action: move, resize или create."
