@@ -166,7 +166,7 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 | `tests/test_web_marks.py` | `test_huge_event_id_is_not_found`: `payload(2**63, …)` → `NoEvent` (рядом с `test_event_id_must_be_int`); mutmut по `git diff` захватит `ai_coach.web.marks:_event`, TESTS — этот файл | ~5 |
 | `src/ai_coach/web/header.py` | новый: `header_view(conn, day, now)` — `weight` (последняя за 30 дней до `day`), `sync` (`last_sync_log` + `syncer.status()`), `metrics` (`readiness`, `sleep_h`, `hrv`, `rhr` дня `day`); `save_weight(conn, payload, now)` — пределы 20–300, `add_weight` | ~45 |
 | `src/ai_coach/web/syncer.py` | новый: `start(db) -> bool` (поток-демон: `load_client` → `run_sync` → `run_workload`, как `cli/main.py:137`; второй запуск при идущем — False), `status() -> {running, started_at, error}`; состояние модульное, под `threading.Lock` | ~50 |
-| `src/ai_coach/web/pantry.py` | новый: `pantry_view(conn, day)` — `stock` + флаги `expired/expiring` из `expiring`, при Р7 = 1 `remaining` и `food` дня (как `meal_view`); `save_pantry(conn, payload, now, today)` — `op: add \| use \| set \| spoil`, `record`/`spoil`, `ValueError` → `MarkError`, предупреждение в ответ | ~60 |
+| `src/ai_coach/web/pantry.py` | новый: `pantry_view(conn, day, now)` (`now` не читается — как `week_view`, `server.py:119`; «Правки по ревью», партия 4) — `stock` + флаги `expired/soon` из `expiring(conn, day, 2)`, при Р7 = 1 `remaining` (как `day.py:64-67`) и `food` дня (ключи `marks_for_day`, `marks.py:183`); `save_pantry(conn, payload, now)` — `op: add \| use \| set \| spoil` (`PULT_OPS`), `record`/`spoil` с `today = now.date()`, `ValueError` → `MarkError`, предупреждение в ответ | ~60 |
 | `src/ai_coach/web/state.py` | новый: `state_view(conn, day, now)` — `signals` (пять отчётов, `kind/value/limit` + источник), `trends` (14 дней: `sleep_h`, `hrv`, `rhr`, `readiness`; вес 30 дней), `load_error` при `ToolError` (overload без `tss`) | ~70 |
 | `src/ai_coach/web/day.py` | `day_view` += `"header": header_view(...)` | ~3 |
 | `src/ai_coach/web/server.py` | `POST_ROUTES = {"/api/mark": save_mark-путь, "/api/event": apply_event, "/api/weight": save_weight, "/api/pantry": save_pantry}`; `/api/sync` — отдельная ветка `post_reply` (`SYNC_PATH`, `sync_reply(db)`: 202/409; «Правки по ревью», партия 3); `_refusal(path, headers)` — путь из `POST_PATHS`; `post_reply(db, path, headers, rfile)` — общий разбор JSON и ошибок, `mark_reply` переименована в него (обёртки нет); GET `/api/pantry`, `/api/state`, `/api/sync` через `api(query, build)`; `do_POST` → `post_reply`, JSON при `status < 300` | ~45 |
@@ -177,7 +177,8 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
 | `src/ai_coach/web/static/header-pane.js` | новый: показатели, вес («записать» → поле + «OK»), «Обновить» → `POST /api/sync`, опрос `/api/sync` раз в 5 с пока `running`, затем `load()`; `headerBusy()` для `typing()` | ~55 |
 | `src/ai_coach/web/static/header-model.js`, `tests/web/header.test.mjs` | новые (партия 3, решил папа 2026-11-10): чистые `metricsLine(metrics)`, `weightLine(weight)`, `syncLine(sync, status)` — тексты строк шапки по Р2 = 1; тесты `node --test` | ~25 + ~40 |
 | `src/ai_coach/store/journal.py`, `src/ai_coach/cli/journal.py` | `MIN_WEIGHT_KG`, `MAX_WEIGHT_KG` переезжают из `cli/journal.py:39-40` в `store/journal.py`, CLI импортирует их (имена в `cli.journal` остаются; `grep -rn MIN_WEIGHT_KG tests/` — пусто) | ~4 |
-| `src/ai_coach/web/static/pantry-model.js`, `pantry-pane.js` | новые: `stepFor(unit)` (Р6), `parseDelta("+200" \| "-50" \| "120")` → `{op, qty}`, `pantryRows(view, today)`; DOM — таблица «Продукт · Остаток · Годен до», кнопки «−»/«+», поле, «Списать просроченное», форма добавления, блок КБЖУ (Р7) | ~40 + ~110 |
+| `src/ai_coach/web/static/pantry-model.js`, `pantry-pane.js` | новые: `stepFor(unit)` (Р6), `parseDelta("+200" \| "-50" \| "120")` → `{op, qty}`, `pantryRows(view, today)` → `[{item, qty, unit, step, until, state, spoil}]` («Правки по ревью», партия 4); DOM — таблица «Продукт · Остаток · Годен до», кнопки «−»/«+», поле, «Списать просроченное», форма добавления, блок КБЖУ (Р7); `loadPantry(day, today)` и `pantryBusy()` — как `loadWeek`/`headerBusy` | ~45 + ~110 |
+| `src/ai_coach/web/static/toast.js`, `post.js` | новые (партия 4, отступления кабана — «Правки по ревью»): `toast(text)` — узел и таймер из `marks.js:48` без смены поведения (третий потребитель, предложение из партии 3); `postJson(url, payload)` — из `header-pane.js`, ответ += `body` (текст 200 — `warning` кладовой); потребители — `marks.js`, `header-pane.js`, `pantry-pane.js` | 18 + 19 (`wc -l`) |
 | `src/ai_coach/web/static/state-model.js`, `state-pane.js` | новые: `SIGNAL_WORDS` (слова из справки — Р10), `signalRows(state)`, `trendSeries(state)`; DOM — список сигналов («сигналов нет»), пять графиков через `chart.js` | ~40 + ~70 |
 | `src/ai_coach/web/static/pult.js`, `pult-model.js` | `render` зовёт `renderScale`, `renderHeader`; вкладки `food`/`state` грузят `/api/pantry`, `/api/state` (как `train` → `loadWeek`, `:140, :161`); `typing()` += `dragging` | ~25 |
 | `src/ai_coach/web/static/index.html`, `pult.css` | `#scale` под баром; шапка — строка показателей и кнопок под `#now` (Р2); панели `food`, `state` вместо «скоро»; стили `.scale`, `.blk-ev`, `.handle`, `.tip`, `.chips`, `.pantry`, `.sig`, `.trend`; `touch-action: none`, `user-select: none` у шкалы; телефон — кнопки 44 px (П2в Р3 = 2) | ~15 + ~150 |
@@ -394,6 +395,38 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   Рекомендую 2 — так партия 2 и прошла по факту (`:90`): красное всё равно стало партией 2б, конвейер не ждёт Влада,
   история по партиям чище; `main` — рабочий репо Влада без релизов, цена непроверенного коммита — один коммит-правка.
   Решает Влад. **Решено: 2** — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
+- **Р18. Строка таблицы кладовой** (партия 4; Р6 = 1 задал кнопки и поле, текст ячеек — нет). (1) Как `coach pantry list`
+  (`cli/pantry.py:149`): остаток числом как есть («350 g», «2.5 pcs»), единицы `g`/`ml`/`pcs` из базы, «Годен до» — дата
+  `YYYY-MM-DD`, нет срока — пусто; просроченная строка — красная, дата с пометкой «просрочен», истекающая (≤ 2 дней) —
+  жёлтая с «скоро»; (2) единицы по-русски («г», «мл», «шт») и дата «6 ноя» — таблица перевода в `pantry-model.js`,
+  расхождение с CLI и справкой `pantry.md`. Рекомендую 1 — то же, что видит тренер в `get_pantry` и Влад в CLI; перевод —
+  отдельным шагом, если понадобится. Решает Влад. **Решено: 1** — кто решил: Влад, окно 2026-11-10, по рекомендации папы.
+- **Р19. Форма добавления** (партия 4). (1) Четыре поля в одну форму под таблицей: название · количество · единица
+  (кнопки `g · ml · pcs`, как кнопки вида у формы нового пункта Р5, по умолчанию `g`) · «годен до» (`<input type="date">`,
+  необязательно) · «Добавить»; (2) только название и количество, единица `g`, срок — через CLI; (3) форма открывается по
+  кнопке «+ продукт», как поле веса по «записать» (Р3), иначе таблица без формы. Рекомендую 3 — на телефоне таблица
+  короче, форма нужна реже, чем «−»/«+»; поля — как в (1). Решает Влад. **Решено: 3** — кто решил: Влад, окно 2026-11-10,
+  по рекомендации папы.
+- **Р20. Предупреждение «списано больше остатка» и «Записано»** (партия 4; `record` возвращает `warning`,
+  `pantry/service.py:87`). (1) Успех без предупреждения — всплывает «Записано» (`toast`, как у веса — П2в Р9 = 1);
+  с предупреждением — его текст строкой под таблицей (как ошибки сервера, П2 Р11 = 1), держится до следующей записи,
+  «Записано» не всплывает; (2) предупреждение — в тосте вместо «Записано», под таблицей только ошибки 400. Рекомендую 1 —
+  тост исчезает, а «остаток 0» — повод для сверки. Решает Влад. **Решено: 1** — кто решил: Влад, окно 2026-11-10, по
+  рекомендации папы.
+- **Р21. Порядок блоков на вкладке «Еда»** (партия 4). (1) Кладовая сверху (таблица, форма), ниже блок КБЖУ (строка
+  остатка дня + записи еды за день, Р7 = 1); (2) КБЖУ сверху, кладовая ниже. Рекомендую 1 — порядок текста BACKLOG 49
+  («кладовая … и КБЖУ дня»), кнопки «−»/«+» — главное действие вкладки. Решает Влад. **Решено: 1** — кто решил: Влад,
+  окно 2026-11-10, по рекомендации папы.
+- **Р22. Как применяется поле «+N/−N» и как закрыть форму добавления** (партия 4, отступление кабана — план способ не
+  задавал; `pantry-pane.js:rowNode`, `:addProduct`). У кабана: поле в каждой строке между «− остаток +», применяется
+  только клавишей Enter, кнопки нет; форма «+ продукт» закрывается только после удачного «Добавить» (ни «Отмена», ни
+  Escape). У веса (партия 3) — кнопка «OK» + Enter, Escape закрывает поле. (1) Поле — Enter без кнопки (как у кабана), форма
+  закрывается Escape (горячая клавиша, как у веса — техническое, кабан ставит сейчас) и после «Добавить». (2) То же плюс
+  кнопка «OK» у каждого поля и «Отмена» в форме — как у веса и формы нового пункта. (3) Одно поле «+N/−N» на таблицу
+  (выбор продукта — клик по строке) с кнопкой «OK». Рекомендую 1 — в строке на телефоне уже две кнопки по 44 px и число,
+  третья не влезает; клавиша «ввод» есть и на телефонной клавиатуре; при Р17 = 2 коммит партии не ждёт — если на
+  чек-листе Enter окажется неочевидным, «OK» — партия 4б (~6 строк). Решает Влад. **Решено: 1** — кто решил: Влад, окно
+  2026-11-10, по рекомендации папы.
 
 Риски:
 - EventKit из потока HTTP-обработчика (`CalendarWriter._open` → `_request_access`, `calendar_eventkit.py:48`,
@@ -431,8 +464,26 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   `id: "7"` и `id: true` → `MarkError` (не `NoEvent`), событие 1 на месте; `kind: "training"`, `"checkin"` → `MarkError`,
   в `coach_events` ничего.
 - Ошибки — два слоя по П2 Р10 = 2: тексты сервера под шкалой/в блоке, протокольные — «Не сохранилось, ошибка пульта (код N)».
-- `pantry_view.rows` — порядок `stock()` (по алфавиту), `expired` и `soon` (≤ 2 дней, `expiring(days=2)`) — флаги строк; при
-  Р7 = 1 `remaining`/`food` — `meal_view` + `list_food` дня.
+- `pantry_view.rows` — порядок `stock()` (по алфавиту), `expired` и `soon` (≤ 2 дней, `expiring(days=2)`) — флаги строк
+  относительно дня просмотра `day` (тест доебы `test_view_flags_depend_on_viewed_day`); при Р7 = 1 `remaining` —
+  `meal_view(conn, day, profile_nutrition(conn, day, current_profile(conn, day)))["remaining"]` (как `day.py:64-67`),
+  `food` — `list_food(conn, day, day)` с ключами `id, text, kcal, logged_at` (как `marks_for_day`, `marks.py:183`).
+- `save_pantry`: `PULT_OPS = ("add", "use", "set", "spoil")` — `open` из пульта не делается (нужен срок, кнопки нет); чужой
+  `op` → `MarkError` «op: add, use, set или spoil.»; `qty` — число, не bool (`None`/нет ключа — только у `spoil`), иначе
+  «qty: нужно число.»; `item` не строка → «item: нужно название.»; остальное (пустое имя, единица, срок `until`, «нет дома»,
+  `qty ≤ 0`) — тексты `ValueError` из `record`/`spoil` без правки. `spoil` без `qty` → `spoil(conn, item, None, None, now,
+  today)` (весь просроченный, `unit` не читается), с `qty` — `spoil(conn, item, qty, unit, now, today)` (FIFO, как CLI);
+  `today = now.date().isoformat()`, `now` — `isoformat(sep=" ", timespec="seconds")` (формат `cli/pantry.py:25`).
+- `pantryRows(view, today)` → `[{item, qty, unit, step: stepFor(unit), until: expires_on ?? "", state: "expired" | "soon" |
+  "", spoil: expires_on !== null && expires_on < today}]`: `state` — класс строки по флагам сервера (день просмотра),
+  `spoil` — кнопка «Списать просроченное» по настоящему `today` (`document.body.dataset.today`, `pult.js:145`), чтобы
+  сервер не ответил «нет просроченного остатка» при просмотре будущего дня; на сегодняшнем дне `spoil === (state ===
+  "expired")`. Тексты ячеек — Р18.
+- Вкладка «Еда»: `loadPantry(day, today)` в `pantry-pane.js` по образцу `loadWeek` (`week-pane.js:70`): вызов при открытии
+  вкладки и из `load()` таймера, когда панель видна (`pult.js:146, :168`), после каждого POST — повтор; ошибка запроса —
+  строкой под таблицей. Поля ввода кладовой лежат вне `.pane` — `typing()` их не видит (`pult.js:128`): `pantryBusy()`
+  (фокус в поле или идёт POST), `typing()` += `|| pantryBusy()`, как `headerBusy()`. `toast` — третий потребитель: вынос в
+  `static/toast.js` в этой партии (предложение из «Правок», партия 3; `marks.js`, `header-pane.js` импортируют оттуда).
 - `state_view.signals` — пять источников по дню просмотра: `sleep_report(day, now)`, `illness_report(day, tss, sleep)`,
   `overload_report(day, tss)` (`tss` из `tools.load(day-13, day)`, `ToolError` → `{}` и `load_error`), `who5_report`,
   `find_deviations`; `trends` — `list_daily_metrics`/`list_recovery_days` за 14 дней, `list_weights` за 30.
@@ -460,6 +511,11 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
    доебы по Python от них не зависят — кабан начинает с них); решает Влад.
 7. Р16 — строки шапки без данных (`header-model.js:metricsLine`, `:weightLine`, `:syncLine`); рекомендую 2; разблокирует
    коммит партии 3 (код кабана = вариант 1, правка ~2 строки); решает Влад.
+8. Р18–Р21 — строка таблицы кладовой, форма добавления, предупреждение и «Записано», порядок блоков (`pantry-pane.js`,
+   `pantry-model.js:pantryRows` — новые); рекомендую 1, 3, 1, 1; разблокируют DOM партии 4 (сервер `web/pantry.py` и
+   тесты доебы по Python и `stepFor`/`parseDelta` от них не зависят — кабан начинает с них); решает Влад окнами.
+9. Р22 — поле «+N/−N» только Enter, форма добавления без «Отмена» (`pantry-pane.js:rowNode`, `:addProduct`); рекомендую 1;
+   коммит партии 4 не блокирует (Р17 = 2), окно — вместе с чек-листом браузера; решает Влад.
 
 ## Правки по ревью
 
@@ -637,6 +693,98 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   time.sleep` до подмены, ожидание через `REAL_SLEEP(0.01)` в `wait_idle` и teardown `slow_sync`; потолки `WAIT` и
   `WAIT_SYNC` вернулись к 5 с. Под `taskpolicy -b` оба файла зелёные, самый долгий тест 0,6 с.
 
+Партия 4, тесты доебы (`tests/test_web_pantry.py` — 29 функций, `tests/test_web_server.py` +8, `tests/web/pantry.test.mjs` — 7;
+разбор папы 2026-11-10 по коду; техническое — решил папа, видимое — Р18–Р21 Владу). Красные (прогон папы 2026-11-10):
+`test_web_pantry.py` и `pantry.test.mjs` — сборкой файла (`ModuleNotFoundError: ai_coach.web.pantry`, `ERR_MODULE_NOT_FOUND`),
+поштучно не подтверждены; серверные — 8 из 8 `FAILED` поштучно (`uv run pytest tests/test_web_server.py -k pantry -rA`:
+маршрута нет → 404 вместо 200/400/403), `make lint` на `test_web_server.py` чист.
+
+- **(1) `pantry_view(conn, day, now)` — три аргумента**, не обёртка и не `now=None`: все `build` в `api(query, build)`
+  (`server.py:166`) — `day_view`, `week_view`, `sync_view` — трёхаргументные, `now` у `week_view`/`sync_view` не читается
+  и помечен в докстринге (`server.py:120`, `header.py:59`); второй способ в репо не заводим. Доеба правит тесты: `pantry_view(conn, DAY, NOW)`
+  (`rows_by_item` и прямые вызовы, ~12 строк), «Файлы» исправлены.
+- **(2) `save_pantry(conn, payload, now)` → `{"warning": str | None}`** — принято: контракт `POST_ROUTES` (`server.py:76`,
+  «Правки», партия 3), `today = now.date().isoformat()` — тот же момент, что `date.today()` рядом с `now()` в CLI
+  (`cli/pantry.py:88`). Четвёртый аргумент в «Файлах» был ошибкой — исправлено.
+- **(3) Тело `{op, item, qty, unit[, until]}`, ответ `{warning}`, ключи `food` — `text, kcal, logged_at`, `remaining` как у
+  `meal_view`** — принято, совпадает с «API и модель» (`:259, :261`). `food` — ровно `id, text, kcal, logged_at` (как
+  `marks_for_day`, `marks.py:183`; тест доебы проверяет три — четвёртый не мешает); `remaining` — `meal_view` с целью
+  `profile_nutrition` (`day.py:64-67`), без профиля `None`. Детали разбора `payload` — «Умолчания» (`PULT_OPS`, bool,
+  `open` не из пульта).
+- **(4) `pantryRows(view, today)`** — форма результата в плане не была описана, папа задал в «Файлах» и «Умолчаниях»:
+  `[{item, qty, unit, step, until, state, spoil}]`; `today` — кнопка списания по настоящему дню, `state` — по флагам
+  сервера. Тесты доебы — ниже.
+- **(5) I001 в `test_web_pantry.py`** — верно: ruff относит импорт к first-party по наличию модуля в `src` (подсказка ruff
+  переносит именно `ai_coach.web.pantry` к `pytest`, остальные `ai_coach.*` на месте — проверено `uv run ruff check`
+  2026-11-10); после `src/ai_coach/web/pantry.py` пройдёт. Коммитить файл тестов до модуля не нужно (коммит — партия
+  целиком, RULES «Гигиена»), отдельной правки нет.
+- Тесты по плану — сверка: «Тесты» требуют `expired`, `soon`, `+200 → add`, `-50 → use`, `warning`, `spoil` у непросроченного
+  → ошибка, чужая единица → 400, сервер `GET /api/pantry` 200 и мусорная дата 400 — всё есть. Сверх плана и принято:
+  граница `soon` (сегодня, 2, 3 дня), флаги по дню просмотра, `set`, нормализация имени, `until`, таблица плохих тел,
+  `[1]` → «Нужен JSON-объект.», 403 без записи, `logged_at` запроса. Расхождений с решениями Влада нет; `qty == 200`
+  против `REAL` sqlite — `200.0 == 200` в Python истинно, не ловушка.
+- **Доебе дописать** (до кода, тем же стилем): `test_web_pantry.py` — `{"op": "open", "item": "рис", "qty": 0, "unit": "g",
+  "until": "2026-12-01"}` → `MarkError`, в журнале пусто (иначе `record` его примет — `PULT_OPS` под mutmut); `spoil` с `qty`
+  у непросроченного (`put` без срока, `{"op": "spoil", "item": "рис", "qty": 100, "unit": "g"}`) → `{"warning": None}`,
+  остаток 400 (ветка `spoil(qty, unit)`); `spoil` с `qty` больше остатка → `warning` «остаток 0»; `set` с `qty: 0` →
+  продукт исчезает из `rows` (сверка «0» в поле — Р6 = 1, `set` допускает 0); `pantry_view` после `save_pantry` «молоко»
+  со сроком `2026-11-06` при `DAY` → `expired`, после `spoil` без qty — строки нет. `tests/web/pantry.test.mjs` —
+  `pantryRows`: строка без срока → `{until: "", state: "", spoil: false}`; `expired: true`, `expires_on: "2026-11-06"`,
+  `today: "2026-11-07"` → `state: "expired", spoil: true`; `soon: true` → `state: "soon", spoil: false`; `expired: true`
+  при `today` раньше срока (день просмотра в будущем: `expires_on: "2026-11-08"`, `today: "2026-11-07"`) → `state:
+  "expired", spoil: false`; `step` по единице; порядок строк как в `view.rows`. `parseDelta("0")` → `{op: "set", qty: 0}`
+  (сверка «ничего не осталось»), `parseDelta("-0")`/`"+0"` → `null` (списать/добавить ноль нечего). Серверные — как
+  написаны. Поштучный прогон красных — как в партии 3.
+
+Партия 4, отступления кабана (разбор папы 2026-11-10 по `git diff HEAD` и новым `pantry.py`, `pantry-model.js`, `pantry-pane.js`,
+`toast.js`, `post.js`; техническое — решил папа, видимое сверх Р18–Р21 — Р22 Владу; тесты зелёные по слову кабана, папа прогнал
+только пробу `save_pantry` ниже):
+
+- **`static/post.js`: `postJson` вынесен из `header-pane.js`, ответ += `body`** — принято. Два потребителя (`header-pane.js:4`,
+  `pantry-pane.js:6`), вторая копия была бы BACKLOG 66 заново; `body` нужен кладовой ради `warning` из ответа 200 (Р20 = 1),
+  шапка его не читает — поведение веса и синка не меняется (`text: ""` при `ok` как раньше). Имя `post.js` — рядом с `dom.js`
+  (функции без состояния), в `dom.js` не кладём: там DOM, тут сеть. В «Файлы» добавлен. Не в этой партии: `marks.js:75` и
+  `scale-pane.js:41` шлют POST своим кодом (третья и четвёртая копия разбора ответа) — вне области партии 4, объединение —
+  пункт BACKLOG (оптимизация), не сейчас (правило 9: регресс в области — в партию, оптимизации — в бэклог).
+- **`static/toast.js` уже в этой партии** — принято, ровно предложение папы из партии 3 («третий потребитель — вынести в той же
+  партии», `:663`): `marks.js`, `header-pane.js`, `pantry-pane.js` импортируют оттуда, узел и таймер одни, `.toast` в `pult.css`
+  не тронут, `ui.toast` из `marks.js` снят. В «Файлы» добавлен.
+- **«просрочен» / «скоро» рядом с датой, строка красная / жёлтая** (`pantry-pane.js:71`, `pult.css .pantry tr.expired/.soon`) —
+  не отступление: дословно Р18 = 1 (Влад 2026-11-10: «дата с пометкой «просрочен»… жёлтая с «скоро»»). Остаток «350 g»,
+  дата `YYYY-MM-DD`, пусто без срока — тоже Р18 = 1. Принято.
+- **Поле «+N/−N» в каждой строке** — принято как исполнение Р6 = 1 («− остаток +» и поле; Р18 прямо говорит, что кнопки и поле
+  задал Р6). Способ применения (только Enter) и закрытие формы без «Отмена» — видимое, план не задавал → **Р22** («Развилки»),
+  код кабана = вариант 1 без Escape; Escape у формы — кабан ставит сейчас (горячая клавиша, прецедент поля веса
+  `header-pane.js:100`, принято папой в партии 3 `:628`), остальное — до окна не менять.
+- **Тексты** — приняты, развилки не дают: «Дома ничего нет.» — то же слово, что `coach pantry list` на пустой кладовой
+  (`cli/pantry.py:144`) — исполнение Р18 = 1 «как CLI»; «Записей еды за день нет.» — пустой список записей Р7 = 1 в манере
+  «На этот день ничего нет.» / «сигналов нет» (Р16 = 2); «Нужно число: +200, -50 или 120.» — отказ клиента на `parseDelta →
+  null`, три формы — слова Р6 = 1, показывается там же, где ошибки сервера (П2 Р11 = 1). Строка остатка КБЖУ — `remainingText`
+  из `marks-model.js:129` (без цели — «Цель на день не задана.»), тот же текст, что в окне еды — Р7 = 1 «как в окне еды».
+- **`save_pantry`: `until` не строкой** — **не принято, поправить** (регресс области, правило 9): `{"until": 5}`, `true`, `["x"]`
+  → `_check_expiry` (`pantry/service.py:48`) падает `TypeError: fromisoformat: argument must be str`, `except ValueError`
+  (`web/pantry.py:63`) его не ловит, `post_reply` — тоже (`server.py:113` ловит только `MarkError`) → обработчик падает,
+  ответа нет (проверено `uv run python` 2026-11-10). Правка (техническое, папа): в `save_pantry` после `unit` — `until =
+  payload.get("until")`; `if until is not None and not isinstance(until, str): raise MarkError("until: нужна дата
+  YYYY-MM-DD.")` (текст — как у `date` в `api`, `test_web_server.py:test_get_pantry_garbage_date_is_400_with_text`); ~2 строки.
+  Тест — кабан дописывает в таблицу `test_save_bad_payload_is_mark_error_and_writes_nothing` (`tests/test_web_pantry.py:276`)
+  две строки: `{"op": "add", "item": "рис", "qty": 1, "unit": "g", "until": 5}` и `"until": True` (по замечанию ревью к файлу
+  доебы — граница из партии 3 `:668`; `ai_coach.web.pantry:save_pantry` под mutmut уже в «Тестах»). `unit` не строкой —
+  проверено: `record` отвечает `ValueError` «Единица должна быть из …» на любой тип → 400, правки не нужно.
+- Прочее по диффу без замечаний: `pantry_view` — три аргумента, флаги по дню просмотра, `FOOD_KEYS` — четыре ключа («Правки»,
+  тесты доебы); `POST_ROUTES["/api/pantry"]` и GET через `api(query, build)` — как в «Файлах»; `pantryBusy()` — идёт POST или
+  фокус в `INPUT` видимой панели (`panel.contains(active)` — `null` безопасен); `write()` чистит заметку перед записью —
+  «держится до следующей записи» Р20 = 1; форма — поля Р19 (1), кнопки `g · ml · pcs` с `aria-pressed`, по умолчанию `g`,
+  открывается по «+ продукт» (Р19 = 3), после удачи `reset()` и скрыта; порядок карточек — кладовая, затем КБЖУ (Р21 = 1);
+  `inputmode="decimal"` у количества — как у веса (`:624`), у поля `+N/−N` его нет намеренно (на iOS у decimal нет «+»/«−»);
+  44 px на телефоне (П2в Р3 = 2); таймер зовёт `loadPantry` только у видимой панели (как `loadWeek`).
+- Не от кабана: в дереве неотслеживаемый `str_me` (одна строка — команда `claude --resume` этой сессии, артефакт среды) — в
+  коммит не брать; удалить — по «да» Влада (RULES «Гигиена»).
+
+Партия 4, ревью мамы и аудит свекрови (круг 1, 2026-11-10): свекровь — чисто; мама — одно замечание:
+медиаблок `@media (max-width: 520px)` с 44 px для `.pantry button, .pf button` в `pult.css` дублировал общий блок «Телефон
+(Р3)» — кабан удалил (техническое, по ревью мамы), node 195/195, `make lint` чист. BACKLOG не заводился.
+
 ## Открыто: стенд / аналитик
 
 - Прототип (артефакт claude.ai) папе недоступен — развилки Р1, Р2, Р5–Р7, Р11 составлены без него; Влад сверяет с
@@ -668,6 +816,15 @@ docs/plan-p2.md, вид — docs/plan-p2v.md, П3 — docs/plan-p3.md). Под �
   (в) «Синк» из пульта → «синк идёт…», затем время; данные Garmin и Календаря (EventKit из потока сервера) обновились;
   (г) без токенов Garmin — «синк HH:MM ошибка» и текст ошибки под шапкой, кнопка снова активна;
   (д) открытое поле веса не останавливает обновление дня; на телефоне шапка не ломает вёрстку.
+- Партия 4, `pantry-pane.js` — только руками; коммит не блокирует (Р17 = 2), красное — партия 4б; Р22 — тем же окном:
+  (а) вкладка «Еда»: таблица, «Дома ничего нет.» на пустой кладовой, просроченная строка красная с «просрочен», ≤ 2 дней —
+  жёлтая с «скоро», `coach pantry list` совпадает;
+  (б) «−»/«+» по шагу единицы (g 50, ml 100, pcs 1) → «Записано»; списание больше остатка → предупреждение под таблицей,
+  «Записано» не всплывает;
+  (в) поле «+200» / «-50» / «120» + Enter → add / use / set; «abc» → «Нужно число: +200, -50 или 120.»;
+  (г) «Списать просроченное» у просроченной строки → строка исчезает; «+ продукт» → форма, `g · ml · pcs`, дата, «Добавить»;
+  (д) блок КБЖУ: строка остатка как в окне еды, записи дня «время · текст · ккал», «Записей еды за день нет.»;
+  (е) ввод в поле не сбивается таймером; телефон — кнопки 44 px, таблица не ломает вёрстку.
 
 ## Смета (кабан-тесть, режим 1)
 

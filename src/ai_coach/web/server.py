@@ -1,6 +1,6 @@
 """HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
 (неделя Пн-Вс и нагрузка вкладки «Тренировки»); пишет в базу
-только POST из таблицы POST_ROUTES (/api/mark, /api/event; Origin = Host, Р1 = 2 П2),
+только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry; Origin = Host, Р1 = 2 П2),
 на каждый запрос своё соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
@@ -24,6 +24,7 @@ from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.header import save_weight, sync_view
 from ai_coach.web.marks import save_mark
+from ai_coach.web.pantry import pantry_view, save_pantry
 from ai_coach.web.plan import apply_event
 
 MAX_BODY = 64 * 1024
@@ -77,6 +78,7 @@ POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], 
     "/api/mark": _mark,
     "/api/event": apply_event,
     "/api/weight": save_weight,
+    "/api/pantry": save_pantry,
 }
 POST_PATHS = frozenset(POST_ROUTES) | {SYNC_PATH}
 
@@ -146,6 +148,8 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
                 self.api(parse_qs(parts.query), day_view)
             elif parts.path == "/api/week":
                 self.api(parse_qs(parts.query), week_view)
+            elif parts.path == "/api/pantry":
+                self.api(parse_qs(parts.query), pantry_view)
             elif parts.path == SYNC_PATH:
                 self.api(parse_qs(parts.query), sync_view)
             elif parts.path.startswith(STATIC_PREFIX):

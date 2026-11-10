@@ -807,6 +807,67 @@ nav button[aria-selected="true"] {
 	opacity: 1;
 }
 
+/* Вкладка «Еда»: кладовая (Р18 = 1, Р19 = 3). */
+.pantry {
+	border-collapse: collapse;
+	font-size: 12px;
+	width: 100%;
+}
+
+.pantry th {
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 600;
+	text-align: left;
+	text-transform: uppercase;
+}
+
+.pantry td,
+.pantry th {
+	border-bottom: 1px solid var(--line);
+	padding: 5px 4px;
+	vertical-align: middle;
+}
+
+.pantry td.qty {
+	font-family: var(--f-mono);
+	white-space: nowrap;
+}
+
+.pantry td.qty input {
+	margin-left: 6px;
+	width: 7ch;
+}
+
+.pantry tr.expired td {
+	color: var(--bad);
+}
+
+.pantry tr.soon td {
+	color: var(--warn);
+}
+
+.pf {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.pf[hidden] {
+	display: none;
+}
+
+.chips {
+	display: inline-flex;
+	gap: 4px;
+}
+
+.chips button[aria-pressed="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
 /* Телефон (Р3): текст крупнее, нажимаемое — от 44 px. */
 @media (max-width: 520px) {
 	body {

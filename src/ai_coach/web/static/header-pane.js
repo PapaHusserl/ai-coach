@@ -1,7 +1,8 @@
 // Пульт: шапка — показатели дня, вес, синк (DOM, в браузере). Тексты строк — header-model.js.
 
 import { metricsLine, syncLine, weightLine } from "./header-model.js";
-import { toast } from "./marks.js";
+import { postJson } from "./post.js";
+import { toast } from "./toast.js";
 
 const POLL_MS = 5000;
 const IDLE = { running: false, started_at: null, error: null };
@@ -41,24 +42,6 @@ async function poll() {
 
 function watch() {
 	if (timer === null) timer = setInterval(poll, POLL_MS);
-}
-
-async function postJson(url, payload) {
-	try {
-		const response = await fetch(url, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(payload),
-		});
-		if (response.ok) return { ok: true, status: response.status, text: "" };
-		const text = (await response.text()).trim();
-		const known = [400, 404, 409].includes(response.status);
-		const shown = known ? text : `Не сохранилось, ошибка пульта (код ${response.status})`;
-		return { ok: false, status: response.status, text: shown };
-	} catch (error) {
-		console.error(`POST ${url} не удался`, error);
-		return { ok: false, status: 0, text: "Не сохранилось, нет связи с пультом" };
-	}
 }
 
 async function saveWeight() {

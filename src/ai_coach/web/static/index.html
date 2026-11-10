@@ -57,7 +57,30 @@
 				<p id="load-error" class="hint" hidden></p>
 			</div>
 		</section>
-		<section data-panel="food" class="card" hidden><p class="empty">скоро</p></section>
+		<section data-panel="food" class="cards" hidden>
+			<div class="card">
+				<div class="plan-h"><h2>Кладовая</h2> <button id="pantry-add" class="link" type="button">+ продукт</button></div>
+				<form id="pantry-form" class="pf" hidden>
+					<input id="pantry-name" placeholder="Продукт" aria-label="Продукт" required>
+					<input id="pantry-qty" inputmode="decimal" size="6" placeholder="Количество" aria-label="Количество" required>
+					<span id="pantry-units" class="chips"></span>
+					<input id="pantry-until" type="date" aria-label="Годен до">
+					<button type="submit">Добавить</button>
+				</form>
+				<table class="pantry">
+					<thead><tr><th>Продукт</th><th>Остаток</th><th>Годен до</th></tr></thead>
+					<tbody id="pantry-rows"></tbody>
+				</table>
+				<p id="pantry-empty" class="empty" hidden>Дома ничего нет.</p>
+				<p id="pantry-note" class="error" hidden></p>
+			</div>
+			<div class="card">
+				<div class="plan-h"><h2>КБЖУ дня</h2></div>
+				<p id="food-left" class="bar-label"></p>
+				<ul id="food-list" class="rows"></ul>
+				<p id="food-empty" class="empty" hidden>Записей еды за день нет.</p>
+			</div>
+		</section>
 		<section data-panel="state" class="card" hidden><p class="empty">скоро</p></section>
 	</div>
 	<noscript><p class="error">Нужен включённый JavaScript.</p></noscript>

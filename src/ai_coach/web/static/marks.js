@@ -18,6 +18,7 @@ import {
 import { el } from "./dom.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
 import { offersBlock } from "./offers-pane.js";
+import { toast } from "./toast.js";
 import { fillTraining } from "./training-pane.js";
 
 export * from "./marks-model.js";
@@ -27,7 +28,6 @@ const state = { id: null, day: null, tab: null, future: false, past: false, form
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
 const ui = {};
-let toastTimer;
 // Черновики формы по «день:id пункта» до перезагрузки страницы (Р17 = 1); у каждого — формы по вкладкам, текст в form.text.
 const drafts = {};
 
@@ -42,19 +42,6 @@ function paneNode() {
 		ui.pane.append(ui.sub, ui.tabs, ui.form, ui.history);
 	}
 	return ui.pane;
-}
-
-// Всплывающее «Записано» (Р9).
-export function toast(text) {
-	if (!ui.toast) {
-		ui.toast = el("div", "toast");
-		ui.toast.setAttribute("role", "status");
-		document.body.append(ui.toast);
-	}
-	ui.toast.textContent = text;
-	ui.toast.classList.add("show");
-	clearTimeout(toastTimer);
-	toastTimer = setTimeout(() => ui.toast.classList.remove("show"), 1800);
 }
 
 export function setupMarks(reload) {

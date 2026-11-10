@@ -850,3 +850,67 @@ def test_post_sync_without_origin_is_403_and_starts_nothing(port: int) -> None:
 
     assert post(port, {}, path="/api/sync", origin=None)[0] == 403
     assert syncer.status()["running"] is False
+
+
+# Партия 4: вкладка «Еда» - кладовая.
+RICE = {"op": "add", "item": "рис", "qty": 200, "unit": "g"}
+
+
+def pantry_rows(db_path: Path) -> list[Any]:
+    conn = open_db(db_path)
+    try:
+        return conn.execute("SELECT * FROM pantry_log").fetchall()
+    finally:
+        conn.close()
+
+
+def test_get_pantry_has_rows_remaining_and_food(port: int) -> None:
+    status, body = request(port, "/api/pantry?date=2026-11-07")
+    assert status == 200
+    data = json.loads(body)
+    assert data["rows"] == []
+    assert set(data) == {"rows", "remaining", "food"}
+
+
+def test_get_pantry_without_date_is_today(port: int) -> None:
+    assert request(port, "/api/pantry")[0] == 200
+
+
+def test_get_pantry_garbage_date_is_400_with_text(port: int) -> None:
+    status, body = request(port, "/api/pantry?date=" + quote("мусор"))
+    assert status == 400
+    assert body.decode() == "date: нужна дата YYYY-MM-DD."
+
+
+def test_post_pantry_writes_and_shows_in_get(port: int, db_path: Path) -> None:
+    status, answer = post(port, RICE, path="/api/pantry")
+    assert status == 200
+    assert json.loads(answer) == {"warning": None}
+    [row] = pantry_rows(db_path)
+    assert (row["item"], row["qty"], row["unit"], row["op"]) == ("рис", 200, "g", "add")
+    [shown] = json.loads(request(port, "/api/pantry")[1])["rows"]
+    assert (shown["item"], shown["qty"]) == ("рис", 200)
+
+
+def test_post_pantry_overuse_answers_warning(port: int) -> None:
+    post(port, RICE, path="/api/pantry")
+    status, answer = post(port, RICE | {"op": "use", "qty": 500}, path="/api/pantry")
+    assert status == 200
+    assert "остаток 0" in json.loads(answer)["warning"]
+
+
+def test_post_pantry_error_is_400_with_text_and_writes_nothing(port: int, db_path: Path) -> None:
+    status, answer = post(port, RICE | {"op": "use"}, path="/api/pantry")
+    assert status == 400
+    assert "нет дома" in answer.decode()
+    assert pantry_rows(db_path) == []
+
+
+def test_post_pantry_without_origin_is_403_and_writes_nothing(port: int, db_path: Path) -> None:
+    assert post(port, RICE, path="/api/pantry", origin=None)[0] == 403
+    assert pantry_rows(db_path) == []
+
+
+def test_post_pantry_array_body_is_400_json_object_needed(port: int) -> None:
+    status, answer = post(port, b"[1]", path="/api/pantry")
+    assert (status, answer.decode()) == (400, "Нужен JSON-объект.")

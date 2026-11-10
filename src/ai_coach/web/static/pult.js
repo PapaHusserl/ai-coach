@@ -18,6 +18,7 @@ import {
 } from "./pult-model.js";
 
 import { headerBusy, renderHeader } from "./header-pane.js";
+import { loadPantry, pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
 import { loadWeek } from "./week-pane.js";
 
@@ -123,7 +124,7 @@ function render(view) {
 
 // Таймер не перерисовывает список, пока в окне пункта идёт ввод (прототип :513).
 function typing() {
-	if (scaleBusy() || headerBusy()) return true;
+	if (scaleBusy() || headerBusy() || pantryBusy()) return true;
 	const active = document.activeElement;
 	return Boolean(active?.closest(".pane")) && ["INPUT", "TEXTAREA"].includes(active.tagName);
 }
@@ -143,7 +144,9 @@ if (typeof document !== "undefined") {
 			renderHeader(view.header, load);
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
-			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, view.now.slice(0, 10));
+			const today = view.now.slice(0, 10);
+			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, today);
+			if (!document.querySelector('[data-panel="food"]').hidden) loadPantry(view.date, today);
 		} catch (error) {
 			message.textContent = `Не удалось загрузить: ${error.message}`;
 			message.hidden = false;
@@ -166,6 +169,9 @@ if (typeof document !== "undefined") {
 			}
 			if (tab.dataset.tab === "train" && document.body.dataset.day) {
 				loadWeek(document.body.dataset.day, document.body.dataset.today);
+			}
+			if (tab.dataset.tab === "food" && document.body.dataset.day) {
+				loadPantry(document.body.dataset.day, document.body.dataset.today);
 			}
 		});
 	}
