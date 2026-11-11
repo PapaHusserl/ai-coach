@@ -122,6 +122,24 @@ def test_help_workload_topic_points_to_todo_topic() -> None:
     assert "coach-help/todo.md" in (AGENTS / "coach-help" / "workload.md").read_text()
 
 
+def test_day_step_five_asks_by_text_not_window() -> None:
+    step = next(line for line in day_text().splitlines() if line.startswith("5. "))
+    assert "Спроси текстом" in step
+    assert "Спроси окном" not in day_text()
+    step_two = next(line for line in day_text().splitlines() if line.startswith("2. Задачи"))
+    assert "AskUserQuestion" in step_two
+
+
+def test_recalc_yes_no_is_text_with_substance() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    assert "текстом - с сутью изменений" in text
+    assert "Окно «да/нет»" not in text
+
+
+def test_help_day_plan_says_one_window() -> None:
+    assert "одним окном" in (AGENTS / "coach-help" / "day-plan.md").read_text()
+
+
 def test_day_file_offers_cancelling_cooking_block_by_event_cancel() -> None:
     text = day_text()
     assert "готовк" in text

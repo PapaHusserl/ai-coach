@@ -1,9 +1,14 @@
 import json
 import sqlite3
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
+import pytest
+from fake_clock import freeze
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text
 
+from ai_coach.goals.service import accept_phase, propose_phase
+from ai_coach.mcp_server import snapshot as snapshot_module
 from ai_coach.mcp_server.server import TOOLS
 from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS, SNAPSHOT_MAX_CHARS, SNAPSHOT_ROWS
 from ai_coach.mcp_server.tools import MAX_CHARS
@@ -13,6 +18,7 @@ from ai_coach.store.journal import add_food, add_sync_log, add_weight
 from ai_coach.store.meds import add_med, delete_med
 from ai_coach.store.pantry import add_entry
 from ai_coach.store.plans import add_plan_actual, add_planned_workout
+from ai_coach.store.recipes import add_recipe
 from ai_coach.store.sport_nutrition import (
     add_protocol,
     add_supplement,
@@ -483,3 +489,284 @@ def test_snapshot_description_names_seven_days_and_limit() -> None:
     text = TOOLS["get_morning_snapshot"][1]
     assert "самочувствие за 7 дней" in text
     assert "32768 символов" in text
+
+
+# --- Н24: выжившие мутанты сводки (окна, порядок обрезки, лимиты) ---
+
+
+def day_shift(days: int) -> str:
+    return (date.fromisoformat(DAY) + timedelta(days=days)).isoformat()
+
+
+def extra_actual(conn: sqlite3.Connection, activity_id: int, day: str) -> None:
+    upsert_activity(
+        conn,
+        {
+            "activity_id": activity_id,
+            "start_time_local": "2026-01-01 07:00:00",
+            "type_key": "running",
+            "raw_json": {},
+        },
+    )
+    add_plan_actual(
+        conn, {"date": day, "activity_id": activity_id, "kind": "extra", "details_json": {}}
+    )
+
+
+def test_snapshot_load_error_tells_to_run_sync_on_empty_base(conn: sqlite3.Connection) -> None:
+    assert "coach sync" in call(conn, "get_morning_snapshot", date=DAY)["load_error"]
+
+
+def test_snapshot_deviations_use_load_of_the_day(conn: sqlite3.Connection) -> None:
+    fill(conn)
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 2,
+            "start_time_local": f"{DAY} 07:00:00",
+            "type_key": "running",
+            "name": "Длинный бег",
+            "duration_s": 10800,
+            "avg_hr": 170,
+            "raw_json": {},
+        },
+    )
+    kinds = [r["kind"] for r in call(conn, "get_morning_snapshot", date=DAY)["deviations"]["rows"]]
+    assert "atl_over_ctl" in kinds
+
+
+def test_snapshot_goals_keep_first_rows_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        add_goal(conn, {"title": f"Цель {number}", "status": "active"})
+    found = call(conn, "get_morning_snapshot", date=DAY)["goals"]["rows"]
+    assert (len(found), found[0]["title"]) == (SNAPSHOT_ROWS, "Цель 0")
+
+
+def test_snapshot_metrics_keep_newest_when_cut_by_chars(conn: sqlite3.Connection) -> None:
+    for back in range(8):
+        upsert_daily_metrics(
+            conn, {"date": day_shift(-back), "readiness_level": "я" * 600, "raw_json": {}}
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)["metrics"]
+    assert found["truncated"] is True
+    assert found["rows"][-1]["date"] == DAY
+
+
+def test_snapshot_metrics_window_is_seven_days_back(conn: sqlite3.Connection) -> None:
+    for back in (8, 7, 0):
+        upsert_daily_metrics(conn, {"date": day_shift(-back), "raw_json": {}})
+    found = call(conn, "get_morning_snapshot", date=DAY)["metrics"]["rows"]
+    assert [r["date"] for r in found] == [day_shift(-7), DAY]
+
+
+def test_snapshot_activities_keep_newest_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        upsert_activity(
+            conn,
+            {
+                "activity_id": number + 1,
+                "start_time_local": f"{DAY} 07:{number:02d}:00",
+                "type_key": "running",
+                "name": f"Бег {number}",
+                "raw_json": {},
+            },
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)["activities"]["rows"]
+    assert found[-1]["name"] == f"Бег {SNAPSHOT_ROWS + 4}"
+
+
+def test_snapshot_activities_window_is_seven_days_back(conn: sqlite3.Connection) -> None:
+    for number, back in enumerate((8, 7, 0)):
+        upsert_activity(
+            conn,
+            {
+                "activity_id": number + 1,
+                "start_time_local": f"{day_shift(-back)} 07:00:00",
+                "type_key": "running",
+                "raw_json": {},
+            },
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)["activities"]["rows"]
+    assert [r["start_time_local"][:10] for r in found] == [day_shift(-7), DAY]
+
+
+def test_snapshot_phases_proposed_has_only_proposed(conn: sqlite3.Connection) -> None:
+    propose_phase(conn, "Новая", now="2026-10-01T10:00:00")
+    taken = propose_phase(conn, "Принятая", now="2026-10-01T10:00:00")
+    accept_phase(conn, taken, now="2026-10-02T10:00:00")
+    found = call(conn, "get_morning_snapshot", date=DAY)["phases_proposed"]["rows"]
+    assert [r["name"] for r in found] == ["Новая"]
+
+
+def test_snapshot_phases_now_has_phases_of_the_day(conn: sqlite3.Connection) -> None:
+    propose_phase(conn, "Фаза", now="2026-10-01T10:00:00")
+    found = call(conn, "get_morning_snapshot", date=DAY)["phases_now"]["rows"]
+    assert [r["name"] for r in found] == ["Фаза"]
+
+
+def test_snapshot_plan_covers_today_and_six_days_ahead(conn: sqlite3.Connection) -> None:
+    for ahead in (-1, 0, 6, 7):
+        add_planned_workout(
+            conn,
+            {"date": day_shift(ahead), "sport": "run", "name": "Бег", "workout_json": {}},
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)["plan"]["rows"]
+    assert [r["date"] for r in found] == [DAY, day_shift(6)]
+
+
+def test_snapshot_plan_actual_window_is_seven_days_back_to_today(
+    conn: sqlite3.Connection,
+) -> None:
+    for number, back in enumerate((8, 7, 0, -1)):
+        extra_actual(conn, number + 1, day_shift(-back))
+    found = call(conn, "get_morning_snapshot", date=DAY)["plan_actual"]["rows"]
+    assert [r["date"] for r in found] == [day_shift(-7), DAY]
+
+
+def test_snapshot_plan_actual_keeps_newest_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        extra_actual(conn, number + 1, DAY)
+    found = call(conn, "get_morning_snapshot", date=DAY)["plan_actual"]["rows"]
+    assert found[-1]["id"] == SNAPSHOT_ROWS + 5
+
+
+def test_snapshot_weights_window_is_fourteen_days_back(conn: sqlite3.Connection) -> None:
+    for back in (15, 14, 0):
+        add_weight(conn, {"measured_at": f"{day_shift(-back)} 07:00:00", "weight_kg": 80})
+    found = call(conn, "get_morning_snapshot", date=DAY)["weights"]["rows"]
+    assert [r["measured_at"][:10] for r in found] == [day_shift(-14), DAY]
+
+
+def test_snapshot_weights_keep_newest_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        add_weight(conn, {"measured_at": f"{DAY} 07:{number:02d}:00", "weight_kg": 80 + number})
+    found = call(conn, "get_morning_snapshot", date=DAY)["weights"]["rows"]
+    assert found[-1]["weight_kg"] == 80 + SNAPSHOT_ROWS + 4
+
+
+def test_snapshot_food_today_keeps_newest_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(SNAPSHOT_ROWS + 5):
+        add_food(conn, {"logged_at": f"{DAY} 09:{number:02d}:00", "text": f"еда {number}"})
+    found = call(conn, "get_morning_snapshot", date=DAY)["food_today"]["rows"]
+    assert found[-1]["text"] == f"еда {SNAPSHOT_ROWS + 4}"
+
+
+def test_snapshot_wellbeing_keeps_newest_when_cut(conn: sqlite3.Connection) -> None:
+    for number in range(65):
+        conn.execute(
+            "INSERT INTO wellbeing_log (date, score, text, logged_at) VALUES (?, 3, ?, ?)",
+            (DAY, f"м{number}", f"{DAY} {number // 60:02d}:{number % 60:02d}:00"),
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]
+    assert found["truncated"] is True
+    assert found["rows"][-1]["text"] == "м64"
+
+
+def test_snapshot_workload_ahead_starts_tomorrow(conn: sqlite3.Connection) -> None:
+    found = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert found[0]["date"] == day_shift(1)
+
+
+def test_snapshot_sleep_has_awake_hours_for_today(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    millis = int(datetime.fromisoformat(f"{DAY} 07:10:00").replace(tzinfo=UTC).timestamp() * 1000)
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": DAY,
+            "sleep_seconds": 6 * 3600,
+            "raw_json": {"sleep": {"dailySleepDTO": {"sleepEndTimestampLocal": millis}}},
+        },
+    )
+    freeze(monkeypatch, f"{DAY} 11:00:00")
+    assert call(conn, "get_morning_snapshot", date=DAY)["sleep"]["awake_h"] == 3.8
+
+
+@pytest.mark.parametrize("name", ["pantry", "pantry_expiring", "recipes"])
+def test_snapshot_short_lists_are_limited_by_chars(conn: sqlite3.Connection, name: str) -> None:
+    big = "я" * 300
+    for number in range(20):
+        add_entry(
+            conn,
+            {
+                "item": f"продукт {number} {big}",
+                "qty": 1.0,
+                "unit": "g",
+                "op": "add",
+                "expires_on": DAY,
+                "logged_at": f"{DAY} 06:00:00",
+            },
+        )
+        add_recipe(
+            conn,
+            {
+                "name": f"рецепт {number} {big}",
+                "kcal_100": 1,
+                "protein_100": 1,
+                "fat_100": 1,
+                "carbs_100": 1,
+                "created_at": f"{DAY} 06:00:00",
+            },
+            [],
+        )
+    found = call(conn, "get_morning_snapshot", date=DAY)[name]
+    assert 0 < len(json.dumps(found["rows"], ensure_ascii=False)) <= SNAPSHOT_CHARS
+
+
+def total_limit(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Общий лимит на один символ меньше, чем весь ответ: срезается ровно один ряд."""
+    full = len(
+        json.dumps(snapshot_module.morning_snapshot(conn, DAY), ensure_ascii=False, default=str)
+    )
+    monkeypatch.setattr(snapshot_module, "SNAPSHOT_MAX_CHARS", full - 1)
+
+
+def test_snapshot_exactly_at_total_limit_is_not_cut(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    full = json.dumps(snapshot_module.morning_snapshot(conn, DAY), ensure_ascii=False, default=str)
+    monkeypatch.setattr(snapshot_module, "SNAPSHOT_MAX_CHARS", len(full))
+    cut = snapshot_module.morning_snapshot(conn, DAY)
+    assert json.dumps(cut, ensure_ascii=False, default=str) == full
+    assert cut["workload"]["truncated"] is False
+
+
+def test_snapshot_cut_takes_longest_list_and_drops_oldest_of_date_series(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # на пустой базе самый длинный список — workload (ряды по датам), следом workload_ahead
+    total_limit(conn, monkeypatch)
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert [r["date"] for r in snapshot["workload"]["rows"]] == [
+        day_shift(-n) for n in range(5, -1, -1)
+    ]
+    assert snapshot["workload"]["truncated"] is True
+    assert (len(snapshot["workload_ahead"]["rows"]), snapshot["workload_ahead"]["truncated"]) == (
+        7,
+        False,
+    )
+
+
+def test_snapshot_cut_drops_last_row_of_other_lists(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(snapshot_module, "SNAPSHOT_CHARS", 20000)  # цели длиннее workload
+    for number in range(15):
+        add_goal(conn, {"title": f"цель {number:02d} " + "я" * 300, "status": "active"})
+    total_limit(conn, monkeypatch)
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert [r["title"][:7] for r in snapshot["goals"]["rows"]] == [
+        f"цель {n:02d}" for n in range(14)
+    ]
+    assert snapshot["goals"]["truncated"] is True
+    assert len(snapshot["workload"]["rows"]) == 7
+
+
+def test_snapshot_that_cannot_be_cut_enough_raises(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add_goal(conn, {"title": "Цель", "status": "active"})
+    monkeypatch.setattr(snapshot_module, "SNAPSHOT_MAX_CHARS", 10)
+    with pytest.raises(ToolError, match=r"Снапшот не помещается в лимит даже без списков\.$"):
+        call(conn, "get_morning_snapshot", date=DAY)

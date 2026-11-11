@@ -134,6 +134,28 @@ def test_snapshot_has_wellbeing_section(conn: sqlite3.Connection) -> None:
     assert section["truncated"] is False
 
 
+def test_snapshot_wellbeing_rows_are_projected(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log"
+        " (date, score, text, logged_at, mood, stress, work_thoughts, event_id)"
+        " VALUES (?, 4, 'бодро', ?, 3, 2, 5, 7)",
+        (DAY, f"{DAY} 08:00:00"),
+    )
+    row = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"][0]
+    assert list(row) == ["date", "logged_at", "score", "mood", "stress", "text"]
+    assert (row["mood"], row["stress"]) == (3, 2)
+
+
+def test_get_wellbeing_keeps_all_columns(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, logged_at, work_thoughts, event_id)"
+        " VALUES (?, 4, ?, 5, 7)",
+        (DAY, f"{DAY} 08:00:00"),
+    )
+    row = rows(conn, "get_wellbeing", start=DAY, end=DAY)[0]
+    assert (row["work_thoughts"], row["event_id"]) == (5, 7)
+
+
 def test_snapshot_wellbeing_has_history_not_only_today(conn: sqlite3.Connection) -> None:
     feel(conn, "2026-10-03", 3, None, "2026-10-03 08:00:00")
     feel(conn, DAY, 4, None, f"{DAY} 08:00:00")

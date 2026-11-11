@@ -136,6 +136,12 @@ def test_coach_md_has_one_window_rule() -> None:
     assert "до 4" in text
 
 
+def test_coach_md_window_rule_excludes_yes_no_before_write() -> None:
+    text = coach_only_text()
+    assert "чек-ин, задачи плана дня и WHO-5" in text
+    assert "«да/нет» перед записью и остальное - текстом" in text
+
+
 def test_week_agent_reads_slip_log_and_fits_limit() -> None:
     path = ROOT / "agents" / "coach-week.md"
     assert "get_slip_log" in path.read_text()

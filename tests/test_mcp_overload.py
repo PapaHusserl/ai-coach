@@ -363,10 +363,12 @@ def test_get_wellbeing_detachment_fields_are_null_when_not_asked(
     assert [found[k] for k in sorted(NEW_KEYS)] == [None] * 4
 
 
-def test_snapshot_wellbeing_has_detachment_fields(conn: sqlite3.Connection) -> None:
+def test_snapshot_wellbeing_omits_detachment_fields(conn: sqlite3.Connection) -> None:
     feel(conn, DAY, "21:00:00", mood=3, work_thoughts=4, hindrance=2, valuable=5, flow=0)
     found = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"][0]
-    assert (found["work_thoughts"], found["hindrance"], found["valuable"], found["flow"]) == (
+    assert not {"work_thoughts", "hindrance", "valuable", "flow"} & set(found)
+    full = rows(conn, "get_wellbeing", start=DAY, end=DAY)[0]
+    assert (full["work_thoughts"], full["hindrance"], full["valuable"], full["flow"]) == (
         4,
         2,
         5,

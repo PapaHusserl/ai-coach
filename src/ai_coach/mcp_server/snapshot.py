@@ -49,6 +49,7 @@ WELLBEING_DAYS = 7
 WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
+WELLBEING_FIELDS = ("date", "logged_at", "score", "mood", "stress", "text")
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
 WORKLOAD_CHARS = 5000
 WORKLOAD_SKIP = CLAUDE_COUNTERS
@@ -180,7 +181,9 @@ def morning_snapshot(
     snapshot["weights"] = part(list_weights(conn, tools.shift_day(date, -14), date), True)
     snapshot["food_today"] = part(list_food(conn, date, date), True)
     marks = list_wellbeing(conn, tools.shift_day(date, -(WELLBEING_DAYS - 1)), date)
-    snapshot["wellbeing"] = tools.cap(marks, newest=True)
+    snapshot["wellbeing"] = tools.cap(
+        [{k: r[k] for k in WELLBEING_FIELDS} for r in marks], newest=True
+    )
     snapshot["deviations"] = part(tools.day_deviations(conn, date, load_row))
     week = workload_series(conn, tools.shift_day(date, -6), date)
     snapshot["workload"] = tools.cap(

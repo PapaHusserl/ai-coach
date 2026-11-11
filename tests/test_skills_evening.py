@@ -71,10 +71,15 @@ def test_evening_skill_has_detachment_options() -> None:
         assert option in text
 
 
-def test_evening_skill_has_closing_ritual_with_todo() -> None:
+def test_evening_ritual_offers_day_plan_without_todo() -> None:
     text = EVENING.read_text()
-    assert "туду" in text
-    assert "что осталось и с чего начнёшь завтра" in text
+    assert "что осталось и с чего начнёшь завтра" not in text
+    assert "todo add" not in text
+    assert "разложить завтра" in text
+    assert "coach-day.md" in text
+    for name in ("wellbeing.md", "todo.md"):
+        help_text = (CLAUDE / "agents" / "coach-help" / name).read_text()
+        assert "что осталось и с чего начнёшь завтра" not in help_text
 
 
 def test_evening_skill_keeps_skip_when_unknown() -> None:
