@@ -61,7 +61,7 @@ def test_day_trigger_stands_between_9v_and_9g() -> None:
         "create_day_plan",
         "uv run coach event write",
         "uv run coach event cancel",
-        "uv run coach todo list",
+        "Инбокс",
         "uv run coach sync",
         "get_agenda",
         "skipped",
@@ -126,7 +126,7 @@ def test_day_step_five_asks_by_text_not_window() -> None:
     step = next(line for line in day_text().splitlines() if line.startswith("5. "))
     assert "Спроси текстом" in step
     assert "Спроси окном" not in day_text()
-    step_two = next(line for line in day_text().splitlines() if line.startswith("2. Задачи"))
+    step_two = next(line for line in day_text().splitlines() if line.startswith("2. Распорядок"))
     assert "AskUserQuestion" in step_two
 
 
@@ -148,12 +148,16 @@ def test_day_file_offers_cancelling_cooking_block_by_event_cancel() -> None:
 
 def test_day_file_puts_meals_before_tasks() -> None:
     text = day_text()
-    assert "готовка и завтрак, перекус, отдых после перекуса, готовка и ужин, задачи, фокус" in text
+    assert (
+        "готовка и завтрак, перекус, отдых после перекуса, готовка и ужин, "
+        "инбокс (два блока «Инбокс» по 20 минут после завтрака и после отдыха, "
+        "задача `work`, в будни), задачи, фокус"
+    ) in text
 
 
 def test_day_step_two_asks_morning_routine() -> None:
-    step = next(line for line in day_text().splitlines() if line.startswith("2. Задачи"))
-    assert "распорядок утра" in step
+    step = next(line for line in day_text().splitlines() if line.startswith("2. Распорядок"))
+    assert "распорядок утра" in step.lower()
     assert "`day_start`" in step
     assert "`breakfast_at`" in step
 
@@ -202,3 +206,14 @@ def test_readme_mentions_cooking() -> None:
 @pytest.mark.parametrize("word", ["create_day_plan", "coach todo list"])
 def test_readme_mentions_day_plan(word: str) -> None:
     assert word in (BASE / "README.md").read_text()
+
+
+def test_day_file_does_not_read_todo() -> None:
+    text = day_text()
+    assert "туду" not in text.replace("туду не показывай", "")
+    assert "coach todo list" not in text
+
+
+def test_help_todo_topic_says_day_plan_does_not_touch_todo() -> None:
+    text = (AGENTS / "coach-help" / "todo.md").read_text()
+    assert "План дня туду не читает и пункты в день не ставит" in text

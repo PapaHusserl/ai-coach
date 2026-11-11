@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from workload_fakes import coach_event, stored_event
 
-from ai_coach.agenda.day_plan import (
+from ai_coach.agenda.day_layout import (
     BREAK_MIN,
     COOK_MIN,
     FOCUS_MAX,
@@ -16,14 +16,13 @@ from ai_coach.agenda.day_plan import (
     FOCUS_UNTIL,
     REST_MIN,
     SNACK_MIN,
-    TRAINING_PAD_MIN,
     WEEKDAY,
     WEEKEND,
     Task,
     Training,
-    create_day_plan,
     plan_day,
 )
+from ai_coach.agenda.day_plan import TRAINING_PAD_MIN, create_day_plan
 from ai_coach.agenda.service import AgendaError, agenda_rows
 from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import MIN_SLOT, STEP_MIN, busy_spans, free_slots
@@ -233,11 +232,12 @@ def test_weekday_layout_without_busy_and_tasks() -> None:
     assert shape(blocks) == [
         ("meal", "10:30", "11:00"),
         ("meal", "11:00", "12:00"),
-        ("focus", "12:00", "13:30"),
-        ("focus", "13:45", "15:15"),
+        ("task", "12:00", "12:20"),
+        ("focus", "12:20", "13:20"),
         ("meal", "15:30", "15:45"),
         ("rest", "15:45", "16:15"),
-        ("focus", "16:15", "17:45"),
+        ("task", "16:15", "16:35"),
+        ("focus", "16:35", "17:35"),
         ("meal", "19:00", "19:30"),
         ("meal", "19:30", "20:30"),
     ]
@@ -260,10 +260,137 @@ def test_weekday_titles_and_categories() -> None:
 def test_weekday_has_focus_max_blocks_and_none_in_evening() -> None:
     blocks, _ = plan()
     focus = [b for b in blocks if b["kind"] == "focus"]
-    assert len(focus) == FOCUS_MAX
+    assert len(focus) == FOCUS_MAX == 2
     assert all(b["start_at"][11:16] < "19:00" for b in focus)
     assert all(b["end_at"] > b["start_at"] for b in blocks)
-    assert (FOCUS_MIN, BREAK_MIN, SNACK_MIN, REST_MIN) == (90, 15, 15, 30)
+    assert (FOCUS_MIN, BREAK_MIN, SNACK_MIN, REST_MIN) == (60, 15, 15, 30)
+
+
+def test_inbox_constants() -> None:
+    from ai_coach.agenda.day_layout import INBOX_CATEGORY, INBOX_MIN, INBOX_TITLE
+
+    assert (INBOX_MIN, INBOX_TITLE, INBOX_CATEGORY) == (20, "Инбокс", "work")
+
+
+def inboxes(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [b for b in blocks if b["title"] == "Инбокс"]
+
+
+def spans_of(blocks: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    return [(b["start_at"][11:16], b["end_at"][11:16]) for b in blocks]
+
+
+def focus_spans(blocks: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    return spans_of([b for b in blocks if b["kind"] == "focus"])
+
+
+def test_weekday_inboxes_are_twenty_minute_work_tasks() -> None:
+    blocks, _ = plan()
+    found = inboxes(blocks)
+    assert spans_of(found) == [("12:00", "12:20"), ("16:15", "16:35")]
+    assert {(b["kind"], b["category"]) for b in found} == {("task", "work")}
+
+
+@pytest.mark.parametrize("day", [SAT, SUN])
+def test_weekend_has_no_inbox_and_no_focus(day: date) -> None:
+    blocks, _ = plan(day, first="11:00")
+    assert inboxes(blocks) == []
+    assert all(b["kind"] != "focus" for b in blocks)
+
+
+def test_inbox_follows_breakfast_end_when_breakfast_is_late() -> None:
+    frame = WEEKDAY._replace(breakfast=time(12, 0))
+    blocks, _ = plan_day(frame, window(MON), [], [], None, False)
+    assert spans_of(inboxes(blocks))[0] == ("13:00", "13:20")
+
+
+def test_second_inbox_follows_rest_end_when_snack_is_late() -> None:
+    frame = WEEKDAY._replace(snack=time(16, 0))
+    blocks, _ = plan_day(frame, window(MON), [], [], None, False)
+    assert named(blocks, "Прогулка / отдых")["end_at"][11:16] == "16:45"
+    assert spans_of(inboxes(blocks))[1] == ("16:45", "17:05")
+
+
+def test_meeting_after_breakfast_moves_first_inbox_after_it() -> None:
+    blocks, _ = plan(busy=[span(MON, "12:00", "13:00")])
+    assert spans_of(inboxes(blocks)) == [("13:00", "13:20"), ("16:15", "16:35")]
+    assert focus_spans(blocks) == [("13:20", "14:20"), ("16:35", "17:35")]
+
+
+def test_first_inbox_starts_at_frame_start_when_breakfast_is_skipped() -> None:
+    blocks, skipped = plan(busy=[span(MON, "11:30", "14:30")])
+    assert any(line.startswith("Завтрак") for line in skipped)
+    assert spans_of(inboxes(blocks)) == [("10:00", "10:20"), ("16:15", "16:35")]
+    assert focus_spans(blocks) == [("10:20", "11:20"), ("16:35", "17:35")]
+
+
+def test_second_inbox_is_skipped_when_two_hours_after_nominal_are_busy() -> None:
+    blocks, skipped = plan(busy=[span(MON, "16:30", "18:30")])
+    assert spans_of(inboxes(blocks)) == [("12:00", "12:20")]
+    assert any(line.startswith("Инбокс") for line in skipped)
+
+
+def test_today_midday_first_inbox_starts_at_now() -> None:
+    blocks, _ = plan(first="12:10")
+    assert spans_of(inboxes(blocks)) == [("12:10", "12:30"), ("16:15", "16:35")]
+    assert focus_spans(blocks) == [("12:30", "13:30"), ("16:35", "17:35")]
+
+
+def test_today_late_afternoon_second_inbox_is_before_day_start() -> None:
+    blocks, skipped = plan(first="18:30")
+    assert spans_of(inboxes(blocks)) == [("18:30", "18:50")]
+    assert any(line.startswith("Инбокс") and "раньше начала дня" in line for line in skipped)
+
+
+def test_task_goes_after_inbox_and_focus_after_task() -> None:
+    blocks, _ = plan(tasks=[Task("Отчёт", 60, "work")])
+    assert spans_of(inboxes(blocks)) == [("12:00", "12:20"), ("16:15", "16:35")]
+    assert spans_of([named(blocks, "Отчёт")]) == [("12:20", "13:20")]
+    assert focus_spans(blocks) == [("13:20", "14:20"), ("16:35", "17:35")]
+
+
+def test_long_task_pushes_first_focus_after_second_inbox() -> None:
+    blocks, _ = plan(tasks=[Task("Отчёт", 180, "work")])
+    assert spans_of([named(blocks, "Отчёт")]) == [("12:20", "15:20")]
+    assert focus_spans(blocks) == [("16:35", "17:35"), ("17:50", "18:50")]
+
+
+def test_each_focus_follows_its_inbox() -> None:
+    blocks, _ = plan()
+    first, second = inboxes(blocks)
+    focus = [b for b in blocks if b["kind"] == "focus"]
+    assert [f["start_at"] for f in focus] == [first["end_at"], second["end_at"]]
+
+
+def test_meeting_after_first_inbox_puts_both_focus_after_second_inbox() -> None:
+    blocks, _ = plan(busy=[span(MON, "12:20", "15:30")])
+    assert focus_spans(blocks) == [("16:35", "17:35"), ("17:50", "18:50")]
+
+
+def test_second_inbox_skipped_gives_second_focus_by_first_fit_after_pause() -> None:
+    blocks, _ = plan(busy=[span(MON, "16:30", "18:30")])
+    assert focus_spans(blocks) == [("12:20", "13:20"), ("13:35", "14:35")]
+
+
+def test_first_inbox_skipped_gives_first_focus_from_frame_start() -> None:
+    blocks, _ = plan(busy=[span(MON, "11:30", "14:30")])
+    assert focus_spans(blocks)[0] == ("10:20", "11:20")
+
+
+def test_day_start_0900_morning_has_no_focus() -> None:
+    blocks, _ = plan(first="09:00")
+    assert focus_spans(blocks) == [("12:20", "13:20"), ("16:35", "17:35")]
+
+
+def test_focus_max_zero_gives_no_focus_though_both_inboxes_have_room() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_max=0)
+    assert len(inboxes(blocks)) == 2
+    assert focus_spans(blocks) == []
+
+
+def test_focus_limit_one_leaves_only_morning_block() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_max=1)
+    assert focus_spans(blocks) == [("12:20", "13:20")]
 
 
 def test_weekday_hour_before_breakfast_is_not_focus() -> None:
@@ -353,7 +480,7 @@ def test_task_longer_than_any_window_is_skipped() -> None:
     blocks, skipped = plan_day(
         WEEKDAY, span(MON, "10:00", "14:00"), busy, [Task("Долгая", 120, "work")], None, False
     )
-    assert [b for b in blocks if b["kind"] == "task"] == []
+    assert [b for b in blocks if b["kind"] == "task" and b["title"] != "Инбокс"] == []
     assert any(line.startswith("Долгая") for line in skipped)
 
 
@@ -452,7 +579,9 @@ def test_breakfast_before_window_start_is_skipped_with_reason() -> None:
 
 def test_today_evening_skips_three_meals_with_reason(conn: sqlite3.Connection) -> None:
     result = make(conn, now=datetime(2026, 11, 2, 20, 30))
-    early = [s for s in result["skipped"] if "раньше начала дня" in s]
+    early = [
+        s for s in result["skipped"] if "раньше начала дня" in s and not s.startswith("Инбокс")
+    ]
     assert early == [
         "Завтрак 11:00: раньше начала дня",
         "Перекус 15:30: раньше начала дня",
@@ -623,7 +752,10 @@ def test_creates_drafts_with_kinds_and_categories(conn: sqlite3.Connection) -> N
     assert kinds == {"task", "meal", "rest", "focus", "training"}
     for row in stored:
         assert row is not None
-        expected = {"task": "hobby", "rest": "rest"}.get(row["kind"])
+        if row["title"] == "Инбокс":
+            expected = "work"
+        else:
+            expected = {"task": "hobby", "rest": "rest"}.get(row["kind"])
         assert row["category"] == expected
 
 
@@ -709,7 +841,7 @@ def test_training_without_duration_is_sixty_plus_pad(conn: sqlite3.Connection) -
 
 def test_task_category_defaults_to_work_on_weekday(conn: sqlite3.Connection) -> None:
     result = make(conn, tasks=[{"title": "Т", "minutes": 30}])
-    assert next(d for d in result["drafts"] if d["kind"] == "task")["category"] == "work"
+    assert next(d for d in result["drafts"] if d["title"] == "Т")["category"] == "work"
 
 
 def test_task_category_defaults_to_personal_on_weekend(conn: sqlite3.Connection) -> None:
@@ -733,15 +865,42 @@ def test_weekend_frame_has_breakfast_at_12_and_no_focus(
     assert all(d["kind"] != "focus" for d in drafts)
 
 
-def test_weekday_plan_has_nine_drafts_and_repeat_returns_all_ids(
+def test_weekday_plan_has_ten_drafts_and_repeat_returns_all_ids(
     conn: sqlite3.Connection,
 ) -> None:
     first = make(conn)
-    assert len(first["drafts"]) == 9
+    assert len(first["drafts"]) == 10
     second = make(conn)
     standing = {d["draft_id"] for d in first["drafts"] if d["kind"] in ("focus", "meal")}
     assert set(second["already_planned"]) == standing
-    assert len(standing) == 8  # 5 блоков еды (две готовки) и 3 фокуса; rest не в PLAN_KINDS
+    # 5 блоков еды (две готовки) и 2 фокуса; rest и «Инбокс» (task) не в PLAN_KINDS
+    assert len(standing) == 7
+
+
+def test_weekday_plan_through_create_day_plan_has_two_work_inboxes(
+    conn: sqlite3.Connection,
+) -> None:
+    drafts = make(conn)["drafts"]
+    found = [d for d in drafts if d["title"] == "Инбокс"]
+    assert [(d["kind"], d["category"], d["start_at"], d["end_at"]) for d in found] == [
+        ("task", "work", f"{MON}T12:00", f"{MON}T12:20"),
+        ("task", "work", f"{MON}T16:15", f"{MON}T16:35"),
+    ]
+    stored = [get_event(conn, d["draft_id"]) for d in found]
+    assert [(r["kind"], r["category"]) for r in stored if r] == [("task", "work")] * 2
+
+
+def test_weekend_plan_through_create_day_plan_has_six_drafts_without_inbox(
+    conn: sqlite3.Connection,
+) -> None:
+    drafts = make(conn, SAT)["drafts"]
+    assert len(drafts) == 6
+    assert all(d["title"] != "Инбокс" for d in drafts)
+
+
+def test_task_named_inbox_is_not_deduplicated_by_title(conn: sqlite3.Connection) -> None:
+    drafts = make(conn, tasks=[{"title": "Инбокс", "minutes": 20, "category": "work"}])["drafts"]
+    assert len([d for d in drafts if d["title"] == "Инбокс"]) == 3
 
 
 def test_weekend_tasks_start_not_before_11(conn: sqlite3.Connection) -> None:
@@ -885,27 +1044,40 @@ def test_evening_repeat_does_not_double_tasks(conn: sqlite3.Connection) -> None:
     now = datetime(2026, 11, 2, 20, 30)
     tasks = [{"title": "Отчёт", "minutes": 60, "category": "work"}]
     first = make(conn, now=now, tasks=tasks)
-    assert len(first["drafts"]) == 1
-    before = count(conn)
+    assert [d["title"] for d in first["drafts"] if d["title"] != "Инбокс"] == ["Отчёт"]
     again = make(conn, now=now, tasks=[{"title": "  отчёт ", "minutes": 60, "category": "work"}])
-    assert again["drafts"] == []
+    assert [d for d in again["drafts"] if d["title"].lower() == "отчёт"] == []
     assert any("уже стоит" in line for line in again["skipped"])
-    assert count(conn) == before
+    rows = conn.execute("SELECT COUNT(*) FROM coach_events WHERE title = 'Отчёт'").fetchone()
+    assert rows[0] == 1
 
 
 def test_evening_repeat_places_task_with_other_title(conn: sqlite3.Connection) -> None:
     now = datetime(2026, 11, 2, 20, 30)
     make(conn, now=now, tasks=[{"title": "Отчёт", "minutes": 60, "category": "work"}])
     again = make(conn, now=now, tasks=[{"title": "Письмо", "minutes": 30, "category": "work"}])
-    assert [d["title"] for d in again["drafts"]] == ["Письмо"]
-    assert not any("уже стоит" in s for s in again["skipped"])
-    assert all("раньше начала дня" in line for line in again["skipped"])
+    assert "Письмо" in [d["title"] for d in again["drafts"]]
+    assert not any("уже стоит" in s for s in again["skipped"] if not s.startswith("Инбокс"))
+    assert all(
+        "раньше начала дня" in line or line == "Инбокс: уже стоит в agenda"
+        for line in again["skipped"]
+    )
+
+
+def test_evening_repeat_does_not_add_second_inbox(conn: sqlite3.Connection) -> None:
+    now = datetime(2026, 11, 2, 20, 30)
+    make(conn, now=now)
+    again = make(conn, now=now, tasks=[{"title": "Письмо", "minutes": 30, "category": "work"}])
+    assert "Инбокс: уже стоит в agenda" in again["skipped"]
+    assert [d for d in again["drafts"] if d["title"] == "Инбокс"] == []
+    rows = conn.execute("SELECT COUNT(*) FROM coach_events WHERE title = 'Инбокс'").fetchone()
+    assert rows[0] == 1
 
 
 def test_task_standing_from_morning_is_not_doubled(conn: sqlite3.Connection) -> None:
     coach(conn, MON, "09:00", "10:00", kind="task", title="Отчёт", category="work")
     result = make(conn, tasks=[{"title": "Отчёт", "minutes": 60, "category": "work"}])
-    assert all(d["kind"] != "task" for d in result["drafts"])
+    assert all(d["title"] != "Отчёт" for d in result["drafts"])
     assert any("уже стоит" in line for line in result["skipped"])
 
 
@@ -923,9 +1095,9 @@ def focus_ends(blocks: list[dict[str, Any]]) -> list[str]:
     return [b["end_at"][11:16] for b in blocks if b["kind"] == "focus"]
 
 
-def test_plan_day_focus_max_two_gives_two_focus_blocks() -> None:
-    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_max=2)
-    assert len(focus_ends(blocks)) == 2
+def test_plan_day_focus_max_one_gives_one_focus_block() -> None:
+    blocks, _ = plan_day(WEEKDAY, window(MON), [], [], None, False, focus_max=1)
+    assert len(focus_ends(blocks)) == 1
 
 
 def test_plan_day_focus_until_cuts_late_blocks() -> None:
@@ -1022,12 +1194,19 @@ def late_focus_after_meeting(
 def test_caution_at_1900_does_not_cut_focus(conn: sqlite3.Connection) -> None:
     short_night_today(conn, wake="03:00")
     focus = late_focus_after_meeting(conn)
-    assert [(d["start_at"][11:16], d["end_at"][11:16]) for d in focus] == [("17:15", "18:45")]
+    assert [(d["start_at"][11:16], d["end_at"][11:16]) for d in focus] == [("17:35", "18:35")]
 
 
 def test_caution_at_1800_drops_focus_ending_after_it(conn: sqlite3.Connection) -> None:
     short_night_today(conn, wake="02:00")
     assert late_focus_after_meeting(conn) == []
+
+
+def test_focus_until_1700_leaves_only_morning_block_of_two() -> None:
+    blocks, _ = plan_day(
+        WEEKDAY, window(MON), [], [], None, False, focus_until=time(17, 0), focus_max=2
+    )
+    assert focus_spans(blocks) == [("12:20", "13:20")]
 
 
 def test_caution_at_1800_keeps_focus_ending_before_it(conn: sqlite3.Connection) -> None:
@@ -1299,18 +1478,18 @@ def test_focus_blocks_are_titled_focus() -> None:
 
 def test_focus_fits_window_of_exactly_focus_min() -> None:
     blocks, _ = plan_day(
-        WEEKDAY, window(MON, "12:00"), [], [], None, False, focus_until=time(13, 30)
+        WEEKDAY, window(MON, "12:00"), [], [], None, False, focus_until=time(13, 20)
     )
     assert [(b["start_at"][11:16], b["end_at"][11:16]) for b in blocks if b["kind"] == "focus"] == [
-        ("12:00", "13:30")
+        ("12:20", "13:20")
     ]
 
 
 def test_focus_break_kept_when_busy_gap_is_shorter_than_break() -> None:
-    busy = [span(MON, "13:30", "13:40")]
+    busy = [span(MON, "13:20", "13:25"), span(MON, "16:30", "18:30")]
     blocks, _ = plan_day(WEEKDAY, window(MON, "12:00"), busy, [], None, False)
     starts = [b["start_at"][11:16] for b in blocks if b["kind"] == "focus"]
-    assert starts[:2] == ["12:00", "13:45"]
+    assert starts[:2] == ["12:20", "13:35"]
 
 
 def test_task_does_not_shift_breakfast() -> None:
@@ -1359,3 +1538,77 @@ def test_snack_not_flush_with_shifted_breakfast(conn: sqlite3.Connection) -> Non
     assert by_title["Завтрак"]["start_at"] == f"{MON}T14:15"
     assert by_title["Перекус"]["start_at"] >= by_title["Завтрак"]["end_at"]
     assert by_title["Перекус"]["start_at"] != by_title["Завтрак"]["end_at"]
+
+
+# --- доеба Н28: выжившие мутанты ---
+
+
+def inbox_starts(blocks: list[dict[str, Any]]) -> list[str]:
+    return [b["start_at"][11:16] for b in blocks if b["title"] == "Инбокс"]
+
+
+def test_anchor_past_window_end_is_skipped_as_outside() -> None:
+    frame_window = (at(MON, "10:00"), at(MON, "15:40"))
+    blocks, skipped = plan_day(WEEKDAY, frame_window, [], [], None, True)
+    assert "Перекус: вне рамки дня" in skipped
+    assert all(b["title"] != "Перекус" for b in blocks)
+
+
+def test_anchor_ending_exactly_at_window_end_is_placed() -> None:
+    frame_window = (at(MON, "10:00"), at(MON, "15:45"))
+    blocks, skipped = plan_day(WEEKDAY, frame_window, [], [], None, True)
+    assert named(blocks, "Перекус")["end_at"][11:16] == "15:45"
+    assert not any(line.startswith("Перекус") for line in skipped)
+
+
+def test_anchor_busy_skip_reason_names_two_whole_hours() -> None:
+    _, skipped = plan(busy=[span(MON, "15:30", "17:35")])
+    assert "Перекус: занято, окна в течение 2 ч нет" in skipped
+
+
+def test_second_inbox_without_snack_is_nominal_after_snack_and_rest() -> None:
+    blocks, skipped = plan(busy=[span(MON, "15:35", "17:35")])
+    assert "Перекус: занято, окна в течение 2 ч нет" in skipped
+    assert inbox_starts(blocks) == ["12:00", "17:35"]
+
+
+def test_second_inbox_follows_rest_end_when_rest_is_far_from_nominal() -> None:
+    frame = WEEKDAY._replace(snack=time(16, 30))
+    busy = [span(MON, "16:45", "18:20")]
+    blocks, skipped = plan_day(frame, window(MON), busy, [], None, False)
+    assert named(blocks, "Прогулка / отдых")["start_at"][11:16] == "18:20"
+    assert inbox_starts(blocks) == ["12:00", "20:30"]
+    assert not any(line.startswith("Инбокс") for line in skipped)
+
+
+def test_late_first_inbox_does_not_cancel_focus_after_second_inbox() -> None:
+    frame = WEEKDAY._replace(breakfast=time(19, 0))
+    blocks, _ = plan_day(frame, window(MON), [], [], None, False)
+    assert inbox_starts(blocks)[-1] >= "19:00"
+    assert [(b["start_at"][11:16], b["end_at"][11:16]) for b in blocks if b["kind"] == "focus"] == [
+        ("16:35", "17:35")
+    ]
+
+
+@pytest.mark.parametrize(
+    "name", ["day_start", "day_end", "training_at", "breakfast_at", "snack_at", "dinner_at"]
+)
+def test_bad_clock_error_names_the_parameter(conn: sqlite3.Connection, name: str) -> None:
+    with pytest.raises(AgendaError, match=rf"^{name}: нужно HH:MM"):
+        make(conn, MON, **{name: "9:00"})
+
+
+def test_date_out_of_range_error_names_ahead_days(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match=r"^Дата от сегодня до 14 дней вперёд\.$"):
+        make(conn, date(2026, 10, 31))
+
+
+def test_already_planned_answer_has_date(conn: sqlite3.Connection) -> None:
+    make(conn)
+    assert make(conn)["date"] == MON.isoformat()
+
+
+def test_drafts_are_checked_against_given_now_not_wall_clock(conn: sqlite3.Connection) -> None:
+    now = datetime(2026, 1, 5, 9, 0)
+    result = make(conn, date(2026, 1, 12), now=now)
+    assert result["drafts"]

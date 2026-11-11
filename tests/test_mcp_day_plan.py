@@ -11,9 +11,10 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, tool_names
 
+import ai_coach.agenda.day_layout as day_layout_module
 import ai_coach.agenda.day_plan as day_plan_module
 import ai_coach.agenda.slots as slots_module
-from ai_coach.agenda.day_plan import FOCUS_MAX
+from ai_coach.agenda.day_layout import FOCUS_MAX
 from ai_coach.mcp_server.server import TOOLS
 from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.journal import add_who5
@@ -51,9 +52,13 @@ def test_drafts_are_stored_as_drafts(conn: sqlite3.Connection) -> None:
     assert {r["status"] for r in rows} == {"draft"}
 
 
-def test_weekday_plan_has_nine_drafts_with_two_cooking_meals(conn: sqlite3.Connection) -> None:
+def test_weekday_plan_has_ten_drafts_with_two_cooking_meals_and_two_inboxes(
+    conn: sqlite3.Connection,
+) -> None:
     result = plan(conn)
-    assert len(result["drafts"]) == 9
+    assert len(result["drafts"]) == 10
+    inbox = [d for d in result["drafts"] if d["title"] == "Инбокс"]
+    assert [(d["kind"], d["category"]) for d in inbox] == [("task", "work")] * 2
     cooks = [d for d in result["drafts"] if d["title"] == "Готовка"]
     assert [(c["kind"], c["start_at"], c["end_at"]) for c in cooks] == [
         ("meal", f"{DAY}T10:30", f"{DAY}T11:00"),
@@ -63,6 +68,10 @@ def test_weekday_plan_has_nine_drafts_with_two_cooking_meals(conn: sqlite3.Conne
 
 def test_tool_description_mentions_cooking() -> None:
     assert "готовк" in TOOLS["create_day_plan"][1]
+
+
+def test_tool_description_mentions_inbox() -> None:
+    assert "Инбокс" in TOOLS["create_day_plan"][1]
 
 
 def test_second_call_is_already_planned(conn: sqlite3.Connection) -> None:
@@ -160,14 +169,14 @@ def illness_base(conn: sqlite3.Connection, out_days: int) -> None:
         )
 
 
-def test_illness_risk_gives_two_focus_blocks_and_reason(conn: sqlite3.Connection) -> None:
+def test_illness_risk_gives_one_focus_block_and_reason(conn: sqlite3.Connection) -> None:
     illness_base(conn, out_days=2)
     result = plan(conn)
     assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX - 1
     assert [s for s in result["skipped"] if "возможно, заболеваешь" in s]
 
 
-def test_no_illness_signal_keeps_three_focus_blocks(conn: sqlite3.Connection) -> None:
+def test_no_illness_signal_keeps_two_focus_blocks(conn: sqlite3.Connection) -> None:
     illness_base(conn, out_days=1)
     result = plan(conn)
     assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX
@@ -190,21 +199,23 @@ def who5_low_yesterday(conn: sqlite3.Connection, day: str = "2026-10-31") -> Non
     )
 
 
-def test_who5_low_gives_two_focus_blocks_and_reason(conn: sqlite3.Connection) -> None:
+def test_who5_low_gives_one_focus_block_and_reason(conn: sqlite3.Connection) -> None:
     who5_low_yesterday(conn)
     result = plan(conn)
     assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX - 1
     assert [s for s in result["skipped"] if "режим щажения (WHO-5 28 из 100" in s]
 
 
-def test_who5_low_15_days_ago_keeps_three_focus_blocks(conn: sqlite3.Connection) -> None:
+def test_who5_low_15_days_ago_keeps_two_focus_blocks(conn: sqlite3.Connection) -> None:
     who5_low_yesterday(conn, "2026-10-17")
     result = plan(conn)
     assert len([d for d in result["drafts"] if d["kind"] == "focus"]) == FOCUS_MAX
     assert not [s for s in result["skipped"] if "щажения" in s]
 
 
-@pytest.mark.parametrize("module", [day_plan_module, slots_module], ids=lambda m: m.__name__)
+@pytest.mark.parametrize(
+    "module", [day_plan_module, day_layout_module, slots_module], ids=lambda m: m.__name__
+)
 def test_day_plan_modules_do_not_import_calendar_writer(module: ModuleType) -> None:
     names: list[str] = []
     for node in ast.walk(ast.parse(Path(module.__file__ or "").read_text())):

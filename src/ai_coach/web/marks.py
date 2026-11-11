@@ -28,7 +28,7 @@ ALLOWED = {
     "meal": ("food", "feel", "slip"),
     "checkin": ("checkin",),
 }
-COOKING = "Готовка"  # пункт meal из agenda/day_plan.py: окна нет, красным не бывает
+COOKING = "Готовка"  # пункт meal из agenda/day_layout.py: окна нет, красным не бывает
 MAX_ID = 2**63 - 1  # предел INTEGER sqlite
 MIN_SCORE = 1
 MAX_SCORE = 5
