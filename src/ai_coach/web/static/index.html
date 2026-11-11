@@ -41,10 +41,23 @@
 			<button role="tab" data-tab="food" aria-selected="false">Еда</button>
 			<button role="tab" data-tab="state" aria-selected="false">Состояние</button>
 		</nav>
-		<section data-panel="plan" class="card">
-			<div class="plan-h"><h2>План дня</h2></div>
-			<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
-			<ul id="rows" class="rows"></ul>
+		<section data-panel="plan" class="cards">
+			<div class="card">
+				<div class="plan-h"><h2>План дня</h2></div>
+				<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
+				<ul id="rows" class="rows"></ul>
+			</div>
+			<div id="todo-card" class="card">
+				<div class="plan-h"><h2>Туду</h2> <button id="todo-add" class="link" type="button">+ задача</button></div>
+				<form id="todo-form" class="pf" hidden>
+					<input id="todo-title" placeholder="Название" aria-label="Название" required>
+					<input id="todo-note" placeholder="Заметка" aria-label="Заметка">
+					<button type="submit">Добавить</button>
+				</form>
+				<p id="todo-empty" class="empty" hidden>Туду пусто.</p>
+				<ul id="todo-rows" class="rows"></ul>
+				<p id="todo-error" class="error" hidden></p>
+			</div>
 		</section>
 		<section data-panel="train" class="cards" hidden>
 			<div class="card">

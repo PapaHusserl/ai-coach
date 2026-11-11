@@ -1135,6 +1135,27 @@ nav button[aria-selected="true"] {
 	min-width: 0;
 }
 
+/* Карточка «Туду»: пункт — название, заметка, ряд действий; в работе — акцентная метка. */
+.todo.doing .tm {
+	color: var(--accent);
+}
+
+.todo .frow {
+	margin-top: 4px;
+}
+
+.todo .pf input {
+	flex: 1 1 140px;
+	min-width: 0;
+}
+
+@media (max-width: 600px) {
+	.todo .frow button {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	* {
 		animation: none !important;

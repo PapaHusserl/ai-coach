@@ -145,9 +145,28 @@ def test_add_empty_title_fails(todo_path: Path) -> None:
     assert not todo_path.exists()
 
 
-def test_active_items_returns_id_title_state(tmp_path: Path) -> None:
+def test_active_items_returns_id_title_note_state(tmp_path: Path) -> None:
     path = write_todo(tmp_path / "t.json", [todo_item(2, "todo", "2026-10-01")])
-    assert active_items(path) == [{"id": 2, "title": "Синтетическая задача 2", "state": "todo"}]
+    assert active_items(path) == [
+        {"id": 2, "title": "Синтетическая задача 2", "note": "", "state": "todo"}
+    ]
+
+
+def test_active_items_note_is_taken_from_file(tmp_path: Path) -> None:
+    item = todo_item(2, "todo", "2026-10-01")
+    item["note"] = "подробности"
+    path = write_todo(tmp_path / "t.json", [item])
+    assert active_items(path)[0]["note"] == "подробности"
+
+
+def test_list_prints_three_fields_without_note(todo_path: Path) -> None:
+    item = todo_item(2, "todo", "2026-10-01")
+    item["note"] = "секретная-заметка"
+    write_todo(todo_path, [item])
+    result = runner.invoke(main.app, ["todo", "list"])
+    assert result.exit_code == 0
+    assert "секретная-заметка" not in result.output
+    assert "Синтетическая задача 2" in result.output
 
 
 def test_active_items_without_file_is_empty(tmp_path: Path) -> None:

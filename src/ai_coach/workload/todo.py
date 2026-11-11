@@ -115,10 +115,15 @@ def edit_item(path: Path, item_id: int, title: str | None, note: str | None) -> 
 
 
 def active_items(path: Path, include_closed: bool = False) -> list[dict[str, Any]]:
-    """Открытые пункты (состояние не done/dropped; с include_closed - все): id, title, state;
+    """Открытые пункты (состояние не done/dropped; с include_closed - все): id, title, note, state;
     doing первыми, затем по id. Нет файла - пусто."""
     items = [
-        {"id": r.get("id"), "title": str(r.get("title") or ""), "state": str(r.get("state") or "")}
+        {
+            "id": r.get("id"),
+            "title": str(r.get("title") or ""),
+            "note": str(r.get("note") or ""),
+            "state": str(r.get("state") or ""),
+        }
         for r in _records(path)
         if include_closed or r.get("state") not in CLOSED_STATES
     ]

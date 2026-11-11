@@ -953,3 +953,49 @@ def test_post_sync_starts_syncer_on_the_server_base(
     status, _ = server_module.post_reply(db_path, "/api/sync", headers, io.BytesIO(b"{}"))
     assert status == 202
     assert started == [db_path]
+
+
+@pytest.fixture
+def todo_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    from types import SimpleNamespace
+
+    from workload_fakes import todo_item, write_todo
+
+    from ai_coach.web import todo as web_todo
+
+    path = write_todo(
+        tmp_path / "todo.json",
+        [todo_item(1, "todo", "2026-10-01"), todo_item(2, "done", "2026-10-02")],
+    )
+    monkeypatch.setattr(web_todo, "load_config", lambda: SimpleNamespace(todo_path=path))
+    return path
+
+
+def test_get_api_todo_is_open_items_json(port: int, todo_file: Path) -> None:
+    status, body = request(port, "/api/todo")
+    assert status == 200
+    assert [item["id"] for item in json.loads(body)["items"]] == [1]
+
+
+def test_post_todo_add_writes_file_and_answers_id(port: int, todo_file: Path) -> None:
+    status, body = post(port, {"op": "add", "title": "Новая", "note": ""}, path="/api/todo")
+    assert status == 200
+    assert json.loads(body) == {"id": 3}
+    assert "Новая" in todo_file.read_text(encoding="utf-8")
+
+
+def test_post_todo_error_is_400_with_text(port: int, todo_file: Path) -> None:
+    before = todo_file.read_bytes()
+    status, body = post(port, {"op": "move", "id": 2, "state": "doing"}, path="/api/todo")
+    assert status == 400
+    assert "Нельзя done -> doing" in body.decode()
+    assert todo_file.read_bytes() == before
+
+
+def test_post_todo_without_origin_is_403_and_file_untouched(port: int, todo_file: Path) -> None:
+    before = todo_file.read_bytes()
+    status, _ = post(
+        port, {"op": "add", "title": "Новая", "note": ""}, path="/api/todo", origin=None
+    )
+    assert status == 403
+    assert todo_file.read_bytes() == before

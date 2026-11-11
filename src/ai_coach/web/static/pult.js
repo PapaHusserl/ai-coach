@@ -21,6 +21,7 @@ import { headerBusy, renderHeader } from "./header-pane.js";
 import { loadPantry, pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
 import { loadState } from "./state-pane.js";
+import { loadTodo, todoBusy } from "./todo-pane.js";
 import { loadWeek } from "./week-pane.js";
 
 export * from "./pult-model.js";
@@ -125,7 +126,7 @@ function render(view) {
 
 // Таймер не перерисовывает список, пока в окне пункта идёт ввод (прототип :513).
 function typing() {
-	if (scaleBusy() || headerBusy() || pantryBusy()) return true;
+	if (scaleBusy() || headerBusy() || pantryBusy() || todoBusy()) return true;
 	const active = document.activeElement;
 	return Boolean(active?.closest(".pane")) && ["INPUT", "TEXTAREA"].includes(active.tagName);
 }
@@ -143,6 +144,7 @@ if (typeof document !== "undefined") {
 			render(view);
 			renderScale(view, load, openRow);
 			renderHeader(view.header, load);
+			loadTodo();
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
 			const today = view.now.slice(0, 10);

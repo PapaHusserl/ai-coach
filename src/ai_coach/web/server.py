@@ -1,7 +1,8 @@
 """HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
 (неделя Пн-Вс и нагрузка вкладки «Тренировки»); пишет в базу
-только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry; Origin = Host, Р1 = 2 П2),
-на каждый запрос своё соединение. Без ключа доступа: решение Влада (Р6 = 1)."""
+только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry, /api/todo;
+Origin = Host, Р1 = 2 П2), на каждый запрос своё соединение.
+Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
 import socket
@@ -27,6 +28,7 @@ from ai_coach.web.marks import save_mark
 from ai_coach.web.pantry import pantry_view, save_pantry
 from ai_coach.web.plan import apply_event
 from ai_coach.web.state import state_view
+from ai_coach.web.todo import save_todo, todo_view
 
 MAX_BODY = 64 * 1024
 SYNC_PATH = "/api/sync"
@@ -80,6 +82,7 @@ POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], 
     "/api/event": apply_event,
     "/api/weight": save_weight,
     "/api/pantry": save_pantry,
+    "/api/todo": save_todo,
 }
 POST_PATHS = frozenset(POST_ROUTES) | {SYNC_PATH}
 
@@ -128,6 +131,7 @@ GET_VIEWS: dict[str, Callable[..., dict[str, Any]]] = {
     "/api/day": day_view,
     "/api/week": week_view,
     "/api/pantry": pantry_view,
+    "/api/todo": todo_view,
     "/api/state": state_view,
     SYNC_PATH: sync_view,
 }
