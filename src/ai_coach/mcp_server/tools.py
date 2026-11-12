@@ -12,6 +12,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
+from ai_coach.decisions import settle, track
 from ai_coach.load import (
     THRESHOLD_SPORTS,
     daily_tss,
@@ -383,7 +384,9 @@ def create_draft_workout(
         raise ToolError(f"spec не подходит: {type(e).__name__}: {e}") from None
     row = {"date": date, "sport": sport, "name": name, "workout_json": full_spec}
     with conn:
-        return {"draft_id": add_planned_workout(conn, row)}
+        draft_id = add_planned_workout(conn, row)
+        track(conn, "workout", draft_id, name, date)
+    return {"draft_id": draft_id}
 
 
 def save_food_nutrition(
@@ -432,6 +435,7 @@ def cancel_draft_workout(conn: sqlite3.Connection, workout_id: int) -> dict[str,
         raise ToolError(f"Отменить можно только черновик, а {workout_id} — {row['status']}.")
     with conn:
         update_planned_workout(conn, workout_id, {"status": "cancelled"})
+        settle(conn, "workout", workout_id, "dropped")
     return {"cancelled_id": workout_id}
 
 
@@ -454,6 +458,7 @@ def propose_phase(
     try:
         with conn:
             phase_id = goals.propose_phase(conn, name, **given)
+            track(conn, "phase", phase_id, name, start_date)
     except (ValueError, LookupError) as e:
         raise ToolError(str(e)) from None
     return {"phase_id": phase_id}

@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from ai_coach.cli.agenda import event_app
+from ai_coach.cli.decide import decide_app
 from ai_coach.cli.habits import habit_app
 from ai_coach.cli.journal import (
     check_date,
@@ -90,6 +91,7 @@ app.add_typer(recipe_app, name="recipe")
 app.add_typer(practice_app, name="practice")
 app.add_typer(habit_app, name="habit")
 app.add_typer(review_app, name="review")
+app.add_typer(decide_app, name="decide")
 app.add_typer(event_app, name="event")
 app.add_typer(todo_app, name="todo")
 app.add_typer(protocol_app, name="protocol")

@@ -294,3 +294,58 @@ def test_status_does_not_need_garmin(isolated: Path, client: PushClient) -> None
 def test_status_on_empty_database_is_ok(isolated: Path) -> None:
     result = runner.invoke(main.app, ["status"])
     assert result.exit_code == 0
+
+
+# очередь решений (Н29, партия 2): approve закрывает пункт черновика «да»
+
+
+def item_status(db: Path, wid: int) -> str | None:
+    conn = open_db(db)
+    try:
+        found = conn.execute(
+            "SELECT status FROM decision_log WHERE kind = 'workout' AND ref_id = ?", (wid,)
+        ).fetchone()
+        return found[0] if found else None
+    finally:
+        conn.close()
+
+
+def track_workout(db: Path, wid: int) -> None:
+    from ai_coach.decisions import track
+
+    conn = open_db(db)
+    try:
+        track(conn, "workout", wid, "Бег лёгкий", "2026-03-12")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_approve_closes_item_with_yes(isolated: Path) -> None:
+    wid = workout(isolated, "draft")
+    track_workout(isolated, wid)
+    conn = open_db(isolated)
+    approve(conn, wid)
+    conn.commit()
+    conn.close()
+    assert item_status(isolated, wid) == "yes"
+
+
+def test_approve_without_item_still_works(isolated: Path) -> None:
+    wid = workout(isolated, "draft")
+    conn = open_db(isolated)
+    approve(conn, wid)
+    conn.commit()
+    conn.close()
+    assert status_of(isolated, wid) == "approved"
+    assert item_status(isolated, wid) is None
+
+
+def test_approve_not_draft_keeps_item_unchanged(isolated: Path) -> None:
+    wid = workout(isolated, "pushed")
+    track_workout(isolated, wid)
+    conn = open_db(isolated)
+    with pytest.raises(PlanError):
+        approve(conn, wid)
+    conn.close()
+    assert item_status(isolated, wid) == "open"

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_plan_push import PushClient, row, status_of, workout
@@ -6,6 +7,7 @@ from test_plan_push_failures import FailingClient, use
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
+from ai_coach.store.db import open_db
 
 runner = CliRunner()
 
@@ -143,6 +145,48 @@ def test_cancel_unknown_id_fails(isolated: Path, client: PushClient) -> None:
     assert result.exit_code != 0
     assert "Тренировки 999 нет." in result.output
     assert client.calls == []
+
+
+def item_status(db: Path, wid: int) -> str | None:
+    conn = open_db(db)
+    try:
+        found = conn.execute(
+            "SELECT status FROM decision_log WHERE kind = 'workout' AND ref_id = ?", (wid,)
+        ).fetchone()
+        return found[0] if found else None
+    finally:
+        conn.close()
+
+
+def track_item(db: Path, wid: int, close_as: str | None = None) -> None:
+    from ai_coach.decisions import settle, track
+
+    conn = open_db(db)
+    try:
+        track(conn, "workout", wid, "Бег лёгкий", "2026-03-12")
+        if close_as is not None:
+            settle(conn, "workout", wid, close_as)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_cancel_draft_closes_item_with_no(isolated: Path, client: PushClient) -> None:
+    wid = workout(isolated, "draft")
+    track_item(isolated, wid)
+    assert runner.invoke(main.app, ["cancel", str(wid)]).exit_code == 0
+    assert item_status(isolated, wid) == "no"
+
+
+@pytest.mark.parametrize("status", ["approved", "pushed"])
+def test_cancel_sent_keeps_closed_item_yes(isolated: Path, client: PushClient, status: str) -> None:
+    ids: dict[str, Any] = (
+        {"garmin_workout_id": 11, "garmin_schedule_id": 22} if status == "pushed" else {}
+    )
+    wid = workout(isolated, status, **ids)
+    track_item(isolated, wid, close_as="yes")
+    assert runner.invoke(main.app, ["cancel", str(wid), "--yes"]).exit_code == 0
+    assert item_status(isolated, wid) == "yes"
 
 
 def test_cancel_shows_date_and_name_before_question(isolated: Path, client: PushClient) -> None:

@@ -69,3 +69,27 @@ def test_help_topic_covers_exceptions() -> None:
     text = HELP_TOPIC.read_text()
     assert "разложить завтра" in text
     assert "обзор недели" in text
+
+
+# партия 2: команды очереди
+
+
+def test_decide_commands_are_allowed() -> None:
+    assert "Bash(uv run coach decide:*)" in ALLOW
+
+
+@pytest.mark.parametrize(
+    "word", ["decide add", "decide list", "decide done", "decide result", "workout", "phase"]
+)
+def test_help_topic_covers_queue_commands_and_kinds(word: str) -> None:
+    assert word in HELP_TOPIC.read_text()
+
+
+def test_goals_help_says_phase_is_accepted_by_decide_done() -> None:
+    assert "decide done" in (AGENTS / "coach-help" / "goals-profile.md").read_text()
+
+
+def test_training_help_says_draft_goes_to_decision_queue() -> None:
+    text = (AGENTS / "coach-help" / "training.md").read_text()
+    assert "очеред" in text
+    assert "decisions.md" in text

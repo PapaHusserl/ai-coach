@@ -173,6 +173,73 @@ def test_only_draft_can_be_cancelled(conn: sqlite3.Connection, status: str) -> N
     assert [row["status"] for row in saved(conn)] == [status]
 
 
+@pytest.mark.parametrize("name", ["create_draft_workout", "cancel_draft_workout", "propose_phase"])
+def test_tool_description_names_decision_queue(name: str) -> None:
+    from ai_coach.mcp_server.server import TOOLS
+
+    assert "очеред" in TOOLS[name][1]
+
+
+def test_instructions_explain_queue_and_who_answers() -> None:
+    from ai_coach.mcp_server.server import INSTRUCTIONS
+
+    assert "очеред" in INSTRUCTIONS
+    assert "coach decide" in INSTRUCTIONS
+
+
+def items(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    conn.commit()
+    return [dict(r) for r in conn.execute("SELECT * FROM decision_log ORDER BY id")]
+
+
+def test_draft_puts_workout_item_with_date_and_name(conn: sqlite3.Connection) -> None:
+    draft_id = call(conn, "create_draft_workout", **RUN)["draft_id"]
+    (item,) = items(conn)
+    assert (item["kind"], item["ref_id"], item["status"]) == ("workout", draft_id, "open")
+    assert (item["target_date"], item["text"]) == ("2026-10-08", "Бег 5 км")
+
+
+def test_draft_with_broken_spec_puts_no_item(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, "create_draft_workout", **{**RUN, "spec": {}})
+    assert items(conn) == []
+
+
+def test_cancelled_draft_item_is_dropped(conn: sqlite3.Connection) -> None:
+    draft_id = call(conn, "create_draft_workout", **RUN)["draft_id"]
+    call(conn, "cancel_draft_workout", workout_id=draft_id)
+    (item,) = items(conn)
+    assert item["status"] == "dropped"
+    assert item["decided_at"]
+
+
+def test_refused_cancel_keeps_item_open(conn: sqlite3.Connection) -> None:
+    draft_id = call(conn, "create_draft_workout", **RUN)["draft_id"]
+    conn.execute("UPDATE planned_workouts SET status = 'approved' WHERE id = ?", (draft_id,))
+    with pytest.raises(ToolError):
+        call(conn, "cancel_draft_workout", workout_id=draft_id)
+    assert [i["status"] for i in items(conn)] == ["open"]
+
+
+def test_phase_puts_phase_item_with_start_date(conn: sqlite3.Connection) -> None:
+    phase_id = call(conn, "propose_phase", name="База", start_date="2026-10-12")["phase_id"]
+    (item,) = items(conn)
+    assert (item["kind"], item["ref_id"], item["status"]) == ("phase", phase_id, "open")
+    assert (item["target_date"], item["text"]) == ("2026-10-12", "База")
+
+
+def test_phase_without_dates_puts_item_without_target_date(conn: sqlite3.Connection) -> None:
+    call(conn, "propose_phase", name="Отдых")
+    (item,) = items(conn)
+    assert item["target_date"] is None
+
+
+def test_rejected_phase_puts_no_item(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        call(conn, "propose_phase", name="База", goal_ids=[999])
+    assert items(conn) == []
+
+
 def test_cancelling_unknown_workout_is_rejected(conn: sqlite3.Connection) -> None:
     with pytest.raises(ToolError):
         call(conn, "cancel_draft_workout", workout_id=999)

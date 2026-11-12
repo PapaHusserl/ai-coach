@@ -258,9 +258,12 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Доступ: триггер 9г в `coach.md` («что умеешь», «как …», «что значит …») → `cat` оглавления и файла темы (по строке allow на каждый файл в `.claude/settings.json`); отдельной команды `coach help` нет. Строка «что умею» в сводке указывает на «справка».
 - Полнота: `tests/test_skills_help.py` сверяет текст справки с командами typer (`ai_coach.cli.main:app`), MCP-инструментами сервера и скилами `.claude/skills/*/SKILL.md`. Новая функция без записи в справке — красный тест; правило — в AGENTS.md.
 
-## Н29: решения на будущее (партия 1)
+## Н29: решения на будущее (партии 1-2)
 - `decisions.py`: `day_part(moment)` - чистая функция: `morning` с `EVENING_CUTOFF` (04:00) до `MORNING_UNTIL` (12:00), `day` до `EVENING_FROM` (19:00), `evening` с 19:00 до 04:00. Ключ `day_part` в сводке (в `NOT_LISTS`): для сегодняшней даты, иначе `null`.
-- Правило для тренера - `.claude/agents/coach-decisions.md` (п. 9ж `coach.md`, п. 4б вечернего чек-ина); справка - `coach-help/decisions.md`. Таблица очереди, команды и точки записи - партии 2-3.
+- Правило для тренера - `.claude/agents/coach-decisions.md` (п. 9ж `coach.md`, п. 4б вечернего чек-ина); справка - `coach-help/decisions.md`. Сводка, `get_decisions` и замер - партия 3.
+- Очередь (партия 2): таблица `decision_log` (миграция 0032; `store/decisions.py`), виды `text` | `workout` | `phase`, на объект (`kind`, `ref_id`) один пункт (уникальный индекс), статусы `open` -> `yes` | `no` | `dropped`, `result` (`kept` | `missed`) только у `yes`; строки не удаляются. Миграция переносит открытое: черновики с датой не раньше сегодня и фазы `proposed`.
+- Кладёт и закрывает код: `decisions.track` / `settle` (commit у вызывающего) - `create_draft_workout` и `propose_phase` кладут пункт, `plan/service.py` `approve` закрывает «да», `cancel` - «нет», `cancel_draft_workout` - «снято»; у закрытого пункта `settle` ничего не меняет. Слова - `coach decide add`; фаза - `decide done` (`accept_phase` / `reject_phase`), тренировку `decide done` не закрывает.
+- Команды `cli/decide.py`: `decide add | list | done | result`; allow `Bash(uv run coach decide:*)` добавляет Влад.
 
 ## Н13: план дня (партия 1)
 - Миграция 0023: `coach_events.kind` + `focus`, `meal` (пересоздание таблицы по образцу 0009; id, `calendar_uid`, индексы сохранены). Категории у `focus`/`meal` нет — в нагрузку не входят; `KINDS` в `agenda/service.py`.

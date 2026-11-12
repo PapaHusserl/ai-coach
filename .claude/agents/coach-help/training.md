@@ -38,4 +38,4 @@
 ## Инструменты тренера
 
 - Читает: `get_plan` (план), `get_plan_actual` (план и факт), `get_load` (CTL/ATL), `get_deviations` (отклонения), `get_workout_link` (ссылка для телефона).
-- Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (отменяет только `draft`).
+- Пишет только черновики: `create_draft_workout`, `cancel_draft_workout` (отменяет только `draft`). Черновик попадает в очередь решений (см. `decisions.md`).

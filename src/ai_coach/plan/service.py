@@ -9,6 +9,7 @@ import sqlite3
 from datetime import datetime
 from typing import Any
 
+from ai_coach.decisions import settle
 from ai_coach.garmin import GarminError, garmin_errors
 from ai_coach.store.plans import get_planned_workout, update_planned_workout
 from ai_coach.workouts import build_workout
@@ -33,6 +34,7 @@ def approve(conn: sqlite3.Connection, workout_id: int) -> None:
             f"Утвердить можно только черновик, а тренировка {workout_id} — {row['status']}."
         )
     update_planned_workout(conn, workout_id, {"status": "approved"})
+    settle(conn, "workout", workout_id, "yes")
 
 
 def pushable(conn: sqlite3.Connection, workout_id: int) -> dict[str, Any]:
@@ -57,6 +59,7 @@ def cancel(conn: sqlite3.Connection, workout_id: int) -> None:
     """-> cancelled; id Garmin обнуляются (после снятия с Garmin их там нет)."""
     values = {"status": "cancelled", "garmin_workout_id": None, "garmin_schedule_id": None}
     update_planned_workout(conn, workout_id, values)
+    settle(conn, "workout", workout_id, "no")
 
 
 def garmin_json(row: dict[str, Any]) -> dict[str, Any]:

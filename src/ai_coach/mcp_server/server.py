@@ -46,7 +46,10 @@ INSTRUCTIONS = (
     "в сводке week_review_due - пора проводить обзор, после обзора тренер "
     "отмечает его командой coach review done (CLI, не MCP). "
     "События в календаре тренера (get_agenda): MCP пишет только черновики, в календарь их "
-    "кладёт пользователь командой coach event write (CLI, не MCP)."
+    "кладёт пользователь командой coach event write (CLI, не MCP). "
+    "В очередь решений MCP кладёт пункт только вместе с черновиком тренировки и предложением "
+    "фазы и снимает его при отмене черновика; отвечает на пункты пользователь через CLI "
+    "coach decide, approve, cancel."
 )
 
 CLAUDE_WORKLOAD = (
@@ -374,11 +377,13 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         '"interval", "meters": 5000, "pace_sec_per_km": [360, 330], "note": "ровно"}, '
         '{"type": "cooldown", "seconds": 300}]} - type: warmup / interval / recovery / '
         "cooldown / rest; шаг - seconds или meters; pace_sec_per_km - [медленнее, быстрее], "
-        "сек на км. Для телефона беговые шаги лучше задавать по времени (seconds).",
+        "сек на км. Для телефона беговые шаги лучше задавать по времени (seconds). "
+        "Кладёт пункт в очередь решений.",
     ),
     "cancel_draft_workout": (
         tools.cancel_draft_workout,
-        "Отменить черновик тренировки по id (только draft; утверждённые и отправленные нельзя).",
+        "Отменить черновик тренировки по id (только draft; утверждённые и отправленные нельзя); "
+        "снимает его пункт очереди решений.",
     ),
     "get_workout_link": (
         links.workout_link,
@@ -432,7 +437,10 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "ответ command - готовая команда coach event move, покажи её пользователю, выполняет он. "
         "Повторяющееся не двигается: снять и поставить заново.",
     ),
-    "propose_phase": (tools.propose_phase, "Предложить фазу (proposed); принимает пользователь."),
+    "propose_phase": (
+        tools.propose_phase,
+        "Предложить фазу (proposed); принимает пользователь. Кладёт пункт в очередь решений.",
+    ),
 }
 
 
