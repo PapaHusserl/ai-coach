@@ -258,6 +258,10 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - Доступ: триггер 9г в `coach.md` («что умеешь», «как …», «что значит …») → `cat` оглавления и файла темы (по строке allow на каждый файл в `.claude/settings.json`); отдельной команды `coach help` нет. Строка «что умею» в сводке указывает на «справка».
 - Полнота: `tests/test_skills_help.py` сверяет текст справки с командами typer (`ai_coach.cli.main:app`), MCP-инструментами сервера и скилами `.claude/skills/*/SKILL.md`. Новая функция без записи в справке — красный тест; правило — в AGENTS.md.
 
+## Н29: решения на будущее (партия 1)
+- `decisions.py`: `day_part(moment)` - чистая функция: `morning` с `EVENING_CUTOFF` (04:00) до `MORNING_UNTIL` (12:00), `day` до `EVENING_FROM` (19:00), `evening` с 19:00 до 04:00. Ключ `day_part` в сводке (в `NOT_LISTS`): для сегодняшней даты, иначе `null`.
+- Правило для тренера - `.claude/agents/coach-decisions.md` (п. 9ж `coach.md`, п. 4б вечернего чек-ина); справка - `coach-help/decisions.md`. Таблица очереди, команды и точки записи - партии 2-3.
+
 ## Н13: план дня (партия 1)
 - Миграция 0023: `coach_events.kind` + `focus`, `meal` (пересоздание таблицы по образцу 0009; id, `calendar_uid`, индексы сохранены). Категории у `focus`/`meal` нет — в нагрузку не входят; `KINDS` в `agenda/service.py`.
 - `agenda/slots.py` (геометрия отрезков, календарь не пишет): `busy_spans` (календарь дня без отменённых, отклонённых и all-day + события тренера draft/written, кроме `checkin`), `free_slots` (рамка минус занятое, начало вверх до `STEP_MIN`, окна короче `MIN_SLOT` не отдаются), `anchored`, `first_fit`, `vacant`, `ceil_step`.

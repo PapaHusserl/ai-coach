@@ -125,6 +125,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "evening_done_today",
         "habits_today",
         "week_review_due",
+        "day_part",
     }
 
 
@@ -489,6 +490,41 @@ def test_snapshot_description_names_seven_days_and_limit() -> None:
     text = TOOLS["get_morning_snapshot"][1]
     assert "самочувствие за 7 дней" in text
     assert "32768 символов" in text
+
+
+def test_snapshot_description_names_day_part_and_evening() -> None:
+    text = TOOLS["get_morning_snapshot"][1]
+    assert "day_part" in text
+    assert "evening" in text
+    assert "вернусь утром" in text
+    assert "coach-decisions.md" in text
+
+
+@pytest.mark.parametrize(
+    ("clock", "part"), [("09:00:00", "morning"), ("14:00:00", "day"), ("21:00:00", "evening")]
+)
+def test_snapshot_day_part_for_today(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, clock: str, part: str
+) -> None:
+    freeze(monkeypatch, f"{DAY} {clock}")
+    assert call(conn, "get_morning_snapshot", date=DAY)["day_part"] == part
+
+
+def test_snapshot_day_part_is_none_for_past_date(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{day_shift(1)} 09:00:00")
+    assert call(conn, "get_morning_snapshot", date=DAY)["day_part"] is None
+
+
+def test_snapshot_with_day_part_is_cut_without_error(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overfill(conn)
+    freeze(monkeypatch, f"{DAY} 09:00:00")
+    text = call_text(conn, "get_morning_snapshot", date=DAY)
+    assert len(text) <= SNAPSHOT_MAX_CHARS
+    assert json.loads(text)["day_part"] == "morning"
 
 
 # --- Н24: выжившие мутанты сводки (окна, порядок обрезки, лимиты) ---

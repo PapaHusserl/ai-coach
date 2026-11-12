@@ -3,6 +3,8 @@
     "allow": [
       "mcp__ai-coach",
       "Bash(uv run coach slip:*)",
+      "Bash(cat .claude/agents/coach-decisions.md)",
+      "Bash(cat .claude/agents/coach-help/decisions.md)",
       "Bash(cat .claude/agents/coach-help/day-plan.md)",
       "Bash(cat .claude/agents/coach-help/claude.md)",
       "Bash(cat .claude/agents/coach-help/todo.md)",
