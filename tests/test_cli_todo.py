@@ -152,6 +152,11 @@ def test_active_items_returns_id_title_note_state(tmp_path: Path) -> None:
     ]
 
 
+def test_active_items_missing_title_and_state_become_empty_strings(tmp_path: Path) -> None:
+    path = write_todo(tmp_path / "t.json", [{"id": 7}])
+    assert active_items(path) == [{"id": 7, "title": "", "note": "", "state": ""}]
+
+
 def test_active_items_note_is_taken_from_file(tmp_path: Path) -> None:
     item = todo_item(2, "todo", "2026-10-01")
     item["note"] = "подробности"

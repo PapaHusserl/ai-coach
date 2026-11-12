@@ -255,3 +255,163 @@ def test_unknown_id_is_no_event(conn: sqlite3.Connection) -> None:
 def test_unknown_action_is_mark_error(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError):
         apply(conn, {"action": "create", "id": put(conn)}, FakeForeignEditor())
+
+
+def message_of(call: Any) -> str:
+    with pytest.raises((MarkError, NoEvent)) as raised:
+        call()
+    return str(raised.value)
+
+
+def test_unknown_action_message(conn: sqlite3.Connection) -> None:
+    text = message_of(
+        lambda: apply(conn, {"action": "create", "id": put(conn)}, FakeForeignEditor())
+    )
+    assert text == "action: нужно одно из update, remove."
+
+
+def test_bad_id_messages(conn: sqlite3.Connection) -> None:
+    assert message_of(lambda: view(conn, "abc", FakeForeignEditor())) == "id: нужен номер встречи."
+    assert (
+        message_of(lambda: apply(conn, {"action": "remove", "id": "1"}, FakeForeignEditor()))
+        == "id: нужен номер встречи."
+    )
+
+
+def test_unknown_id_message(conn: sqlite3.Connection) -> None:
+    text = message_of(lambda: apply(conn, {"action": "remove", "id": 999}, FakeForeignEditor()))
+    assert text == "Встречи нет — обнови синк."
+
+
+def test_id_equal_to_max_id_is_looked_up_not_rejected(conn: sqlite3.Connection) -> None:
+    from ai_coach.web.plan import MAX_ID
+
+    with pytest.raises(NoEvent):
+        apply(conn, {"action": "remove", "id": MAX_ID}, FakeForeignEditor())
+
+
+def test_coach_row_message(conn: sqlite3.Connection) -> None:
+    event_id = put(conn, uid="m1")
+    add_event(conn, coach_event(status="written", calendar_uid="m1"))
+    conn.commit()
+    text = message_of(lambda: apply(conn, update(event_id, title="Х"), FakeForeignEditor()))
+    assert text == "событие тренера — двигай его блок."
+
+
+def test_attendee_message(conn: sqlite3.Connection) -> None:
+    event_id = put(conn, my_status="accepted")
+    text = message_of(lambda: apply(conn, update(event_id, title="Х"), FakeForeignEditor()))
+    assert text == "Встреча с участниками — только просмотр."
+
+
+class SpyEditor(FakeForeignEditor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asked: list[tuple[str, str, str]] = []
+
+    def note(self, uid: str, start_at: str) -> str:
+        self.asked.append(("note", uid, start_at))
+        return super().note(uid, start_at)
+
+    def writable(self, uid: str, start_at: str) -> bool:
+        self.asked.append(("writable", uid, start_at))
+        return super().writable(uid, start_at)
+
+
+def test_view_asks_editor_about_this_uid_and_start(conn: sqlite3.Connection) -> None:
+    editor = SpyEditor()
+    view(conn, put(conn), editor)
+    assert editor.asked == [("note", "m1", START), ("writable", "m1", START)]
+
+
+def test_view_note_is_none_when_editor_fails_on_writable(conn: sqlite3.Connection) -> None:
+    class Failing(FakeForeignEditor):
+        def writable(self, uid: str, start_at: str) -> bool:
+            raise CalendarError("пропало")
+
+    result = view(conn, put(conn), Failing())
+    assert (result["note"], result["editable"], result["reason"]) == (None, False, "пропало")
+
+
+def test_update_empty_payload_message(conn: sqlite3.Connection) -> None:
+    text = message_of(lambda: apply(conn, update(put(conn)), FakeForeignEditor()))
+    assert text == "Нечего менять: нужны title, note, start_at или end_at."
+
+
+def test_update_non_string_message(conn: sqlite3.Connection) -> None:
+    text = message_of(lambda: apply(conn, update(put(conn), title=5), FakeForeignEditor()))
+    assert text == "title, note, start_at, end_at: нужны строки."
+
+
+def test_update_empty_title_is_refused_with_message(conn: sqlite3.Connection) -> None:
+    event_id = put(conn)
+    editor = FakeForeignEditor()
+    text = message_of(lambda: apply(conn, update(event_id, title=""), editor))
+    assert text == "title: нужно название."
+    assert editor.updated == []
+
+
+def test_update_empty_note_is_allowed(conn: sqlite3.Connection) -> None:
+    editor = FakeForeignEditor()
+    apply(conn, update(put(conn), note=""), editor)
+    assert editor.updated[0][2] == {"note": ""}
+
+
+@pytest.mark.parametrize("key", ["start_at", "end_at"])
+def test_update_bad_time_format_message(conn: sqlite3.Connection, key: str) -> None:
+    editor = FakeForeignEditor()
+    text = message_of(lambda: apply(conn, update(put(conn), **{key: "не время"}), editor))
+    assert text == "start_at, end_at: нужно время YYYY-MM-DDTHH:MM:SS."
+    assert editor.updated == []
+
+
+def test_update_start_only_is_checked_against_stored_end(conn: sqlite3.Connection) -> None:
+    editor = FakeForeignEditor()
+    text = message_of(
+        lambda: apply(conn, update(put(conn), start_at="2026-11-09T17:00:00"), editor)
+    )
+    assert text == "Конец должен быть позже начала, не больше суток."
+    assert editor.updated == []
+
+
+def test_update_end_only_is_checked_against_stored_start(conn: sqlite3.Connection) -> None:
+    editor = FakeForeignEditor()
+    text = message_of(lambda: apply(conn, update(put(conn), end_at="2026-11-09T14:00:00"), editor))
+    assert text == "Конец должен быть позже начала, не больше суток."
+    assert editor.updated == []
+
+
+def test_update_exactly_24_hours_is_allowed(conn: sqlite3.Connection) -> None:
+    event_id = put(conn)
+    result = apply(conn, update(event_id, end_at="2026-11-10T15:00:00"), FakeForeignEditor())
+    assert result["end_at"] == "2026-11-10T15:00:00"
+
+
+def test_update_end_only_answers_with_stored_start(conn: sqlite3.Connection) -> None:
+    result = apply(conn, update(put(conn), end_at="2026-11-09T17:00:00"), FakeForeignEditor())
+    assert result == {"start_at": START, "end_at": "2026-11-09T17:00:00"}
+
+
+def test_update_start_only_answers_with_stored_end(conn: sqlite3.Connection) -> None:
+    result = apply(conn, update(put(conn), start_at="2026-11-09T15:30:00"), FakeForeignEditor())
+    assert result == {"start_at": "2026-11-09T15:30:00", "end_at": END}
+
+
+def test_update_moves_row_to_the_new_date(conn: sqlite3.Connection) -> None:
+    event_id = put(conn)
+    apply(
+        conn,
+        update(event_id, start_at="2026-11-10T09:00:00", end_at="2026-11-10T10:00:00"),
+        FakeForeignEditor(),
+    )
+    row = row_of(conn, event_id)
+    assert row is not None
+    assert row["date"] == "2026-11-10"
+
+
+def test_update_end_only_keeps_row_date(conn: sqlite3.Connection) -> None:
+    event_id = put(conn)
+    apply(conn, update(event_id, end_at="2026-11-09T17:00:00"), FakeForeignEditor())
+    row = row_of(conn, event_id)
+    assert row is not None
+    assert row["date"] == "2026-11-09"

@@ -218,6 +218,60 @@ def test_config_error_is_mark_error(
         save_todo(conn, {"op": "add", "title": "X", "note": ""}, NOW)
 
 
+@pytest.mark.parametrize("op", ["edit", "move"])
+@pytest.mark.parametrize("item_id", ["1", None, True, 1.0])
+def test_non_integer_id_is_mark_error(
+    conn: sqlite3.Connection, todo_path: Path, op: str, item_id: object
+) -> None:
+    four_states(todo_path)
+    before = todo_path.read_bytes()
+    payload = {"op": op, "id": item_id, "title": "X", "state": "done"}
+    with pytest.raises(MarkError) as raised:
+        save_todo(conn, payload, NOW)
+    assert str(raised.value) == "id: нужно число."
+    assert todo_path.read_bytes() == before
+
+
+def test_non_string_title_is_mark_error_with_key(conn: sqlite3.Connection, todo_path: Path) -> None:
+    with pytest.raises(MarkError) as raised:
+        save_todo(conn, {"op": "add", "title": 5, "note": ""}, NOW)
+    assert str(raised.value) == "title: нужна строка."
+
+
+def test_unknown_op_message(conn: sqlite3.Connection, todo_path: Path) -> None:
+    with pytest.raises(MarkError) as raised:
+        save_todo(conn, {"op": "delete"}, NOW)
+    assert str(raised.value) == "op: add, edit или move."
+
+
+def test_bad_state_message(conn: sqlite3.Connection, todo_path: Path) -> None:
+    four_states(todo_path)
+    with pytest.raises(MarkError) as raised:
+        save_todo(conn, {"op": "move", "id": 1, "state": "archived"}, NOW)
+    assert str(raised.value) == "state: doing, todo, done или dropped."
+
+
+def test_edit_without_fields_message(conn: sqlite3.Connection, todo_path: Path) -> None:
+    four_states(todo_path)
+    with pytest.raises(MarkError) as raised:
+        save_todo(conn, {"op": "edit", "id": 1}, NOW)
+    assert str(raised.value) == "Нужен title или note."
+
+
+def test_add_without_title_is_mark_error_and_writes_nothing(
+    conn: sqlite3.Connection, todo_path: Path
+) -> None:
+    with pytest.raises(MarkError, match="пустое название"):
+        save_todo(conn, {"op": "add", "note": "n"}, NOW)
+    assert not todo_path.exists()
+
+
+def test_add_without_note_has_empty_note(conn: sqlite3.Connection, todo_path: Path) -> None:
+    new_id = save_todo(conn, {"op": "add", "title": "Новая"}, NOW)["id"]
+    [item] = [i for i in view(conn) if i["id"] == new_id]
+    assert item["note"] == ""
+
+
 def test_broken_todo_file_is_mark_error(conn: sqlite3.Connection, todo_path: Path) -> None:
     todo_path.write_text("{не json", encoding="utf-8")
     with pytest.raises(MarkError, match="todo не читается"):

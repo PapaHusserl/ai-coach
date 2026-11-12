@@ -576,6 +576,13 @@ def test_meeting_recurring_comes_from_raw_json(conn: sqlite3.Connection) -> None
     assert [m["recurring"] for m in found] == [True, False]
 
 
+@pytest.mark.parametrize("raw_json", [None, ""])
+def test_recurring_without_raw_json_is_false(raw_json: str | None) -> None:
+    from ai_coach.web.day import recurring
+
+    assert recurring({"raw_json": raw_json}) is False
+
+
 def test_meeting_current_and_frame(conn: sqlite3.Connection) -> None:
     item(conn, "09:00", "10:00")
     mid = meeting(conn, "14:00", "15:00")

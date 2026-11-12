@@ -141,3 +141,155 @@ def test_writable_follows_the_calendar(kit: MagicMock, allowed: bool) -> None:
         occurrence("u1", START, writable=allowed)
     ]
     assert writer().writable("u1", START) is allowed
+
+
+def test_missing_eventkit_is_calendar_error_with_hint(
+    kit: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "EventKit", None)
+    with pytest.raises(CalendarError) as raised:
+        writer().note("u1", START)
+    assert str(raised.value) == (
+        "EventKit недоступен: нужен macOS и pyobjc-framework-EventKit (uv sync)."
+    )
+
+
+def test_missing_foundation_is_calendar_error(
+    kit: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "Foundation", None)
+    with pytest.raises(CalendarError, match="EventKit недоступен"):
+        writer().note("u1", START)
+
+
+def test_dates_are_built_through_foundation_and_access_asked_of_the_store(
+    kit: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach.agenda import calendar_edit
+
+    seen: list[Any] = []
+    asked: list[Any] = []
+    monkeypatch.setattr(
+        calendar_edit, "_ns_date", lambda foundation, moment: seen.append(foundation) or moment
+    )
+    monkeypatch.setattr(
+        calendar_edit, "_request_access", lambda store: asked.append(store) or (True, None)
+    )
+    writer().note("u1", START)
+    assert seen == [sys.modules["Foundation"]] * 2
+    assert asked == [store_of(kit)]
+
+
+def test_update_converts_new_times_through_foundation(
+    kit: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach.agenda import calendar_edit
+
+    seen: list[Any] = []
+    monkeypatch.setattr(
+        calendar_edit, "_ns_date", lambda foundation, moment: seen.append(foundation) or moment
+    )
+    writer().update("u1", START, {"end_at": "2026-11-09T17:00:00"})
+    assert seen[-1] is sys.modules["Foundation"]
+
+
+@pytest.mark.parametrize(
+    ("error", "tail"),
+    [("нет прав", ": нет прав"), (None, ""), ("", "")],
+    ids=["text", "none", "empty"],
+)
+def test_denied_access_message(
+    kit: MagicMock, monkeypatch: pytest.MonkeyPatch, error: str | None, tail: str
+) -> None:
+    from ai_coach.agenda import calendar_edit
+
+    monkeypatch.setattr(calendar_edit, "_request_access", lambda store: (False, error))
+    with pytest.raises(CalendarError) as raised:
+        writer().note("u1", START)
+    assert str(raised.value) == f"Нет доступа к календарю{tail}. {calendar_edit.HINT}"
+
+
+def test_occurrence_asks_event_calendars_and_searches_with_the_predicate(kit: MagicMock) -> None:
+    writer().note("u1", START)
+    store = store_of(kit)
+    store.calendarsForEntityType_.assert_called_once_with(kit.EKEntityTypeEvent)
+    store.eventsMatchingPredicate_.assert_called_once_with(
+        store.predicateForEventsWithStartDate_endDate_calendars_.return_value
+    )
+
+
+def test_missing_occurrence_message(kit: MagicMock) -> None:
+    store_of(kit).eventsMatchingPredicate_.return_value = []
+    with pytest.raises(CalendarError) as raised:
+        writer().note("u1", START)
+    assert str(raised.value) == "события нет в календаре - обнови синк."
+
+
+def test_note_returns_the_notes_of_the_occurrence(kit: MagicMock) -> None:
+    store_of(kit).eventsMatchingPredicate_.return_value[0].notes.return_value = "описание"
+    assert writer().note("u1", START) == "описание"
+
+
+def test_note_of_event_without_notes_is_empty_string(kit: MagicMock) -> None:
+    store_of(kit).eventsMatchingPredicate_.return_value[0].notes.return_value = None
+    assert writer().note("u1", START) == ""
+
+
+def test_note_looks_for_the_given_uid_and_start(kit: MagicMock) -> None:
+    with pytest.raises(CalendarError, match="обнови синк"):
+        writer().note("other", START)
+    with pytest.raises(CalendarError, match="обнови синк"):
+        writer().note("u1", "2026-11-09T09:00:00")
+
+
+def test_readonly_message_is_exact(kit: MagicMock) -> None:
+    store_of(kit).eventsMatchingPredicate_.return_value = [occurrence("u1", START, writable=False)]
+    with pytest.raises(CalendarError) as raised:
+        writer().update("u1", START, {"title": "Х"})
+    assert str(raised.value) == "календарь только для чтения."
+
+
+def test_save_and_remove_use_commit_and_no_error_out_param(kit: MagicMock) -> None:
+    writer().update("u1", START, {"title": "Х"})
+    writer().remove("u1", START)
+    item = store_of(kit).eventsMatchingPredicate_.return_value[0]
+    assert store_of(kit).saveEvent_span_commit_error_.call_args.args == (
+        item,
+        THIS_EVENT,
+        True,
+        None,
+    )
+    assert store_of(kit).removeEvent_span_commit_error_.call_args.args == (
+        item,
+        THIS_EVENT,
+        True,
+        None,
+    )
+
+
+def test_save_failure_text_is_cut_to_120_characters(kit: MagicMock) -> None:
+    store_of(kit).saveEvent_span_commit_error_.return_value = (False, "я" * 200)
+    with pytest.raises(CalendarError) as raised:
+        writer().update("u1", START, {"title": "Х"})
+    assert str(raised.value) == "календарь не сохранил событие: " + "я" * 120
+
+
+def test_remove_failure_text_is_cut_to_120_characters(kit: MagicMock) -> None:
+    store_of(kit).removeEvent_span_commit_error_.return_value = (False, "я" * 200)
+    with pytest.raises(CalendarError) as raised:
+        writer().remove("u1", START)
+    assert str(raised.value) == "календарь не снял событие: " + "я" * 120
+
+
+def test_unexpected_save_exception_is_calendar_error_with_type_name(kit: MagicMock) -> None:
+    store_of(kit).saveEvent_span_commit_error_.side_effect = RuntimeError("секрет")
+    with pytest.raises(CalendarError) as raised:
+        writer().update("u1", START, {"title": "Х"})
+    assert str(raised.value) == "событие не изменено: RuntimeError"
+
+
+def test_unexpected_remove_exception_is_calendar_error_with_type_name(kit: MagicMock) -> None:
+    store_of(kit).removeEvent_span_commit_error_.side_effect = RuntimeError("секрет")
+    with pytest.raises(CalendarError) as raised:
+        writer().remove("u1", START)
+    assert str(raised.value) == "событие не снято: RuntimeError"
