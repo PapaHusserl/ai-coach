@@ -37,6 +37,7 @@
 		<p id="error" class="error" hidden></p>
 		<nav id="tabs" role="tablist">
 			<button role="tab" data-tab="plan" aria-selected="true">План</button>
+			<button role="tab" data-tab="todo" aria-selected="false">Туду</button>
 			<button role="tab" data-tab="train" aria-selected="false">Тренировки</button>
 			<button role="tab" data-tab="food" aria-selected="false">Еда</button>
 			<button role="tab" data-tab="state" aria-selected="false">Состояние</button>
@@ -47,12 +48,16 @@
 				<p id="empty" class="empty" hidden>На этот день ничего нет.</p>
 				<ul id="rows" class="rows"></ul>
 			</div>
+		</section>
+		<section data-panel="todo" class="cards" hidden>
 			<div id="todo-card" class="card">
 				<div class="plan-h"><h2>Туду</h2> <button id="todo-add" class="link" type="button">+ задача</button></div>
-				<form id="todo-form" class="pf" hidden>
-					<input id="todo-title" placeholder="Название" aria-label="Название" required>
-					<input id="todo-note" placeholder="Заметка" aria-label="Заметка">
-					<button type="submit">Добавить</button>
+				<form id="todo-form" class="tf" hidden>
+					<label for="todo-title">Название</label>
+					<input id="todo-title" required>
+					<label for="todo-note">Заметка</label>
+					<input id="todo-note">
+					<div class="tf-act"><button type="submit">Добавить</button></div>
 				</form>
 				<p id="todo-empty" class="empty" hidden>Туду пусто.</p>
 				<ul id="todo-rows" class="rows"></ul>

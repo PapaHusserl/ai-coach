@@ -1,4 +1,4 @@
-// Пульт: карточка «Туду» на вкладке «План», только DOM (зовётся в браузере). Чистые функции — todo-model.js.
+// Пульт: карточка на вкладке «Туду», только DOM (зовётся в браузере). Чистые функции — todo-model.js.
 
 import { el } from "./dom.js";
 import { closeEventForm, openEventForm } from "./event-form.js";
@@ -51,14 +51,20 @@ async function write(payload, done = "Записано") {
 }
 
 function editNode(row) {
-	const form = el("form", "pf");
+	const form = el("form", "tf");
 	const title = el("input");
 	title.value = row.title;
-	title.setAttribute("aria-label", "Название");
+	title.id = `todo-edit-title-${row.id}`;
+	title.required = true;
 	const note = el("input");
 	note.value = row.note;
-	note.placeholder = "Заметка";
-	note.setAttribute("aria-label", "Заметка");
+	note.id = `todo-edit-note-${row.id}`;
+	const label = (input, text) => {
+		const node = el("label", "", text);
+		node.htmlFor = input.id;
+		return node;
+	};
+	const buttons = el("div", "tf-act");
 	const save = el("button", "", "Сохранить");
 	const cancel = el("button", "", "Отмена");
 	cancel.type = "button";
@@ -70,7 +76,8 @@ function editNode(row) {
 		event.preventDefault();
 		write(todoPayload("edit", { id: row.id, title: title.value, note: note.value }));
 	});
-	form.append(title, note, save, cancel);
+	buttons.append(save, cancel);
+	form.append(label(title, "Название"), title, label(note, "Заметка"), note, buttons);
 	return form;
 }
 
@@ -104,7 +111,8 @@ function toCalendar(row) {
 function rowNode(row) {
 	const item = el("li", `agi todo ${row.state}`);
 	const head = el("div", "agh");
-	head.append(el("span", "tm", row.state === "doing" ? "в работе" : ""), el("span", "ttl", row.title));
+	if (row.state === "doing") head.append(el("span", "tm", "в работе"));
+	head.append(el("span", "ttl", row.title));
 	item.append(head);
 	if (row.note) item.append(el("div", "hint", row.note));
 	if (editing === row.id) {
@@ -112,7 +120,7 @@ function rowNode(row) {
 		return item;
 	}
 	const actions = el("div", "frow");
-	const edit = el("button", "link", "править");
+	const edit = el("button", "", "править");
 	edit.type = "button";
 	edit.addEventListener("click", () => {
 		editing = row.id;
@@ -120,7 +128,7 @@ function rowNode(row) {
 		moveBox = null;
 		loadTodo();
 	});
-	const calendar = el("button", "link", "в календарь");
+	const calendar = el("button", "", "в календарь");
 	calendar.type = "button";
 	calendar.addEventListener("click", () => toCalendar(row));
 	actions.append(edit, calendar);

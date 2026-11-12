@@ -893,6 +893,7 @@ nav button[aria-selected="true"] {
 }
 
 .chips button[aria-pressed="true"] {
+	background: var(--accent-soft);
 	border-color: var(--accent);
 	color: var(--accent);
 }
@@ -1162,6 +1163,42 @@ nav button[aria-selected="true"] {
 
 .todo .frow {
 	margin-top: 4px;
+}
+
+/* Без колонки времени плана дня: метка «в работе» — только у пункта в работе. */
+.todo .agh {
+	display: flex;
+}
+
+.todo .ttl {
+	font-weight: 700;
+}
+
+/* Форма пункта туду (создание и правка): поле на строке, лейбл перед полем. */
+.tf {
+	align-items: center;
+	display: grid;
+	gap: 6px 8px;
+	grid-template-columns: auto 1fr;
+	margin: 6px 0;
+}
+
+.tf[hidden] {
+	display: none;
+}
+
+.tf label {
+	color: var(--muted);
+}
+
+.tf input {
+	min-width: 0;
+}
+
+.tf-act {
+	display: flex;
+	gap: 6px;
+	grid-column: 1 / -1;
 }
 
 .todo .pf input {
