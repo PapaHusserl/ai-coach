@@ -174,6 +174,37 @@ def test_help_index_mentions_pult_topic_and_state() -> None:
     assert "правка плана, кладовая, состояние" in text
 
 
+def test_pult_todo_topic_describes_todo_card() -> None:
+    text = topic("pult-todo.md")
+    needles = ("Туду", "coach todo list --all", "coach todo reopen", "отбросить", "в календарь")
+    for needle in needles:
+        assert needle in text, needle
+
+
+def test_pult_todo_topic_describes_foreign_meetings() -> None:
+    text = topic("pult-todo.md")
+    for needle in ("точно удалить", "только этот день", "только просмотр", "пароля"):
+        assert needle in text, needle
+
+
+def test_pult_topic_links_pult_todo_within_limit() -> None:
+    lines = [ln for ln in topic("pult.md").splitlines() if "pult-todo.md" in ln]
+    assert len(lines) == 1
+    assert len(lines[0].encode()) <= 338
+
+
+def test_help_index_mentions_pult_todo_topic() -> None:
+    assert "`pult-todo.md`" in HELP.read_text(encoding="utf-8")
+
+
+def test_todo_topic_points_to_pult_todo() -> None:
+    assert "pult-todo.md" in topic("todo.md")
+
+
+def test_calendar_topic_points_foreign_edits_to_pult_todo() -> None:
+    assert "pult-todo.md" in topic("calendar.md")
+
+
 def test_training_topic_describes_pult_window() -> None:
     text = topic("training.md")
     for needle in ("пульт", "Сделал", "зон", "coach sync"):

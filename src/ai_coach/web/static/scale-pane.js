@@ -2,6 +2,7 @@
 // Блок тренера тянется (сдвиг), правый край — длительность, клик в пустоту — форма нового пункта.
 import { el } from "./dom.js";
 import { openEventForm, postEvent } from "./event-form.js";
+import { postJson } from "./post.js";
 import { formatClock } from "./pult-model.js";
 import {
 	blockBox,
@@ -42,6 +43,18 @@ function showTip(row, box) {
 	ui.tip.style.left = `${Math.min(Math.max(box.left, 0), 80)}%`;
 	ui.tip.textContent = `${formatClock(row.start_at)}–${formatClock(row.end_at)} ${row.title || "Встреча"}`;
 	ui.tip.hidden = false;
+}
+
+// Записать итог перетаскивания; текст ошибки или "". Серый блок — через /api/meeting (Р11 = 1).
+async function saveDrag(mode, row, outcome) {
+	if (row.source === "meeting") {
+		const values = mode === "move" ? { start_at: outcome.start_at, end_at: outcome.end_at } : { end_at: outcome.end_at };
+		return (await postJson("/api/meeting", { action: "update", id: row.id, ...values })).text;
+	}
+	const payload = mode === "move"
+		? { action: "move", id: row.id, start_at: outcome.start_at }
+		: { action: "resize", id: row.id, end_at: outcome.end_at };
+	return (await postEvent(payload)).text;
 }
 
 function startDrag(event, node, row, ctx) {
@@ -86,16 +99,13 @@ function startDrag(event, node, row, ctx) {
 	async function onUp() {
 		release();
 		if (!drag.active) {
-			ctx.open(row.id); // нажали и отпустили без сдвига — это клик по блоку
+			ctx.open(row.id, row.source); // нажали и отпустили без сдвига — это клик по блоку
 			return;
 		}
 		drag.active = false;
 		if (delta === 0) return;
 		drag.saving = true;
-		const payload = mode === "move"
-			? { action: "move", id: row.id, start_at: outcome.start_at }
-			: { action: "resize", id: row.id, end_at: outcome.end_at };
-		fail((await postEvent(payload)).text);
+		fail(await saveDrag(mode, row, outcome));
 		drag.saving = false;
 		ctx.reload();
 	}
@@ -129,8 +139,8 @@ function blockNode(row, ctx) {
 		});
 	} else {
 		node.addEventListener("pointerdown", show);
-		// Повтор не двигается, но раскрывается; встреча — нет.
-		if (row.source === "item") node.addEventListener("click", () => ctx.open(row.id));
+		// Запертый блок не двигается, но раскрывается (встреча — окно просмотра).
+		node.addEventListener("click", () => ctx.open(row.id, row.source));
 	}
 	return node;
 }

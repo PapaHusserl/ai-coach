@@ -18,6 +18,7 @@ import {
 } from "./pult-model.js";
 
 import { headerBusy, renderHeader } from "./header-pane.js";
+import { meetingBusy, mountMeeting } from "./meeting-pane.js";
 import { loadPantry, pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
 import { loadState } from "./state-pane.js";
@@ -80,10 +81,13 @@ function rowClasses(row, now, open) {
 
 // choice — что раскрыл пользователь (см. openedId); lastView — по нему перерисовка без запроса.
 let choice = null;
+let meetChoice = null; // id раскрытой встречи: свой выбор, id пунктов и встреч могут совпасть
 let lastView = null;
+let reloadDay = () => {};
 
 function rowNode(row, view, next, openId) {
-	const open = hasWindow(row) && row.id === openId;
+	const meeting = row.source === "meeting";
+	const open = meeting ? row.id === meetChoice : hasWindow(row) && row.id === openId;
 	const item = el("li", rowClasses(row, view.now, open));
 	const [time, title] = rowText(row);
 	const head = el("div", "agh");
@@ -91,22 +95,31 @@ function rowNode(row, view, next, openId) {
 	head.append(el("span", "tm", time), el("span", "ttl", title), el("span", `st ${status.tone}`.trim(), status.text));
 	if (hasWindow(row)) {
 		makeTappable(head, () => {
-			choice = open ? false : row.id;
+			if (meeting) meetChoice = open ? null : row.id;
+			else choice = open ? false : row.id;
 			render(lastView);
 		}, open);
 	}
 	item.append(head);
 	const progress = row.current ? itemProgress(row, view.now) : null;
 	if (progress) item.append(progressNode(progress));
-	if (open) mountMarks(item, row, view);
+	if (open && meeting) {
+		mountMeeting(item, row, {
+			reload: reloadDay,
+			close: () => {
+				meetChoice = null;
+			},
+		});
+	} else if (open) mountMarks(item, row, view);
 	return item;
 }
 
 // Клик по блоку шкалы раскрывает пункт тренера так же, как клик по строке (без окна — ничего).
-function openRow(id) {
-	const row = dayRows(lastView).find((r) => r.source === "item" && r.id === id);
+function openRow(id, source = "item") {
+	const row = dayRows(lastView).find((r) => r.source === source && r.id === id);
 	if (!row || !hasWindow(row)) return;
-	choice = id;
+	if (source === "meeting") meetChoice = id;
+	else choice = id;
 	render(lastView);
 }
 
@@ -126,7 +139,7 @@ function render(view) {
 
 // Таймер не перерисовывает список, пока в окне пункта идёт ввод (прототип :513).
 function typing() {
-	if (scaleBusy() || headerBusy() || pantryBusy() || todoBusy()) return true;
+	if ([scaleBusy, headerBusy, pantryBusy, todoBusy, meetingBusy].some((busy) => busy())) return true;
 	const active = document.activeElement;
 	return Boolean(active?.closest(".pane")) && ["INPUT", "TEXTAREA"].includes(active.tagName);
 }
@@ -161,8 +174,10 @@ if (typeof document !== "undefined") {
 		if (!shown) return;
 		day = shiftDay(shown, delta);
 		choice = null;
+		meetChoice = null;
 		load();
 	};
+	reloadDay = () => load();
 	setupMarks(load);
 	const tabs = document.querySelectorAll("#tabs button");
 	for (const tab of tabs) {

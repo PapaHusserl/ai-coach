@@ -75,8 +75,9 @@ function minutesBetween(a, b) {
 	return Math.round((Date.parse(b) - Date.parse(a)) / 60000);
 }
 
-// У пункта есть окно отметок (встречи и пункты без окна — нет).
+// У пункта есть окно: у встречи — просмотр и правка (Р7 = 1), у пункта тренера — отметки.
 export function hasWindow(row) {
+	if (row.source === "meeting") return true;
 	// У «Готовки» (kind meal без ключа meal) окна нет, Р7.
 	return row.source === "item" && tabsFor(row.kind).length > 0 && (row.kind !== "meal" || row.meal != null);
 }
@@ -84,7 +85,7 @@ export function hasWindow(row) {
 // Какой пункт раскрыт: choice — id, выбранный кликом; false — свёрнуто всё; null — раскрыт идущий.
 export function openedId(choice, rows) {
 	if (choice === false) return null;
-	const windowed = rows.filter(hasWindow);
+	const windowed = rows.filter((row) => row.source !== "meeting" && hasWindow(row)); // окно встречи — свой выбор
 	const chosen = windowed.find((row) => row.id === choice);
 	return (chosen ?? windowed.find((row) => row.current))?.id ?? null;
 }
@@ -99,13 +100,13 @@ function pastStatus(row) {
 // Ближайший будущий пункт с окном — только на сегодняшнем дне (на чужом «через N» нет); без него undefined.
 export function nextRow(rows, view) {
 	if (view.date !== view.now.slice(0, 10)) return undefined;
-	return rows.find((row) => hasWindow(row) && !row.all_day && isFuture(row, view.now));
+	return rows.find((row) => row.source !== "meeting" && hasWindow(row) && !row.all_day && isFuture(row, view.now));
 }
 
 // Статус справа в строке (Р4): {text, tone}; tone — live | good | bad | "". isNext — ближайший ли это пункт.
 export function rowStatus(row, now, isNext) {
 	if (row.current) return { text: "идёт", tone: "live" };
-	if (!hasWindow(row)) return { text: "", tone: "" };
+	if (row.source === "meeting" || !hasWindow(row)) return { text: "", tone: "" };
 	const known = isPast(row, now)
 		? pastStatus(row)
 		: isNext && { text: `через ${part(minutesBetween(now, row.start_at))}`, tone: "" };

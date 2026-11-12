@@ -74,5 +74,5 @@ export function createPayload({ kind, category, title, start_at, end_at }) {
 	return kind === "task" ? { ...body, category } : body;
 }
 
-// Повтор и встреча не двигаются (Н23 Р5 = 1).
-export const locked = (row) => row.repeat != null || row.source === "meeting";
+// Повтор тренера не двигается (Н23 Р5 = 1); встреча — если сервер отдал editable (Р11 = 1).
+export const locked = (row) => (row.source === "item" ? row.repeat != null : !row.editable);

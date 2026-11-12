@@ -207,9 +207,28 @@ test("createPayload: category только у задачи", async () => {
 	}
 });
 
-test("locked: повтор и встреча заперты, обычный пункт нет", async () => {
+test("locked: пункт с повтором заперт, обычный пункт нет", async () => {
 	const { locked } = await import(MODEL);
 	assert.equal(locked(row("09:00", "10:00", { repeat: "weekly" })), true);
-	assert.equal(locked(row("09:00", "10:00", { source: "meeting" })), true);
 	assert.equal(locked(row("09:00", "10:00", { source: "item" })), false);
+});
+
+test("locked: встреча с editable не заперта (Р11 = 1)", async () => {
+	const { locked } = await import(MODEL);
+	assert.equal(locked(row("09:00", "10:00", { source: "meeting", editable: true })), false);
+});
+
+test("locked: встреча с editable false заперта", async () => {
+	const { locked } = await import(MODEL);
+	assert.equal(locked(row("09:00", "10:00", { source: "meeting", editable: false })), true);
+});
+
+test("locked: повторяющаяся встреча, editable, не заперта (Р8 = 1)", async () => {
+	const { locked } = await import(MODEL);
+	assert.equal(locked(row("09:00", "10:00", { source: "meeting", editable: true, recurring: true })), false);
+});
+
+test("locked: пункт с повтором заперт и при editable", async () => {
+	const { locked } = await import(MODEL);
+	assert.equal(locked(row("09:00", "10:00", { source: "item", repeat: "weekly", editable: true })), true);
 });

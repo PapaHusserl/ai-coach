@@ -207,9 +207,16 @@ test("hasWindow: еда без ключа meal («Готовка») — окна
 	assert.equal(hasWindow(itemRow({ kind: "meal" })), false);
 });
 
-test("hasWindow: у остальных видов ключ meal не нужен, встреча — нет", () => {
+test("hasWindow: у остальных видов ключ meal не нужен", () => {
 	assert.equal(hasWindow(itemRow({ kind: "task" })), true);
-	assert.equal(hasWindow({ source: "meeting", kind: "meal", meal: {} }), false);
+});
+
+test("hasWindow: у встречи окно есть (Р7 = 1)", () => {
+	assert.equal(hasWindow({ source: "meeting", editable: true, recurring: false }), true);
+});
+
+test("hasWindow: у встречи окно есть и без editable (просмотр, Р9 = 1)", () => {
+	assert.equal(hasWindow({ source: "meeting", editable: false }), true);
 });
 
 test("rowStatus: «Готовка» без окна — пусто", () => {
@@ -303,6 +310,18 @@ test("openedId: id встречи или пункта без окна не ра�
 	const noWindow = itemRow({ id: 6, kind: "other" });
 	assert.equal(openedId(5, [meeting, running]), 1);
 	assert.equal(openedId(6, [noWindow, running]), 1);
+});
+
+test("nextRow: будущая встреча с окном перед будущим пунктом — берётся пункт", () => {
+	const meeting = {
+		source: "meeting",
+		editable: true,
+		start_at: "2026-11-07T12:30:00",
+		end_at: "2026-11-07T13:00:00",
+		all_day: false,
+	};
+	const item = later(1);
+	assert.equal(nextRow([meeting, item], todayView), item);
 });
 
 test("nextRow: нет будущих пунктов с окном — undefined", () => {

@@ -1050,7 +1050,7 @@ nav button[aria-selected="true"] {
 	opacity: 0.7;
 }
 
-.blk-ev.lock:not(.meet) {
+.blk-ev.lock {
 	cursor: pointer;
 }
 
@@ -1058,9 +1058,13 @@ nav button[aria-selected="true"] {
 	background: var(--line);
 	border-color: var(--line);
 	color: var(--muted);
-	cursor: default;
+	cursor: grab;
 	height: 12px;
 	top: 38px;
+}
+
+.blk-ev.meet.lock {
+	cursor: pointer;
 }
 
 .blk-ev.meet span {
@@ -1119,6 +1123,22 @@ nav button[aria-selected="true"] {
 .sform .wide {
 	box-sizing: border-box;
 	flex: 1 1 100%;
+	min-width: 0;
+}
+
+/* Окно чужой встречи под строкой: подпись, название, описание, дата и время, кнопки. */
+.mform {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+	margin-top: 8px;
+}
+
+.mform .wide,
+.mform .hint {
+	box-sizing: border-box;
+	flex: 1 1 100%;
+	margin: 0;
 	min-width: 0;
 }
 
