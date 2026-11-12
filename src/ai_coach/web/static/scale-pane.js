@@ -1,12 +1,10 @@
 // Пульт: шкала дня под баром, только DOM (зовётся в браузере). Чистые функции — scale-model.js.
 // Блок тренера тянется (сдвиг), правый край — длительность, клик в пустоту — форма нового пункта.
 import { el } from "./dom.js";
+import { openEventForm, postEvent } from "./event-form.js";
 import { formatClock } from "./pult-model.js";
 import {
-	CATEGORIES,
-	KINDS,
 	blockBox,
-	createPayload,
 	dragOutcome,
 	frameOf,
 	locked,
@@ -29,29 +27,9 @@ const dragging = () => drag.pressed || drag.active || drag.saving;
 // Пока блок тянут или открыта форма, таймер пульта шкалу и страницу не перерисовывает.
 export const scaleBusy = () => dragging() || formOpen;
 
-const clock = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
-
 function fail(text) {
 	ui.error.textContent = text;
 	ui.error.hidden = text === "";
-}
-
-async function post(payload) {
-	try {
-		const response = await fetch("/api/event", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(payload),
-		});
-		// 200 с error — «записан черновиком»: пункт создан, но текст сбоя Календаря показываем.
-		if (response.ok) return { ok: true, text: (await response.json()).error ?? "" };
-		const text = (await response.text()).trim();
-		const known = response.status === 400 || response.status === 404;
-		return { ok: false, text: known ? text : `Не сохранилось, ошибка пульта (код ${response.status})` };
-	} catch (error) {
-		console.error("POST /api/event не удался", error);
-		return { ok: false, text: "Не сохранилось, нет связи с пультом" };
-	}
 }
 
 function place(node, box) {
@@ -117,7 +95,7 @@ function startDrag(event, node, row, ctx) {
 		const payload = mode === "move"
 			? { action: "move", id: row.id, start_at: outcome.start_at }
 			: { action: "resize", id: row.id, end_at: outcome.end_at };
-		fail((await post(payload)).text);
+		fail((await postEvent(payload)).text);
 		drag.saving = false;
 		ctx.reload();
 	}
@@ -157,16 +135,6 @@ function blockNode(row, ctx) {
 	return node;
 }
 
-function timeInput(min) {
-	const input = el("input");
-	input.type = "time";
-	input.value = clock(min);
-	return input;
-}
-
-// Минуты суток из "HH:MM"; конец 00:00 — полночь следующего дня.
-const minutesOf = (value) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-
 function closeForm() {
 	formOpen = false;
 	ui.form.replaceChildren();
@@ -174,67 +142,16 @@ function closeForm() {
 }
 
 function openForm(min, ctx) {
-	const span = newSpan(min, ctx.frame);
-	const choice = { kind: "task", category: "work" };
-	const kinds = el("div", "chips");
-	const categories = el("div", "chips");
-	const title = el("input");
-	// Ряд кнопок одного выбора: нажатая помечена aria-pressed.
-	const choices = (box, items, key, after) => {
-		const buttons = items.map(([value, label]) => {
-			const button = el("button", "", label);
-			button.addEventListener("click", () => {
-				choice[key] = value;
-				for (const [other, mark] of buttons) mark.setAttribute("aria-pressed", String(other === value));
-				after();
-			});
-			return [value, button];
-		});
-		for (const [value, button] of buttons) button.setAttribute("aria-pressed", String(value === choice[key]));
-		box.replaceChildren(...buttons.map(([, button]) => button));
-	};
-	const refresh = () => {
-		categories.hidden = choice.kind !== "task";
-		title.placeholder = KINDS.find((item) => item.value === choice.kind).word;
-	};
-	choices(kinds, KINDS.map((item) => [item.value, item.label]), "kind", refresh);
-	choices(categories, CATEGORIES.map((name) => [name, name]), "category", refresh);
-	refresh();
-	const start = timeInput(span.start);
-	const end = timeInput(span.end);
-	const save = el("button", "", "Создать");
-	const cancel = el("button", "", "Отмена");
-	save.addEventListener("click", async () => {
-		if (!start.value || !end.value) {
-			fail("Укажи время начала и конца.");
-			return;
-		}
-		const from = minutesOf(start.value);
-		const to = minutesOf(end.value) || 1440;
-		const midnight = `${ctx.day}T00:00:00`;
-		const at = (m) => new Date(Date.parse(`${midnight}Z`) + m * 60000).toISOString().slice(0, 19);
-		save.disabled = true; // второе нажатие создало бы второе событие
-		const reply = await post(createPayload({ ...choice, title: title.value, start_at: at(from), end_at: at(to) }));
-		fail(reply.text);
-		save.disabled = false;
-		if (!reply.ok) return;
-		closeForm();
-		ctx.reload();
-	});
-	cancel.addEventListener("click", () => {
-		fail("");
-		closeForm();
-		ctx.reload();
-	});
 	formOpen = true;
-	title.className = "wide";
-	const times = el("div", "frow");
-	times.append("с ", start, " до ", end);
-	const actions = el("div", "frow");
-	actions.append(save, cancel);
-	ui.form.replaceChildren(kinds, categories, title, times, actions);
-	ui.form.hidden = false;
-	title.focus();
+	openEventForm(ui.form, {
+		day: ctx.day,
+		span: newSpan(min, ctx.frame),
+		fail,
+		onDone: () => {
+			formOpen = false;
+			ctx.reload();
+		},
+	});
 }
 
 function ticks(frame) {

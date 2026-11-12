@@ -144,7 +144,7 @@ if (typeof document !== "undefined") {
 			render(view);
 			renderScale(view, load, openRow);
 			renderHeader(view.header, load);
-			loadTodo();
+			loadTodo(load);
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
 			const today = view.now.slice(0, 10);
