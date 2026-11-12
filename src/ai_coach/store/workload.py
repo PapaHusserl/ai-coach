@@ -4,7 +4,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ai_coach.store.db import fetch_all, upsert
+from ai_coach.store.db import fetch_all, fetch_one, update, upsert
 
 CALENDAR_SOURCE = "apple_calendar"
 COUNTER_KINDS = (
@@ -79,6 +79,19 @@ def list_calendar_events(
         "ORDER BY start_at, end_at, uid, source"
     )
     return fetch_all(conn, sql, (date_from, date_to))
+
+
+def get_calendar_event(conn: sqlite3.Connection, event_id: int) -> dict[str, Any] | None:
+    return fetch_one(conn, "SELECT * FROM calendar_events WHERE id = ?", (event_id,))
+
+
+def update_calendar_event(conn: sqlite3.Connection, event_id: int, values: dict[str, Any]) -> None:
+    """Меняет поля строки calendar_events по id (title, start_at, end_at, date)."""
+    update(conn, "calendar_events", event_id, values)
+
+
+def delete_calendar_event(conn: sqlite3.Connection, event_id: int) -> None:
+    conn.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))
 
 
 def upsert_counter(conn: sqlite3.Connection, values: dict[str, Any]) -> None:

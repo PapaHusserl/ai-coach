@@ -397,6 +397,9 @@ tests/test_skills_help.py` и `node --test "tests/web/*.test.mjs"`.
   после выноса в `event-form.js` — как раньше.
 - Партия 2 (папа пп. 2, 10): закрытие формы при смене дня и при исчезновении пункта (и `editing`), `moving` в
   `todoBusy`, одна форма за раз — DOM, руками не проверено.
+- Партия 3 (папа): время открытия окна встречи (`GET /api/meeting` — два обращения к EventKit) и запись в живой
+  Календарь (`update`/`remove` одного вхождения повтора — «отделённое» вхождение, остальные дни на месте) — стенд Влада,
+  тесты на MagicMock/фейке.
 
 ## Правки по ревью
 
@@ -541,3 +544,95 @@ tests/test_web_server.py tests/test_workload_todo_write.py` — зелёные (
 | **итого** | | **~100–135M** | **78–99** (≥ уже прошло 12,57) |
 
 Вердикт: ок по бабкам; главная статья — оркестратор и Декарт. Партия 3 — на краю 200, резать на 3а решает папа.
+
+### Партия 3 — вердикт папы по отступлениям кабана (2026-11-12)
+
+Отчёта кабана (`kaban-p3.md`) в scratchpad нет — по диффу рабочего дерева поверх 06058a9 (Read `calendar_edit.py`,
+`meeting.py`, `git diff src/ tests/`). Измерено: `wc -l` — `calendar_edit.py` 104, `meeting.py` 138; `git diff --numstat
+src/` +46/−5 (`store/agenda.py`, `store/workload.py`, `day.py`, `server.py`) — итого ~288 кода против ~205 по плану, в
+норме ≤ 400 — **партия 3а не нужна**. Тесты: `test_agenda_calendar_edit.py` 143, `test_web_meeting.py` 223, дифф тестов
++182; прогон `uv run pytest tests/test_web_meeting.py tests/test_agenda_calendar_edit.py tests/test_web_day.py
+tests/test_web_server.py tests/test_store_workload.py tests/test_agenda_calendar_*.py tests/test_workload_sync.py` —
+340 passed.
+
+**А. Интерфейсы доебы — приняты все семь**, внутреннее (контракт для фронта — HTTP, не Python):
+
+1. `ForeignWriter.note(uid, start_at) -> str` отдельно от `writable(…) -> bool` — принять. Цена: `meeting_view` зовёт
+   `_occurrence` дважды → два `EKEventStore.alloc().init()`, два `_request_access`, два предиката на открытие окна
+   (`calendar_edit.py:60,63`, `meeting.py:67-68`). Риск Р10 («< 1 с, не измерено») удваивается. Не правка:
+   оптимизация — в «Открыто: стенд» (измерить время `GET /api/meeting` руками); > 1 с — один метод `peek(uid, start_at)
+   -> {note, writable}` отдельным пунктом бэклога (правило 9).
+2. `meeting_view(conn, day, now, query, editor_factory=default_editor)`, `query` — dict от `parse_qs`;
+   `apply_meeting(conn, payload, now, editor_factory=default_editor)` — принять: как `apply_event(…, writer_factory)`
+   (`plan.py:79`), `day`/`now` не читаются — как `week_view`.
+3. `values` у `update` — только переданные ключи `title/note/start_at/end_at` — принять (`VALUE_KEYS`, `meeting.py:23,89`);
+   см. правку 2 ниже о нормализации времени.
+4. `update_calendar_event(conn, id, values)` принимает и `date` — принять: обёртка над `db.update`, список полей в
+   докстринге (`store/workload.py`).
+5. `reason` у редактируемой встречи — `None` — принять: «API и модель» так и читается (`editable: true, reason: null`).
+6. `ForeignWriter()` без аргументов; импорт `_ns_date`, `_request_access` (и `_iso`) с `pyright: ignore` — принять: образец
+   `calendar_write.py:12-17`; календарь коуча писателю чужих событий не нужен.
+7. `api()`: `MarkError` → 400, `NoEvent` → 404 и для GET (`server.py:184-190`); `query` в `meeting_view` — принять. Плановые
+   «`?id=abc` → 400», «строки нет → 404» выполнены (`test_web_server.py`: `test_get_api_meeting_bad_id_is_400`,
+   `test_get_api_meeting_unknown_id_is_404`).
+
+**Б. Отступления кабана:**
+
+1. `get_calendar_event` в `store/workload.py` (сверх плана), `own_uids` в `store/agenda.py` (план допускал «или в
+   `store/agenda.py`»), `recurring(event)` публичная в `day.py` и импорт её в `meeting.py` — принять: `get_calendar_event`
+   нужен `_row` (как `get_event` у `plan._move`), `recurring` — одна функция на два вида вместо дубля `json.loads`. Доебе
+   — в список mutmut: `ai_coach.web.day:recurring`, `ai_coach.store.agenda:own_uids`,
+   `ai_coach.store.workload:get_calendar_event` (TESTS те же, что у `_meetings` / `update_calendar_event`).
+2. Ветка `build is meeting_view` в `api()` вместо «по имени пути, как `SYNC_PATH`» (Умолчания) — принять: `api()` путь не
+   получает (`server.py:171` — `query`, `build`), сравнение по функции короче, чем протаскивать путь; остальные
+   `GET_VIEWS` без изменений, как требовалось.
+3. `calendar_edit.py` 104 строки — не делить (см. объём выше).
+4. `apply_meeting` не пишет `note` в базу; только `note` → `stored` пуст, строка не меняется (`meeting.py:133-137`) — принять:
+   Р10 = 1 (колонки нет), в «API и модель» ниже.
+5. `reason`: сначала снимок (тренер / участники), потом живой EventKit; EventKit недоступен → `note None`, `reason` —
+   текст ошибки, снимочная причина в приоритете (`reason or str(error)`, `meeting.py:72`) — принять: встреча с
+   участниками остаётся «встреча с участниками» и при сбое календаря; окно открывается (200) — по плану.
+6. Сверх плана: `title` непустой, строки у всех значений, отказ на пустой `update` (`_values`, `meeting.py:87-103`) —
+   принять с правкой 1 ниже.
+
+**Правки кабану (в партию 3, до коммита):**
+
+1. **`_values` проверяет не только переданное** (`meeting.py:94,97-102`): `title` сверяется через `values.get("title",
+   row["title"])` — у события без названия в снимке `title` = `None` (`calendar_eventkit.py:81`), и перенос только времени
+   даст 400 «title: нужно название»; интервал сверяется всегда — у многодневного `all_day` (конец − начало > 24 ч) правка
+   одного названия даст 400 «не больше суток». Сделать: `title` — только при `"title" in values`; интервал — только если
+   `start_at` или `end_at` в `values` (как сейчас — с подстановкой второго конца из строки). Доебе: два теста в
+   `test_web_meeting.py` — строка с `title=None` + `update {start_at}` → 200; строка `all_day` 3 дня + `update {title}` → 200.
+2. **Нормализовать `start_at`/`end_at` к формату снимка** (`meeting.py:97-98`): `datetime.fromisoformat` принимает
+   «2026-11-12T10:00» без секунд и дату без времени; строка базы получит иной формат, чем `_iso` («…T10:00:00»,
+   `calendar_eventkit.py:39-41`), и следующая правка той же встречи до синка упадёт в `_occurrence` на `_iso(startDate) ==
+   start_at` (`calendar_edit.py:55`) с «события нет в календаре — обнови синк». `isoAt` шкалы шлёт 19 знаков
+   (`scale-model.js:12`), но окно партии 4 собирает время из `type=date` + `type=time` — контракт API должен держаться
+   сервером: `values[k] = datetime.fromisoformat(values[k]).isoformat(timespec="seconds")` для обоих ключей, в календарь и в
+   базу идёт нормализованное. Доебе: `update {start_at: "2026-11-12T10:00"}` → фейк получил и строка хранит
+   `"2026-11-12T10:00:00"`.
+3. **Правило — докстринг `calendar_write.py:3-4` не изменён** (`git diff` по файлу пуст): по «Сути» первый пункт
+   аппрува, файл в «Файлах» партии 3 (код, не справка). Поставить текст из «Правила» («`CalendarWriter` — только календарь
+   коуча; чужие события правит `ForeignWriter` (`agenda/calendar_edit.py`) по паре (uid, start_at), только это
+   вхождение»). `calendar.md:7` — справка, партия 4 (как п. 4 вердикта партии 1).
+
+**Окно Владу — нет** (блокирующего). Видимые тексты партии 3 достижимы только через окно партии 4 и идут в стиле
+`plan.py` («поле: что нужно.»): «Встречи нет — обнови синк.» (404), «события нет в календаре - обнови синк.»,
+«календарь только для чтения.», «title: нужно название.», «Конец должен быть позже начала, не больше суток.»; «событие
+тренера — двигай его блок.» и «Встреча с участниками — только просмотр.» из окна недостижимы (тренерские скрыты из
+`meetings`, участники — `editable: false` → заперто). Зафиксировано в «API и модель» ниже, не развилка.
+
+**Развилка для партии 4 (не блокирует коммит партии 3) — Р18, всплыла из правки 1:** событие `all_day` в окне встречи.
+(1) Поля «с · до» заперты, правятся дата (сдвиг обоих концов на целые сутки), название, описание, удаление;
+(2) как у остальных — три поля, время задаёт пользователь (событие перестаёт быть all_day только в Календаре вручную —
+`setAllDay_` сервер не трогает). Рекомендую (1): в снимке 0 all_day из 18 («Что уже есть») — минимум кода, и шкала
+all_day не показывает (`frameOf`, `scale-model.js:14`). Решает Влад до партии 4.
+
+Уточнение «API и модель» (партия 3): `POST /api/meeting update` — значения только переданные; `note` уходит в календарь,
+в строку базы не пишется (колонки нет, Р10 = 1); `start_at`/`end_at` принимаются в ISO, нормализуются к
+`YYYY-MM-DDTHH:MM:SS` (после правки 2); проверка интервала — только при смене времени (после правки 1). `GET /api/meeting`
+при сбое EventKit — 200, `note: null`, `editable: false`, `reason` = снимочная причина или текст ошибки.
+
+К коммиту партии 3 после правок 1–3: `make check`, регресс области из «Партий», строка в `docs/pipeline.md`. В «Открыто:
+стенд» добавить: время открытия окна встречи (`GET /api/meeting` — два обращения к EventKit, п. А1) и запись в живой
+Календарь (`update`/`remove` одного вхождения повтора — «отделённое» вхождение, остальные дни на месте) — стенд Влада.

@@ -68,6 +68,12 @@ def find_by_uid(conn: sqlite3.Connection, calendar_uid: str) -> dict[str, Any] |
     return fetch_one(conn, sql, (calendar_uid,))
 
 
+def own_uids(conn: sqlite3.Connection) -> set[str]:
+    """calendar_uid всех событий тренера, записанных в календарь."""
+    sql = "SELECT calendar_uid FROM coach_events WHERE calendar_uid IS NOT NULL"
+    return {r["calendar_uid"] for r in fetch_all(conn, sql, ())}
+
+
 def active_repeats(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Повторяющиеся события в статусе draft или written, по времени начала."""
     sql = (

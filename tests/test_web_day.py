@@ -536,9 +536,44 @@ def test_meeting_fully_yesterday_hidden(conn: sqlite3.Connection) -> None:
 def test_meeting_fields_whitelist_and_title(conn: sqlite3.Connection) -> None:
     meeting(conn, "10:00", "11:00")
     row = view(conn, "10:30")["meetings"][0]
-    assert set(row) == {"id", "start_at", "end_at", "all_day", "title", "calendar"}
+    assert set(row) == {
+        "id",
+        "start_at",
+        "end_at",
+        "all_day",
+        "title",
+        "calendar",
+        "recurring",
+        "editable",
+    }
     assert row["title"] == "Синтетическая встреча"
     assert "сырой ответ" not in str(view(conn, "10:30"))
+    assert "uid-10:00" not in str(view(conn, "10:30"))
+
+
+def test_meeting_with_uid_of_written_coach_item_is_hidden(conn: sqlite3.Connection) -> None:
+    item(conn, "10:00", "11:00", status="written", calendar_uid="uid-10:00-11:00-2026-11-07")
+    meeting(conn, "10:00", "11:00")
+    meeting(conn, "12:00", "13:00")
+    found = view(conn, "10:30")["meetings"]
+    assert [m["start_at"] for m in found] == [f"{D}T12:00:00"]
+
+
+def test_meeting_editable_only_without_attendee_status(conn: sqlite3.Connection) -> None:
+    meeting(conn, "09:00", "10:00", my_status="accepted")
+    meeting(conn, "10:00", "11:00", my_status=None)
+    found = view(conn, "12:00")["meetings"]
+    assert [(m["start_at"][11:16], m["editable"]) for m in found] == [
+        ("09:00", False),
+        ("10:00", True),
+    ]
+
+
+def test_meeting_recurring_comes_from_raw_json(conn: sqlite3.Connection) -> None:
+    meeting(conn, "09:00", "10:00", raw_json={"recurring": True})
+    meeting(conn, "10:00", "11:00", raw_json={})
+    found = view(conn, "12:00")["meetings"]
+    assert [m["recurring"] for m in found] == [True, False]
 
 
 def test_meeting_current_and_frame(conn: sqlite3.Connection) -> None:

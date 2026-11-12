@@ -999,3 +999,76 @@ def test_post_todo_without_origin_is_403_and_file_untouched(port: int, todo_file
     )
     assert status == 403
     assert todo_file.read_bytes() == before
+
+
+@pytest.fixture
+def meeting_id(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    import sys
+
+    from workload_fakes import stored_event
+
+    from ai_coach.store.workload import replace_calendar_window
+
+    monkeypatch.setitem(sys.modules, "EventKit", None)  # EventKit недоступен: ImportError
+    conn = open_db(db_path)
+    try:
+        event = stored_event(uid="m1", my_status=None)
+        replace_calendar_window(conn, "2026-10-07", "2026-10-07", [event])
+        conn.commit()
+        return conn.execute("SELECT id FROM calendar_events").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def meeting_rows(db_path: Path) -> list[Any]:
+    conn = open_db(db_path)
+    try:
+        return [tuple(r) for r in conn.execute("SELECT * FROM calendar_events")]
+    finally:
+        conn.close()
+
+
+def test_get_api_meeting_is_card_json(port: int, meeting_id: int) -> None:
+    status, body = request(port, f"/api/meeting?id={meeting_id}")
+    card = json.loads(body)
+    assert status == 200
+    assert (card["id"], card["title"], card["note"], card["editable"]) == (
+        meeting_id,
+        "Синтетическая встреча",
+        None,
+        False,
+    )
+    assert "EventKit" in card["reason"]
+
+
+def test_get_api_meeting_bad_id_is_400(port: int) -> None:
+    assert request(port, "/api/meeting?id=abc")[0] == 400
+
+
+def test_get_api_meeting_unknown_id_is_404(port: int) -> None:
+    status, body = request(port, "/api/meeting?id=999")
+    assert (status, "обнови синк" in body.decode()) == (404, True)
+
+
+def test_post_meeting_without_origin_is_403_and_row_stays(
+    port: int, db_path: Path, meeting_id: int
+) -> None:
+    before = meeting_rows(db_path)
+    status, _ = post(port, {"action": "remove", "id": meeting_id}, path="/api/meeting", origin=None)
+    assert status == 403
+    assert meeting_rows(db_path) == before
+
+
+def test_post_meeting_unknown_id_is_404(port: int) -> None:
+    status, body = post(port, {"action": "remove", "id": 999}, path="/api/meeting")
+    assert (status, "обнови синк" in body.decode()) == (404, True)
+
+
+def test_post_meeting_calendar_error_is_400_with_text_and_row_stays(
+    port: int, db_path: Path, meeting_id: int
+) -> None:
+    before = meeting_rows(db_path)
+    status, body = post(port, {"action": "remove", "id": meeting_id}, path="/api/meeting")
+    assert status == 400
+    assert "EventKit" in body.decode()
+    assert meeting_rows(db_path) == before

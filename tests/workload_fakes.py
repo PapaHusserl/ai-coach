@@ -153,6 +153,53 @@ class FakeCalendarWriter:
         self.removed.append((uid, future))
 
 
+class FakeForeignEditor:
+    """Подмена ForeignWriter: update/remove/note/writable по (uid, start_at). Календарь не нужен.
+
+    error - исключение на любой вызов; readonly - календарь без права записи (writable False,
+    update/remove падают CalendarError); missing - вхождения нет (всё падает CalendarError)."""
+
+    def __init__(
+        self,
+        error: Exception | None = None,
+        readonly: bool = False,
+        missing: bool = False,
+        note: str = "заметка из календаря",
+    ):
+        self.error = error
+        self.readonly = readonly
+        self.missing = missing
+        self.text = note
+        self.updated: list[tuple[str, str, dict[str, Any]]] = []
+        self.removed: list[tuple[str, str]] = []
+
+    def _check(self, write: bool) -> None:
+        from ai_coach.workload.calendar_eventkit import CalendarError
+
+        if self.error is not None:
+            raise self.error
+        if self.missing:
+            raise CalendarError("события нет в календаре - обнови синк")
+        if write and self.readonly:
+            raise CalendarError("календарь только для чтения")
+
+    def update(self, uid: str, start_at: str, values: dict[str, Any]) -> None:
+        self._check(True)
+        self.updated.append((uid, start_at, dict(values)))
+
+    def remove(self, uid: str, start_at: str) -> None:
+        self._check(True)
+        self.removed.append((uid, start_at))
+
+    def note(self, uid: str, start_at: str) -> str:
+        self._check(False)
+        return self.text
+
+    def writable(self, uid: str, start_at: str) -> bool:
+        self._check(False)
+        return not self.readonly
+
+
 class FakeAw:
     """Подмена ScreenReader: fetch(periods) -> секунды по (приложение, категория) на период.
 

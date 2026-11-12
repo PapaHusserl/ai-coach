@@ -1,12 +1,14 @@
 """День для пульта: события тренера и встречи других календарей, текущие пункты, бар дня.
 Читает базу, не пишет."""
 
+import json
 import sqlite3
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from ai_coach.agenda.service import agenda_rows
 from ai_coach.profile.service import current_profile, profile_nutrition
+from ai_coach.store.agenda import own_uids
 from ai_coach.store.journal import evening_done
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
@@ -74,13 +76,20 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
     return items
 
 
+def recurring(event: dict[str, Any]) -> bool:
+    """Повторяется ли событие календаря (по raw_json снимка; нет сведений - нет)."""
+    raw: dict[str, Any] = json.loads(event["raw_json"]) if event["raw_json"] else {}
+    return bool(raw.get("recurring"))
+
+
 def _meetings(conn: sqlite3.Connection, day: date) -> list[dict[str, Any]]:
     midnight = datetime.combine(day, time.min)
     next_midnight = midnight + timedelta(days=1)
     before = (day - timedelta(days=1)).isoformat()
     found: list[dict[str, Any]] = []
+    own = own_uids(conn)
     for e in list_calendar_events(conn, before, day.isoformat()):
-        span = _clip(e, midnight, next_midnight) if _counted(e) else None
+        span = _clip(e, midnight, next_midnight) if _counted(e) and e["uid"] not in own else None
         if span:
             found.append(
                 {
@@ -90,6 +99,8 @@ def _meetings(conn: sqlite3.Connection, day: date) -> list[dict[str, Any]]:
                     "all_day": e["all_day"],
                     "title": e["title"],
                     "calendar": e["calendar"],
+                    "recurring": recurring(e),
+                    "editable": e["my_status"] is None,
                 }
             )
     return found

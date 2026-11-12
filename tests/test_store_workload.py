@@ -107,6 +107,31 @@ def test_list_events_keeps_all_day_flag_and_statuses(conn: sqlite3.Connection) -
     assert (found["all_day"], found["status"], found["my_status"]) == (1, "tentative", "declined")
 
 
+def test_update_calendar_event_changes_only_given_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.workload import update_calendar_event
+
+    replace_calendar_window(conn, START, END, [ev("a", "2026-10-07"), ev("b", "2026-10-07", 15)])
+    first, second = list_calendar_events(conn, START, END)
+    values = {"title": "Новое", "start_at": "2026-10-08T09:00:00", "end_at": "2026-10-08T10:00:00"}
+    update_calendar_event(conn, first["id"], values | {"date": "2026-10-08"})
+    rows = {e["uid"]: e for e in list_calendar_events(conn, START, END)}
+    assert (rows["a"]["title"], rows["a"]["start_at"], rows["a"]["date"]) == (
+        "Новое",
+        "2026-10-08T09:00:00",
+        "2026-10-08",
+    )
+    assert rows["b"]["title"] == second["title"]
+
+
+def test_delete_calendar_event_removes_only_that_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.workload import delete_calendar_event
+
+    replace_calendar_window(conn, START, END, [ev("a", "2026-10-07"), ev("b", "2026-10-07", 15)])
+    first = list_calendar_events(conn, START, END)[0]
+    delete_calendar_event(conn, first["id"])
+    assert uids(conn) == ["b"]
+
+
 def counter(day: str, kind: str, value: float, source: str = "todo") -> dict[str, object]:
     return {
         "date": day,

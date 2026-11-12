@@ -1,6 +1,6 @@
 """HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
-(неделя Пн-Вс и нагрузка вкладки «Тренировки»); пишет в базу
-только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry, /api/todo;
+(неделя Пн-Вс и нагрузка вкладки «Тренировки»), /api/meeting?id=; пишет в базу
+только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry, /api/todo, /api/meeting;
 Origin = Host, Р1 = 2 П2), на каждый запрос своё соединение.
 Без ключа доступа: решение Влада (Р6 = 1)."""
 
@@ -25,6 +25,7 @@ from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.header import save_weight, sync_view
 from ai_coach.web.marks import save_mark
+from ai_coach.web.meeting import apply_meeting, meeting_view
 from ai_coach.web.pantry import pantry_view, save_pantry
 from ai_coach.web.plan import apply_event
 from ai_coach.web.state import state_view
@@ -83,6 +84,7 @@ POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], 
     "/api/weight": save_weight,
     "/api/pantry": save_pantry,
     "/api/todo": save_todo,
+    "/api/meeting": apply_meeting,
 }
 POST_PATHS = frozenset(POST_ROUTES) | {SYNC_PATH}
 
@@ -132,6 +134,7 @@ GET_VIEWS: dict[str, Callable[..., dict[str, Any]]] = {
     "/api/week": week_view,
     "/api/pantry": pantry_view,
     "/api/todo": todo_view,
+    "/api/meeting": meeting_view,
     "/api/state": state_view,
     SYNC_PATH: sync_view,
 }
@@ -175,7 +178,15 @@ def make_server(host: str, port: int, db: str | Path | None = None) -> Threading
                 return
             conn = open_db(db)
             try:
-                view = build(conn, day, now)
+                view = (
+                    build(conn, day, now, query) if build is meeting_view else build(conn, day, now)
+                )
+            except MarkError as error:
+                status = (
+                    HTTPStatus.NOT_FOUND if isinstance(error, NoEvent) else HTTPStatus.BAD_REQUEST
+                )
+                self.text(status, str(error))
+                return
             finally:
                 conn.close()
             body = json.dumps(view, ensure_ascii=False).encode()
