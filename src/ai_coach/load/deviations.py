@@ -9,6 +9,37 @@ READINESS_MIN = 33
 BAD_HRV_STATUSES = ("LOW", "UNBALANCED", "BELOW")
 ATL_OVER_CTL_MAX = 15
 SLEEP_MIN_HOURS = 6
+# Явные симптомы простуды (ряд WURSS-24): основа (подстрока текста в нижнем регистре) -> слово.
+SYMPTOMS = (
+    ("горл", "горло"),
+    ("насморк", "насморк"),
+    ("сопл", "сопли"),
+    ("температур", "температура"),
+    ("кашл", "кашель"),
+    ("кашел", "кашель"),
+    ("залож", "заложенность"),
+    ("чиха", "чихание"),
+    ("чихн", "чихание"),
+    ("перш", "першение"),
+    ("осип", "осиплость"),
+    ("охрип", "осиплость"),
+    ("озноб", "озноб"),
+    ("зноб", "озноб"),
+    ("ломот", "ломота"),
+    ("ломит", "ломота"),
+    ("простуд", "простуда"),
+    ("простыл", "простуда"),
+)
+
+
+def find_symptoms(texts: list[str]) -> list[str]:
+    """Слова-симптомы из текстов самочувствия: без повторов, в порядке SYMPTOMS."""
+    low = " ".join(texts).lower()
+    found: list[str] = []
+    for stem, word in SYMPTOMS:
+        if stem in low and word not in found:
+            found.append(word)
+    return found
 
 
 def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -20,6 +51,7 @@ def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
     for key in ("mood", "stress"):
         given = [m[key] for m in marks if m[key] is not None]
         main[key] = given[-1] if given else None
+    main["texts"] = [m["text"] for m in marks if m["text"]]
     return main
 
 
@@ -37,6 +69,9 @@ def find_deviations(
         found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
     if wellbeing and wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
         found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
+    symptoms = find_symptoms(wellbeing.get("texts", [])) if wellbeing else []
+    if symptoms:
+        found.append({"kind": "symptoms", "value": symptoms, "limit": None})
     if metrics:
         readiness = metrics["readiness_score"]
         if readiness is not None and readiness < READINESS_MIN:

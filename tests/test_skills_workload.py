@@ -83,6 +83,20 @@ def test_recalc_handles_illness_risk_and_fits_limit() -> None:
     assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
+def test_recalc_and_wellbeing_mention_symptoms_and_fit_limits() -> None:
+    recalc = ROOT / "skills" / "coach-plan" / "recalc.md"
+    assert "symptoms" in recalc.read_text()
+    assert len(recalc.read_bytes()) <= SKILL_LIMIT
+    assert "symptoms" in WELLBEING.read_text()
+    assert len(WELLBEING.read_bytes()) <= AGENT_LIMITS["coach-wellbeing.md"]
+
+
+def test_coach_wellbeing_has_precursors_paragraph_that_keeps_the_plan() -> None:
+    text = WELLBEING.read_text()
+    assert "Предвестники" in text
+    assert "план не трогай" in text
+
+
 def test_recovery_mentions_illness_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "illness" in path.read_text()

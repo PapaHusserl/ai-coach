@@ -88,3 +88,125 @@ def test_sleep_exactly_6_hours_is_fine() -> None:
 def test_several_deviations_are_all_reported() -> None:
     day = metrics(readiness_score=10, sleep_seconds=4 * HOUR)
     assert sorted(kinds({"score": 1}, day)) == ["readiness", "sleep", "wellbeing"]
+
+
+# Н31, партия 1: слова-симптомы в тексте самочувствия.
+
+
+def symptoms(texts: Any) -> list[str]:
+    from ai_coach.load.deviations import find_symptoms
+
+    return find_symptoms(texts)
+
+
+def test_symptoms_go_in_list_order_not_text_order() -> None:
+    assert symptoms(["утро: насморк и горло"]) == ["горло", "насморк"]
+
+
+@pytest.mark.parametrize(
+    ("text", "word"),
+    [
+        ("ГОРЛО", "горло"),
+        ("Насморк", "насморк"),
+        ("в горле ком", "горло"),
+        ("весь в соплях", "сопли"),
+        ("с соплями", "сопли"),
+        ("температуры нет", "температура"),
+        ("кашляю", "кашель"),
+        ("кашель", "кашель"),
+        ("нос заложен", "заложенность"),
+        ("чихаю", "чихание"),
+        ("чихнул", "чихание"),
+        ("першит", "першение"),
+        ("осип", "осиплость"),
+        ("охрип", "осиплость"),
+        ("знобит", "озноб"),
+        ("озноб", "озноб"),
+        ("ломит", "ломота"),
+        ("ломота", "ломота"),
+        ("простыл", "простуда"),
+        ("простуда", "простуда"),
+    ],
+)
+def test_symptom_stems_are_found(text: str, word: str) -> None:
+    assert word in symptoms([text])
+
+
+def test_sore_throat_gives_two_words() -> None:
+    assert symptoms(["горло першит"]) == ["горло", "першение"]
+
+
+@pytest.mark.parametrize(
+    "text", ["жарко", "жар", "голова болит", "устал", "раздражён", "устал, голова тяжёлая", "каша"]
+)
+def test_words_outside_the_list_are_not_symptoms(text: str) -> None:
+    assert symptoms([text]) == []
+
+
+def test_same_word_in_two_entries_is_reported_once() -> None:
+    assert symptoms(["горло", "опять горло"]) == ["горло"]
+
+
+def test_no_texts_no_symptoms() -> None:
+    assert symptoms([]) == []
+
+
+def test_symptom_list_has_the_twelve_agreed_words_in_order() -> None:
+    text = (
+        "простуда ломит знобит осип чихаю першит нос заложен кашель температура сопли насморк горло"
+    )
+    assert symptoms([text]) == [
+        "горло", "насморк", "сопли", "температура", "кашель", "заложенность",
+        "чихание", "першение", "осиплость", "озноб", "ломота", "простуда",
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize("score", [4, 5])
+def test_symptom_in_text_is_a_deviation_at_any_score(score: int) -> None:
+    found = find_deviations({"score": score, "texts": ["болит горло"]}, None, None)
+    assert found == [{"kind": "symptoms", "value": ["горло"], "limit": None}]
+
+
+def test_symptoms_come_after_wellbeing() -> None:
+    assert kinds({"score": 2, "texts": ["горло"]}) == ["wellbeing", "symptoms"]
+
+
+def test_symptoms_come_after_stress_before_readiness() -> None:
+    wellbeing = {"score": 2, "mood": 2, "stress": 5, "texts": ["горло"]}
+    day = metrics(readiness_score=10)
+    assert kinds(wellbeing, day) == ["wellbeing", "mood", "stress", "symptoms", "readiness"]
+
+
+def test_wellbeing_without_texts_key_has_no_symptoms() -> None:
+    assert kinds({"score": 3}) == []
+
+
+def test_negation_is_not_parsed_symptom_still_reported() -> None:
+    assert kinds({"score": 4, "texts": ["температуры нет"]}) == ["symptoms"]
+    assert kinds({"score": 4, "texts": ["горло прошло"]}) == ["symptoms"]
+
+
+def test_tiredness_and_irritability_are_not_symptoms() -> None:
+    assert kinds({"score": 3, "texts": ["устал, всё раздражает"]}) == []
+
+
+def mark(logged_at: str, text: str | None, **values: Any) -> dict[str, Any]:
+    row = {"score": 3, "mood": None, "stress": None, "event_id": None}
+    return {**row, "logged_at": logged_at, "text": text, **values}
+
+
+def test_main_wellbeing_collects_texts_in_time_order() -> None:
+    marks = [mark("08:00", "горло"), mark("12:00", None), mark("20:00", "насморк", event_id=5)]
+    main = deviations.main_wellbeing(marks)
+    assert main is not None
+    assert main["texts"] == ["горло", "насморк"]
+
+
+def test_main_wellbeing_keeps_scores_of_the_last_entry() -> None:
+    marks = [
+        mark("08:00", "горло", score=2, mood=3),
+        mark("20:00", None, score=4, stress=5, event_id=9),
+    ]
+    main = deviations.main_wellbeing(marks)
+    assert main is not None
+    assert (main["score"], main["mood"], main["stress"], main["event_id"]) == (4, 3, 5, 9)

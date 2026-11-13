@@ -194,7 +194,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_deviations": (
         tools.deviations,
-        "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL); пустой "
+        "Отклонения за день (плохое самочувствие, readiness, HRV, сон, ATL - CTL; слова-симптомы "
+        "в тексте самочувствия - symptoms, без порога); пустой "
         "список - всё в норме, пересчёт плана не нужен. date - YYYY-MM-DD.",
     ),
     "get_sleep": (

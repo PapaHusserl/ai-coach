@@ -16,6 +16,7 @@ export const SIGNAL_WORDS = {
 	wellbeing: "самочувствие",
 	mood: "настроение",
 	stress: "стресс",
+	symptoms: "симптомы в тексте",
 	readiness: "готовность",
 	hrv: "HRV",
 	sleep: "сон",
@@ -44,7 +45,9 @@ export function signalRows(state) {
 		kind: signal.kind,
 		source: signal.source,
 		word: SIGNAL_WORDS[signal.kind] ?? signal.kind,
-		detail: `${shown(signal.value)} (порог ${shown(signal.limit)})`,
+		detail: signal.limit === null
+			? shown(signal.value)
+			: `${shown(signal.value)} (порог ${shown(signal.limit)})`,
 	}));
 }
 

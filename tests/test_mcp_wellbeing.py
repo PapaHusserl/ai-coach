@@ -170,6 +170,30 @@ def test_snapshot_has_deviations_section(conn: sqlite3.Connection) -> None:
     assert section["truncated"] is False
 
 
+def test_symptom_in_morning_text_survives_evening_entry_without_text(
+    conn: sqlite3.Connection,
+) -> None:
+    feel(conn, DAY, 3, "горло болит", f"{DAY} 08:00:00")
+    feel(conn, DAY, 4, None, f"{DAY} 20:00:00")
+    found = rows(conn, "get_deviations", date=DAY)
+    assert [(r["kind"], r["value"], r["limit"]) for r in found] == [("symptoms", ["горло"], None)]
+
+
+def test_symptom_of_yesterday_is_not_today(conn: sqlite3.Connection) -> None:
+    feel(conn, "2026-10-06", 3, "горло", "2026-10-06 08:00:00")
+    feel(conn, DAY, 4, "бодро", f"{DAY} 08:00:00")
+    assert kinds(conn) == []
+
+
+def test_symptom_in_pult_mark_with_event_id_counts(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, text, logged_at, event_id)"
+        " VALUES (?, 4, 'насморк', ?, 7)",
+        (DAY, f"{DAY} 08:00:00"),
+    )
+    assert kinds(conn) == ["symptoms"]
+
+
 def test_snapshot_without_data_has_empty_sections(conn: sqlite3.Connection) -> None:
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
     assert snapshot["wellbeing"] == {"rows": [], "truncated": False}

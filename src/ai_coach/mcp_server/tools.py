@@ -244,9 +244,9 @@ def deviations(
     conn: sqlite3.Connection,
     date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
 ) -> dict[str, Any]:
-    """Отклонения за день: самочувствие, readiness, HRV, сон, ATL - CTL (пороги — в
-    load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — ATL - CTL не проверен,
-    причина — в load_error."""
+    """Отклонения за день: самочувствие, симптомы в тексте, readiness, HRV, сон, ATL - CTL
+    (пороги — в load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — ATL - CTL не
+    проверен, причина — в load_error."""
     parse_day(date)
     try:
         load_row = load(conn, date, date)["rows"][-1]

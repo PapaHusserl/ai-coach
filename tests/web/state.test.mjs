@@ -67,10 +67,10 @@ test("trendSeries: вес — числа kg", async () => {
 const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
-	"stress", "readiness", "hrv", "sleep", "atl_over_ctl",
+	"stress", "symptoms", "readiness", "hrv", "sleep", "atl_over_ctl",
 ];
 
-test("SIGNAL_WORDS: ровно 18 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 19 кодов отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -130,6 +130,24 @@ test("detail: словарь — «ключ значение» через зап
 		limit: { readiness: 10, mood: 1, stress: 1 },
 	};
 	assert.equal(await detailOf(drop), "readiness 12, mood 1.5 (порог readiness 10, mood 1, stress 1)");
+});
+
+test("SIGNAL_WORDS: symptoms — «симптомы в тексте»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.symptoms, "симптомы в тексте");
+});
+
+test("detail: symptoms — слова через запятую, без порога", async () => {
+	const symptoms = { source: "deviations", kind: "symptoms", value: ["горло", "насморк"], limit: null };
+	const detail = await detailOf(symptoms);
+	assert.equal(detail, "горло, насморк");
+	assert.ok(!detail.includes("порог"));
+});
+
+test("signalRows: symptoms — слово строки «симптомы в тексте»", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ source: "deviations", kind: "symptoms", value: ["горло"], limit: null }]));
+	assert.equal(row.word, "симптомы в тексте");
 });
 
 test("signalRows: source не попадает в detail", async () => {

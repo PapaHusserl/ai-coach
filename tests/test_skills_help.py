@@ -235,6 +235,14 @@ def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
         assert needle in text, needle
 
 
+def test_sleep_topic_lists_every_symptom_word() -> None:
+    text = topic("sleep.md")
+    words = set(dict(deviations.SYMPTOMS).values())
+    assert len(words) == 12
+    for word in words:
+        assert word in text, word
+
+
 def test_pvt_topic_has_commands_and_flags() -> None:
     text = topic("pvt.md")
     for needle in ("coach pvt", "coach log pvt", "get_pvt_log", "04:00", "Esc"):
