@@ -243,6 +243,28 @@ def test_sleep_topic_lists_every_symptom_word() -> None:
         assert word in text, word
 
 
+def below_line() -> str:
+    lines = [line for line in topic("sleep.md").splitlines() if "Ниже своей нормы" in line]
+    assert len(lines) == 1
+    return lines[0]
+
+
+def test_sleep_topic_below_norm_constants_match_deviations() -> None:
+    line = below_line()
+    for needle in (
+        f"на {deviations.BELOW_DROP} и больше ниже",
+        f"за {deviations.BELOW_DAYS} предыдущих дней",
+        f"нужно {deviations.BELOW_MIN_DAYS} дней",
+        "wellbeing_below",
+        "mood_below",
+    ):
+        assert needle in line, needle
+
+
+def test_sleep_topic_below_norm_says_trainer_offers_to_drop_intensity() -> None:
+    assert "снять интенсивное" in below_line()
+
+
 def test_pvt_topic_has_commands_and_flags() -> None:
     text = topic("pvt.md")
     for needle in ("coach pvt", "coach log pvt", "get_pvt_log", "04:00", "Esc"):

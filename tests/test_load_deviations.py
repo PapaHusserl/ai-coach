@@ -1,6 +1,7 @@
 """Пороги плохого восстановления: константы модуля ai_coach.load.deviations и
 find_deviations(wellbeing, metrics, load) -> список {"kind", ...}; None — данных нет."""
 
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
@@ -210,3 +211,169 @@ def test_main_wellbeing_keeps_scores_of_the_last_entry() -> None:
     main = deviations.main_wellbeing(marks)
     assert main is not None
     assert (main["score"], main["mood"], main["stress"], main["event_id"]) == (4, 3, 5, 9)
+
+
+# Н31, партия 2: оценка ниже своей нормы (медиана за 14 предыдущих дней).
+
+
+def norms_of(marks: list[dict[str, Any]]) -> dict[str, Any]:
+    from ai_coach.load.deviations import wellbeing_norms
+
+    return wellbeing_norms(marks)
+
+
+def history(
+    scores: Sequence[int], moods: Sequence[int | None] | None = None
+) -> list[dict[str, Any]]:
+    """По одной записи на день: даты 2026-10-01, 02, ... (прошлые дни)."""
+    given: Sequence[int | None] = moods if moods is not None else [None] * len(scores)
+    return [
+        mark(f"2026-10-{number:02d} 08:00", None, date=f"2026-10-{number:02d}", score=s, mood=m)
+        for number, (s, m) in enumerate(zip(scores, given, strict=True), start=1)
+    ]
+
+
+def below(wellbeing: Any, norms: Any) -> list[dict[str, Any]]:
+    from ai_coach.load.deviations import find_below
+
+    return find_below(wellbeing, norms)
+
+
+def test_below_constants_are_module_constants() -> None:
+    assert deviations.BELOW_DAYS == 14
+    assert deviations.BELOW_MIN_DAYS == 7
+    assert deviations.BELOW_DROP == 1
+
+
+def test_norm_is_median_of_scores() -> None:
+    assert norms_of(history([4] * 14)) == {"score": 4}
+
+
+def test_norm_has_no_mood_key_when_mood_was_never_set() -> None:
+    assert "mood" not in norms_of(history([4] * 14))
+
+
+def test_norm_of_mood_is_median_of_moods() -> None:
+    assert norms_of(history([4] * 7, [3] * 7))["mood"] == 3
+
+
+def test_six_days_are_not_enough_seven_are() -> None:
+    assert "score" not in norms_of(history([4] * 6))
+    assert norms_of(history([4] * 7)) == {"score": 4}
+
+
+def test_days_are_counted_separately_for_score_and_mood() -> None:
+    norms = norms_of(history([4] * 8, [3, 3, 3, 3, 3, 3, None, None]))
+    assert norms["score"] == 4
+    assert "mood" not in norms
+
+
+def test_norm_takes_the_last_score_of_a_day() -> None:
+    marks = history([4] * 7)
+    marks.insert(0, mark("2026-10-01 07:00", None, date="2026-10-01", score=1))
+    assert norms_of(marks) == {"score": 4}
+
+
+def test_norm_takes_the_last_given_mood_of_a_day() -> None:
+    marks = []
+    for number in range(1, 8):
+        day = f"2026-10-{number:02d}"
+        marks.append(mark(f"{day} 08:00", None, date=day, mood=2))
+        marks.append(mark(f"{day} 20:00", None, date=day, mood=4))
+        marks.append(mark(f"{day} 21:00", None, date=day, mood=None))
+    assert norms_of(marks)["mood"] == 4
+
+
+def test_norm_is_median_not_mean() -> None:
+    assert norms_of(history([4] * 9 + [2] * 5))["score"] == 4
+
+
+def test_norm_of_even_count_is_midpoint() -> None:
+    assert norms_of(history([4, 5] * 4))["score"] == 4.5
+
+
+def test_norm_without_marks_is_empty() -> None:
+    assert norms_of([]) == {}
+
+
+def test_score_one_below_norm_is_below() -> None:
+    found = below({"score": 3, "mood": None}, {"score": 4})
+    assert found == [{"kind": "wellbeing_below", "value": 3, "limit": 4}]
+
+
+def test_score_equal_to_norm_is_fine() -> None:
+    assert below({"score": 4, "mood": None}, {"score": 4}) == []
+
+
+def test_score_above_norm_is_fine() -> None:
+    assert below({"score": 5, "mood": None}, {"score": 4}) == []
+
+
+def test_half_a_point_below_is_fine() -> None:
+    assert below({"score": 4, "mood": None}, {"score": 4.5}) == []
+
+
+def test_one_and_a_half_below_is_below() -> None:
+    found = below({"score": 3, "mood": None}, {"score": 4.5})
+    assert found == [{"kind": "wellbeing_below", "value": 3, "limit": 4.5}]
+
+
+def test_mood_one_below_norm_is_mood_below() -> None:
+    found = below({"score": 4, "mood": 3}, {"score": 4, "mood": 4})
+    assert found == [{"kind": "mood_below", "value": 3, "limit": 4}]
+
+
+def test_mood_none_gives_no_mood_below() -> None:
+    assert below({"score": 4, "mood": None}, {"score": 4, "mood": 4}) == []
+
+
+def test_missing_norm_gives_no_row() -> None:
+    assert below({"score": 1, "mood": 1}, {}) == []
+    assert below({"score": 3, "mood": 3}, {}) == []
+
+
+def test_absolute_threshold_wins_over_below_for_score() -> None:
+    assert kinds({"score": 2, "mood": None}, None, None) == ["wellbeing"]
+    found = find_deviations({"score": 2, "mood": None}, None, None, {"score": 4})
+    assert [d["kind"] for d in found] == ["wellbeing"]
+
+
+def test_absolute_threshold_wins_over_below_for_mood() -> None:
+    wellbeing = {"score": 4, "mood": 2}
+    found = find_deviations(wellbeing, None, None, {"score": 4, "mood": 4})
+    assert [d["kind"] for d in found] == ["mood"]
+
+
+def test_scores_are_independent_low_score_and_below_mood() -> None:
+    wellbeing = {"score": 2, "mood": 3}
+    found = find_deviations(wellbeing, None, None, {"score": 4, "mood": 4})
+    assert [d["kind"] for d in found] == ["wellbeing", "mood_below"]
+
+
+def test_both_scores_below_norm_give_two_rows() -> None:
+    wellbeing = {"score": 3, "mood": 3}
+    found = find_deviations(wellbeing, None, None, {"score": 4, "mood": 4})
+    assert [d["kind"] for d in found] == ["wellbeing_below", "mood_below"]
+
+
+def test_below_rows_go_after_stress_before_symptoms_and_readiness() -> None:
+    wellbeing = {"score": 3, "mood": 3, "stress": 5, "texts": ["горло"]}
+    found = find_deviations(wellbeing, metrics(readiness_score=10), None, {"score": 4, "mood": 4})
+    assert [d["kind"] for d in found] == [
+        "stress", "wellbeing_below", "mood_below", "symptoms", "readiness",
+    ]  # fmt: skip
+
+
+def test_low_wellbeing_mood_stress_then_below_rows_in_order() -> None:
+    wellbeing = {"score": 2, "mood": 2, "stress": 5}
+    found = find_deviations(wellbeing, None, None, {"score": 4, "mood": 4})
+    assert [d["kind"] for d in found] == ["wellbeing", "mood", "stress"]
+
+
+def test_find_deviations_without_norms_is_as_before() -> None:
+    assert kinds({"score": 3, "mood": 3}) == []
+    assert find_deviations({"score": 3, "mood": 3}, None, None, None) == []
+
+
+def test_no_wellbeing_with_norms_gives_no_rows() -> None:
+    assert find_deviations(None, None, None, {"score": 4, "mood": 4}) == []

@@ -67,10 +67,10 @@ test("trendSeries: вес — числа kg", async () => {
 const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
-	"stress", "symptoms", "readiness", "hrv", "sleep", "atl_over_ctl",
+	"stress", "wellbeing_below", "mood_below", "symptoms", "readiness", "hrv", "sleep", "atl_over_ctl",
 ];
 
-test("SIGNAL_WORDS: ровно 19 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 21 код отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -148,6 +148,29 @@ test("signalRows: symptoms — слово строки «симптомы в т�
 	const { signalRows } = await stateModel();
 	const [row] = signalRows(stateOf([{ source: "deviations", kind: "symptoms", value: ["горло"], limit: null }]));
 	assert.equal(row.word, "симптомы в тексте");
+});
+
+test("SIGNAL_WORDS: ниже своей нормы — самочувствие и настроение", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.wellbeing_below, "самочувствие ниже нормы");
+	assert.equal(SIGNAL_WORDS.mood_below, "настроение ниже нормы");
+});
+
+test("detail: mood_below — «3 (норма 4)»", async () => {
+	const mood = { source: "deviations", kind: "mood_below", value: 3, limit: 4 };
+	assert.equal(await detailOf(mood), "3 (норма 4)");
+});
+
+test("detail: wellbeing_below — «3 (норма 4.5)», без «порог»", async () => {
+	const score = { source: "deviations", kind: "wellbeing_below", value: 3, limit: 4.5 };
+	const detail = await detailOf(score);
+	assert.equal(detail, "3 (норма 4.5)");
+	assert.ok(!detail.includes("порог"));
+});
+
+test("detail: у остальных кодов «(порог …)» как раньше, не «норма»", async () => {
+	const detail = await detailOf({ source: "deviations", kind: "mood", value: 2, limit: 2 });
+	assert.equal(detail, "2 (порог 2)");
 });
 
 test("signalRows: source не попадает в detail", async () => {

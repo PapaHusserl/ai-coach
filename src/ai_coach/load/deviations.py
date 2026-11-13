@@ -1,7 +1,13 @@
 """Отклонения: признаки плохого восстановления, при которых тренер пересчитывает план."""
 
+import statistics
 from typing import Any
 
+# Ниже своей нормы: медиана за BELOW_DAYS прошлых дней, нужно BELOW_MIN_DAYS дней, порог BELOW_DROP.
+# Догадка до калибровки v2.9.
+BELOW_DAYS = 14
+BELOW_MIN_DAYS = 7
+BELOW_DROP = 1
 WELLBEING_MAX = 2
 MOOD_MAX = 2
 STRESS_MIN = 4
@@ -55,10 +61,42 @@ def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
     return main
 
 
+def wellbeing_norms(marks: list[dict[str, Any]]) -> dict[str, float]:
+    """Своя норма оценок: медиана значений дня по записям прошлых дней; дней со значением меньше
+    BELOW_MIN_DAYS - ключа нет."""
+    by_day: dict[str, list[dict[str, Any]]] = {}
+    for mark in marks:
+        by_day.setdefault(mark["date"], []).append(mark)
+    days = [main_wellbeing(day_marks) for day_marks in by_day.values()]
+    norms: dict[str, float] = {}
+    for key, name in (("score", "score"), ("mood", "mood")):
+        values = [day[key] for day in days if day and day[key] is not None]
+        if len(values) >= BELOW_MIN_DAYS:
+            norms[name] = statistics.median(values)
+    return norms
+
+
+def find_below(wellbeing: dict[str, Any], norms: dict[str, float]) -> list[dict[str, Any]]:
+    """Оценки дня на BELOW_DROP и больше ниже своей нормы; по оценке, у которой сработал
+    абсолютный порог, строки нет."""
+    found: list[dict[str, Any]] = []
+    for key, kind, top in (
+        ("score", "wellbeing_below", WELLBEING_MAX),
+        ("mood", "mood_below", MOOD_MAX),
+    ):
+        value = wellbeing.get(key)
+        if value is None or value <= top or key not in norms:
+            continue
+        if norms[key] - value >= BELOW_DROP:
+            found.append({"kind": kind, "value": value, "limit": norms[key]})
+    return found
+
+
 def find_deviations(
     wellbeing: dict[str, Any] | None,
     metrics: dict[str, Any] | None,
     load: dict[str, Any] | None,
+    norms: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
     """Отклонения за день. wellbeing — основная (последняя) запись самочувствия дня,
     metrics — строка daily_metrics, load — строка load_series; None — данных нет."""
@@ -69,6 +107,8 @@ def find_deviations(
         found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
     if wellbeing and wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
         found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
+    if wellbeing and norms:
+        found.extend(find_below(wellbeing, norms))
     symptoms = find_symptoms(wellbeing.get("texts", [])) if wellbeing else []
     if symptoms:
         found.append({"kind": "symptoms", "value": symptoms, "limit": None})

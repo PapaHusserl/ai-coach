@@ -203,6 +203,23 @@ def test_symptom_in_wellbeing_text_is_a_deviation_signal(conn: sqlite3.Connectio
     assert (signal["value"], signal["limit"]) == (["горло"], None)
 
 
+def test_score_below_own_norm_is_a_deviation_signal(conn: sqlite3.Connection) -> None:
+    for back in range(1, 8):
+        day = (DAY - timedelta(days=back)).isoformat()
+        conn.execute(
+            "INSERT INTO wellbeing_log (date, score, logged_at) VALUES (?, 4, ?)",
+            (day, f"{day} 08:00:00"),
+        )
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, logged_at) VALUES (?, 3, ?)",
+        (DAY.isoformat(), f"{DAY.isoformat()} 08:00:00"),
+    )
+    view = state_view(conn, DAY, NOW)
+    assert sources(view, "wellbeing_below") == ["deviations"]
+    signal = next(s for s in view["signals"] if s["kind"] == "wellbeing_below")
+    assert (signal["value"], signal["limit"]) == (3, 4)
+
+
 def test_low_who5_comes_from_who5(conn: sqlite3.Connection) -> None:
     put_who5(conn, 24)
     view = state_view(conn, DAY, NOW)

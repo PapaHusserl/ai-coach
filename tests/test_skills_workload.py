@@ -97,6 +97,30 @@ def test_coach_wellbeing_has_precursors_paragraph_that_keeps_the_plan() -> None:
     assert "план не трогай" in text
 
 
+def paragraph(text: str, start: str) -> str:
+    found = [p for p in text.split("\n\n") if p.startswith(start)]
+    assert len(found) == 1, start
+    return found[0]
+
+
+def test_recalc_lists_below_norm_codes_in_the_deviations_sentence() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    deviations_part = text.split("или есть сигналы перегруза")[0]
+    assert "wellbeing_below" in deviations_part
+    assert "mood_below" in deviations_part
+    assert "не пересчёт" not in text
+
+
+def test_wellbeing_below_codes_are_in_symptoms_paragraph_not_in_precursors() -> None:
+    text = WELLBEING.read_text()
+    symptoms = paragraph(text, "Симптомы в тексте")
+    precursors = paragraph(text, "Предвестники")
+    for code in ("wellbeing_below", "mood_below"):
+        assert code in symptoms, code
+        assert code not in precursors, code
+    assert "план не трогай" in precursors
+
+
 def test_recovery_mentions_illness_and_fits_limit() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "illness" in path.read_text()

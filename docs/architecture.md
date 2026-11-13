@@ -250,6 +250,10 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 ## Н31: симптомы в тексте самочувствия (партия 1)
 - `load/deviations.py`: `SYMPTOMS` — пары «основа → слово» (12 слов, ряд WURSS-24), `find_symptoms(texts)` — слова без повторов в порядке списка; `main_wellbeing` кладёт `texts` (непустые тексты всех записей дня), `find_deviations` после `stress` добавляет `{"kind": "symptoms", "value": [слова], "limit": None}`. Отрицания код не разбирает, судит тренер (`coach-wellbeing.md`). Пульт: «симптомы в тексте», без «(порог …)».
 
+## Н31: ниже своей нормы (партия 2)
+- `load/deviations.py`: `wellbeing_norms(marks)` — медиана значений дня (через `main_wellbeing`) по записям прошлых дней, отдельно для `score` и `mood`; дней со значением меньше `BELOW_MIN_DAYS` (7) — ключа нет. `find_below(wellbeing, norms)` — `wellbeing_below` / `mood_below` (`limit` — норма), если оценка на `BELOW_DROP` (1) и больше ниже нормы; по оценке с сработавшим абсолютным порогом (≤ 2) строки нет (Р16). `find_deviations(..., norms=None)` добавляет их после `stress`, перед `symptoms`. Константы — догадка до калибровки v2.9 (`BELOW_DAYS` = 14).
+- `mcp_server/tools.py:day_deviations` читает записи за `BELOW_DAYS` дней до дня и считает нормы. Пульт: «самочувствие ниже нормы · 3 (норма 4)» (`NORM_KINDS` в `state-model.js`). Реакция тренера — как при `symptoms` (`coach-wellbeing.md`, `recalc.md`).
+
 ## Н12: WHO-5
 - Таблица `who5_log` (миграция 0026; `q1..q5` 0–5, `score` = сумма × 4, `text`) — отдельно от `wellbeing_log`: замер раз в 2 недели не должен сдвигать «основную запись дня» (довод Н1 для `focus_log`). Store: `add_who5`, `list_who5`, `last_who5(day, n)`.
 - `agenda/sleep_limits.py`: `who5_low` (сегодня и завтра, пока замер свежий) — фокус-блоков на один меньше, предел `caution_from` только от сна, причина по первому сигналу (сон, болезнь, WHO-5).

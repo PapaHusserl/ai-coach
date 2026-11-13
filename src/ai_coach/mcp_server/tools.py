@@ -22,6 +22,7 @@ from ai_coach.load import (
     resolve_thresholds,
     sleep_report,
 )
+from ai_coach.load.deviations import BELOW_DAYS, wellbeing_norms
 from ai_coach.load.sleep import awake_hours
 from ai_coach.load.stress import stress_at
 from ai_coach.meds import public_meds
@@ -235,16 +236,20 @@ def who5_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
 def day_deviations(
     conn: sqlite3.Connection, day: str, load_row: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
-    marks = list_wellbeing(conn, day, day)
+    start = (parse_day(day) - timedelta(days=BELOW_DAYS)).isoformat()
+    recent = list_wellbeing(conn, start, day)
+    marks = [m for m in recent if m["date"] == day]
+    norms = wellbeing_norms([m for m in recent if m["date"] < day])
     metrics = list_daily_metrics(conn, day, day)
-    return find_deviations(main_wellbeing(marks), metrics[0] if metrics else None, load_row)
+    return find_deviations(main_wellbeing(marks), metrics[0] if metrics else None, load_row, norms)
 
 
 def deviations(
     conn: sqlite3.Connection,
     date: str,  # noqa: F811 - имя параметра для MCP, затеняет импорт date
 ) -> dict[str, Any]:
-    """Отклонения за день: самочувствие, симптомы в тексте, readiness, HRV, сон, ATL - CTL
+    """Отклонения за день: самочувствие (в т. ч. ниже своей нормы: limit - норма), симптомы в
+    тексте, readiness, HRV, сон, ATL - CTL
     (пороги — в load/deviations.py). Пустой rows — всё в норме. Нет нагрузки — ATL - CTL не
     проверен, причина — в load_error."""
     parse_day(date)

@@ -518,7 +518,9 @@ v2.9 — архитектор после аппрува.
 7. Тесты — в существующие файлы, новых файлов тестов нет.
 8. Партия 2: коды `wellbeing_below`, `mood_below` (Р11 = 3); у этих строк `limit` — норма (медиана), не граница
    (Р15 = 1).
-9. Партия 2: `wellbeing_norms(marks: list[dict], day: str) -> dict[str, float]` — группирует записи по `date`,
+9. Партия 2: `wellbeing_norms(marks: list[dict]) -> dict[str, float]` — на вход записи только прошлых дней
+   (сегодняшние отсекает вызывающий, `day_deviations`, п. 10; параметра `day` нет — правка по аудиту партии 2,
+   2026-11-13, решил архитектор), группирует записи по `date`,
    значение дня берёт через `main_wellbeing`, медиана — `statistics.median`; `find_below(wellbeing, norms)` —
    отдельная функция, чтобы `find_deviations` (сложность 12 из 18) не подошла к порогу.
 10. Партия 2: `find_deviations(wellbeing, metrics, load, norms=None)` — параметр с умолчанием, вызовы в тестах не

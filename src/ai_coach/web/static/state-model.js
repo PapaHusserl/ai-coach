@@ -16,6 +16,8 @@ export const SIGNAL_WORDS = {
 	wellbeing: "самочувствие",
 	mood: "настроение",
 	stress: "стресс",
+	wellbeing_below: "самочувствие ниже нормы",
+	mood_below: "настроение ниже нормы",
 	symptoms: "симптомы в тексте",
 	readiness: "готовность",
 	hrv: "HRV",
@@ -39,6 +41,9 @@ function shown(value) {
 	return String(value);
 }
 
+// У двух кодов «ниже нормы» limit — норма, не порог.
+const NORM_KINDS = ["wellbeing_below", "mood_below"];
+
 // Строки сигналов в порядке сервера: [{kind, source, word, detail}].
 export function signalRows(state) {
 	return state.signals.map((signal) => ({
@@ -47,7 +52,7 @@ export function signalRows(state) {
 		word: SIGNAL_WORDS[signal.kind] ?? signal.kind,
 		detail: signal.limit === null
 			? shown(signal.value)
-			: `${shown(signal.value)} (порог ${shown(signal.limit)})`,
+			: `${shown(signal.value)} (${NORM_KINDS.includes(signal.kind) ? "норма" : "порог"} ${shown(signal.limit)})`,
 	}));
 }
 

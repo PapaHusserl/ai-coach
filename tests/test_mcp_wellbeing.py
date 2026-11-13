@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import date, timedelta
 
 from mcp_fakes import call, rows, tool_names
 
@@ -192,6 +193,87 @@ def test_symptom_in_pult_mark_with_event_id_counts(conn: sqlite3.Connection) -> 
         (DAY, f"{DAY} 08:00:00"),
     )
     assert kinds(conn) == ["symptoms"]
+
+
+def past(conn: sqlite3.Connection, scores: list[int], first_back: int = 1) -> None:
+    """По записи на день, начиная с first_back дней до DAY и дальше в прошлое."""
+    for offset, score in enumerate(scores):
+        day = (date.fromisoformat(DAY) - timedelta(days=first_back + offset)).isoformat()
+        feel(conn, day, score, None, f"{day} 08:00:00")
+
+
+def below_rows(conn: sqlite3.Connection) -> list[tuple[str, int, int]]:
+    found = rows(conn, "get_deviations", date=DAY)
+    return [(r["kind"], r["value"], r["limit"]) for r in found if r["kind"].endswith("_below")]
+
+
+def test_seven_days_at_4_and_today_3_is_wellbeing_below(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 7)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert below_rows(conn) == [("wellbeing_below", 3, 4)]
+
+
+def test_six_days_of_history_is_not_enough(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 6)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert kinds(conn) == []
+
+
+def test_history_all_at_3_and_today_3_is_fine(conn: sqlite3.Connection) -> None:
+    past(conn, [3] * 14)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert kinds(conn) == []
+
+
+def test_below_yesterday_without_entry_today_is_empty(conn: sqlite3.Connection) -> None:
+    past(conn, [3] + [4] * 7)
+    assert kinds(conn) == []
+
+
+def test_today_is_not_part_of_the_norm(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 4 + [3] * 3)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert below_rows(conn) == [("wellbeing_below", 3, 4)]
+
+
+def test_days_older_than_14_are_not_in_the_norm(conn: sqlite3.Connection) -> None:
+    past(conn, [5] * 7, first_back=15)
+    past(conn, [3] * 7)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert kinds(conn) == []
+
+
+def test_day_14_back_is_in_the_norm(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 7, first_back=8)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    assert below_rows(conn) == [("wellbeing_below", 3, 4)]
+
+
+def test_mood_below_norm_from_history(conn: sqlite3.Connection) -> None:
+    for back in range(1, 8):
+        day = (date.fromisoformat(DAY) - timedelta(days=back)).isoformat()
+        conn.execute(
+            "INSERT INTO wellbeing_log (date, score, mood, logged_at) VALUES (?, 4, 4, ?)",
+            (day, f"{day} 08:00:00"),
+        )
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, mood, logged_at) VALUES (?, 4, 3, ?)",
+        (DAY, f"{DAY} 08:00:00"),
+    )
+    assert kinds(conn) == ["mood_below"]
+
+
+def test_below_norm_and_symptom_in_one_day_give_both_rows(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 7)
+    feel(conn, DAY, 3, "горло", f"{DAY} 08:00:00")
+    assert kinds(conn) == ["wellbeing_below", "symptoms"]
+
+
+def test_snapshot_deviations_include_below_norm(conn: sqlite3.Connection) -> None:
+    past(conn, [4] * 7)
+    feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
+    section = call(conn, "get_morning_snapshot", date=DAY)["deviations"]
+    assert [r["kind"] for r in section["rows"]] == ["wellbeing_below"]
 
 
 def test_snapshot_without_data_has_empty_sections(conn: sqlite3.Connection) -> None:
