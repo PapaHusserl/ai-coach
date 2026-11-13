@@ -8,7 +8,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach import goals
 from ai_coach.agenda import agenda_rows
-from ai_coach.decisions import day_part
+from ai_coach.decisions import day_part, pending
 from ai_coach.load import illness_report, overload_report, sleep_report, who5_report
 from ai_coach.load.overload import overloaded
 from ai_coach.mcp_server import tools
@@ -46,6 +46,7 @@ SNAPSHOT_RECIPES = 30
 SNAPSHOT_NUTRITION_ROWS = 10
 SNAPSHOT_MEDS = 10
 SNAPSHOT_HABITS = 10
+SNAPSHOT_DECISIONS = 10
 WELLBEING_DAYS = 7
 WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
@@ -221,6 +222,9 @@ def morning_snapshot(
     is_today = date == tools.today().isoformat()
     evening_day = wellbeing_day(tools.now()) if is_today else date
     snapshot["day_part"] = day_part(tools.now()) if is_today else None
+    queue = pending(conn, date)
+    for key, name in (("pending", "decisions_pending"), ("to_check", "decisions_to_check")):
+        snapshot[name] = tools.cap(queue[key], SNAPSHOT_DECISIONS, SNAPSHOT_CHARS)
     snapshot["evening_done_today"] = evening_done(conn, evening_day)
     snapshot["week_review_due"] = review_due(conn, evening_day)
     snapshot["who5"] = who5_report(conn, evening_day)

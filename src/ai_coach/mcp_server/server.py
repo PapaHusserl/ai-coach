@@ -9,6 +9,7 @@ from mcp.server.mcpserver import MCPServer
 
 from ai_coach.mcp_server import (
     agenda,
+    decisions,
     habits,
     links,
     meal,
@@ -81,6 +82,10 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "day_part (часть дня сейчас: morning до 12:00, day до 19:00, evening с 19:00 до 04:00; "
         "null - не сегодня; вечером (evening) новых решений на будущее не предлагать, "
         "черновики - «вернусь утром», правило - coach-decisions.md), "
+        "decisions_pending (открытые пункты очереди решений: id, kind, ref_id, text, "
+        "target_date, created_at; ближайший день первым, без даты в конце; до 10), "
+        "decisions_to_check (слова, принятые «да», срок прошёл, исполнение не отмечено: id, "
+        "text, target_date, decided_at; до 10), "
         "sport_nutrition_today (питание к тренировкам дня и добавки с пометкой принято; "
         "нет - не отдаётся), "
         "habits_today (привычки на день самочувствия: name, unit, done true - сделано, false - "
@@ -261,6 +266,16 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "нагрузка), work_hours, evening_hours, weekend_work_hours, todo_closed, todo_open, mood, "
         "stress, sleep, readiness (средние, null - данных нет), days_with_data, delta - разница "
         "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
+    ),
+    "get_decisions": (
+        decisions.decisions,
+        "Журнал решений на будущее за период (date_from, date_to - YYYY-MM-DD, до 92 дней; "
+        "строки с created_at или decided_at в периоде): id, kind (text - слова, workout - "
+        "черновик тренировки, phase - фаза), ref_id, text, target_date, created_at, status "
+        "(open/yes/no/dropped), decided_at, result (kept/missed: у слов - отметка "
+        "пользователя, у тренировки - из плана/факта, у фазы null), created_part, "
+        "decided_part (morning/day/evening). stats - по решениям с decided_at в периоде, по "
+        "части дня решения: yes, no, dropped, kept, missed. Выводов нет - их делает тренер.",
     ),
     "get_food_variety": (
         variety.food_variety,

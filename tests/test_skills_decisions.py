@@ -89,6 +89,48 @@ def test_goals_help_says_phase_is_accepted_by_decide_done() -> None:
     assert "decide done" in (AGENTS / "coach-help" / "goals-profile.md").read_text()
 
 
+# партия 3: очередь и замер у тренера
+
+
+@pytest.mark.parametrize(
+    "word",
+    [
+        "decisions_pending",
+        "decisions_to_check",
+        "decide add",
+        "decide done",
+        "decide result",
+        "записал на утро",
+        "срок прошёл",
+        "approve",
+    ],
+)
+def test_rule_names_queue_and_check_words(word: str) -> None:
+    assert word in RULE.read_text()
+
+
+def test_rule_user_request_section_says_not_to_queue() -> None:
+    section = RULE.read_text().split("## Просьба пользователя")[1].split("\n## ")[0]
+    assert "В очередь не клади" in section
+
+
+def test_rule_decide_add_paragraph_is_before_day_section() -> None:
+    text = RULE.read_text()
+    assert text.index('decide add "<текст>"') < text.index("## День")
+
+
+def test_coach_md_has_decisions_tool_and_decide_command() -> None:
+    text = (AGENTS / "coach.md").read_text()
+    head = text.split("---")[1]
+    assert "mcp__ai-coach__get_decisions" in head
+    assert "decide" in text.split("Что можно:")[1].split("\n")[0]
+    assert len(text.encode()) <= AGENT_LIMITS["coach.md"]
+
+
+def test_help_topic_covers_get_decisions() -> None:
+    assert "get_decisions" in HELP_TOPIC.read_text()
+
+
 def test_training_help_says_draft_goes_to_decision_queue() -> None:
     text = (AGENTS / "coach-help" / "training.md").read_text()
     assert "очеред" in text

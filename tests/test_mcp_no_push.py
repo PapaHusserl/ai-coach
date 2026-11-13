@@ -81,6 +81,7 @@ EXPECTED_TOOLS = {
     "get_agenda",
     "create_meal_offers",
     "cancel_meal_offers",
+    "get_decisions",
 }
 
 

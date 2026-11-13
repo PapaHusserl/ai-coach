@@ -66,3 +66,23 @@ def test_review_done_is_allowed() -> None:
 
 def test_coach_md_lists_review_in_bash_commands() -> None:
     assert "review" in coach_text()
+
+
+# шаг Н29, партия 3: строка замера решений
+
+
+def decisions_line() -> str:
+    lines = (AGENTS / "coach-week.md").read_text().splitlines()
+    found = [line for line in lines if "get_decisions" in line]
+    assert found
+    return found[0]
+
+
+def test_week_file_has_decisions_line_with_stats_words() -> None:
+    text = (AGENTS / "coach-week.md").read_text()
+    for word in ["get_decisions", "kept", "missed", "данных мало"]:
+        assert word in text
+
+
+def test_week_decisions_line_names_threshold_ten() -> None:
+    assert re.search(r"\b10\b", decisions_line())

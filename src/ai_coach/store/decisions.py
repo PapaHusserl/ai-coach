@@ -30,6 +30,15 @@ def open_decisions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return fetch_all(conn, sql, ())
 
 
+def to_check_decisions(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
+    """Слова, принятые «да», с целевым днём раньше day и без результата исполнения."""
+    sql = (
+        "SELECT * FROM decision_log WHERE kind = 'text' AND status = 'yes' AND result IS NULL "
+        "AND target_date < ? ORDER BY target_date, id"
+    )
+    return fetch_all(conn, sql, (day,))
+
+
 def list_decisions(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Пункты с created_at или decided_at в днях start..end включительно, по created_at."""
     sql = (

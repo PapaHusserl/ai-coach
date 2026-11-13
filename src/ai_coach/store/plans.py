@@ -37,6 +37,12 @@ def list_plan_actual(conn: sqlite3.Connection, start: str, end: str) -> list[dic
     return fetch_all(conn, sql, (start, end))
 
 
+def actual_of(conn: sqlite3.Connection, planned_id: int) -> dict[str, Any] | None:
+    """Последняя строка факта по тренировке плана."""
+    sql = "SELECT * FROM plan_actual WHERE planned_id = ? ORDER BY id DESC"
+    return fetch_one(conn, sql, (planned_id,))
+
+
 def delete_plan_actual(conn: sqlite3.Connection, start: str, end: str) -> None:
     """Очистка периода перед пересчётом сопоставления."""
     conn.execute("DELETE FROM plan_actual WHERE date BETWEEN ? AND ?", (start, end))

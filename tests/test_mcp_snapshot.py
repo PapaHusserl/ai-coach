@@ -126,6 +126,8 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "habits_today",
         "week_review_due",
         "day_part",
+        "decisions_pending",
+        "decisions_to_check",
     }
 
 
@@ -498,6 +500,12 @@ def test_snapshot_description_names_day_part_and_evening() -> None:
     assert "evening" in text
     assert "вернусь утром" in text
     assert "coach-decisions.md" in text
+
+
+def test_snapshot_description_names_decision_keys() -> None:
+    text = TOOLS["get_morning_snapshot"][1]
+    assert "decisions_pending" in text
+    assert "decisions_to_check" in text
 
 
 @pytest.mark.parametrize(

@@ -115,3 +115,35 @@ def test_settle_does_not_touch_other_kind(conn: sqlite3.Connection) -> None:
     phase_id = track(conn, "phase", 5, "База", None)
     assert settle(conn, "workout", 5, "yes") is False
     assert row_of(conn, phase_id)["status"] == "open"
+
+
+# выжившие мутанты партии 2
+
+
+def stat_row(decided: str | None, status: str = "yes", result: str | None = None) -> dict[str, Any]:
+    return {"decided_at": decided, "status": status, "result": result}
+
+
+def test_decision_stats_skips_open_row_and_counts_later_ones() -> None:
+    from ai_coach.decisions import decision_stats
+
+    found = decision_stats([stat_row(None, "open"), stat_row(f"{DAY} 09:00:00")])
+    assert found["morning"]["yes"] == 1
+
+
+def test_decision_stats_sums_same_status_and_result() -> None:
+    from ai_coach.decisions import decision_stats
+
+    rows = [stat_row(f"{DAY} 09:00:00", "yes", "kept"), stat_row(f"{DAY} 10:00:00", "yes", "kept")]
+    morning = decision_stats(rows)["morning"]
+    assert (morning["yes"], morning["kept"]) == (2, 2)
+
+
+def test_approve_non_draft_message_names_workout_and_status(conn: sqlite3.Connection) -> None:
+    from ai_coach.plan.service import PlanError, approve
+    from ai_coach.store.plans import add_planned_workout
+
+    row = {"date": DAY, "sport": "run", "name": "т", "workout_json": {}, "status": "cancelled"}
+    workout_id = add_planned_workout(conn, row)
+    with pytest.raises(PlanError, match=f"тренировка {workout_id} — cancelled"):
+        approve(conn, workout_id)
