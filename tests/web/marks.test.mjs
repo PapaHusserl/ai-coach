@@ -506,6 +506,47 @@ test("buildPayload: еда по варианту — offer_id числом, те
 	});
 });
 
+const MODEL = "../../src/ai_coach/web/static/marks-model.js";
+
+test("screenHint: работа и хобби, браузер 0 — без хвоста", async () => {
+	const { screenHint } = await import(MODEL);
+	assert.equal(screenHint({ work: 4.2, hobby: 0.8, browser: 0 }), "экран: работа 4.2 ч · хобби 0.8 ч");
+});
+
+test("screenHint: браузер больше нуля — хвост с одним знаком", async () => {
+	const { screenHint } = await import(MODEL);
+	assert.equal(
+		screenHint({ work: 4.2, hobby: 0.8, browser: 1.26 }),
+		"экран: работа 4.2 ч · хобби 0.8 ч · браузер 1.3 ч",
+	);
+});
+
+test("screenHint: целые часы без дроби", async () => {
+	const { screenHint } = await import(MODEL);
+	assert.equal(screenHint({ work: 4, hobby: 1, browser: 0 }), "экран: работа 4 ч · хобби 1 ч");
+});
+
+test("screenHint: причины отсутствия данных", async () => {
+	const { screenHint } = await import(MODEL);
+	assert.equal(screenHint({ missing: "config" }), "экран: не настроен");
+	assert.equal(screenHint({ missing: "silent" }), "экран: ActivityWatch не отвечает");
+	assert.equal(screenHint({ missing: "empty" }), "экран: за день пусто");
+});
+
+test("screenFill: один знак после запятой", async () => {
+	const { screenFill } = await import(MODEL);
+	assert.deepEqual(screenFill({ work: 4.19, hobby: 0.81, browser: 2 }), { work: 4.2, hobby: 0.8 });
+});
+
+test("screenFill + buildPayload checkin: подставленное уходит числом", async () => {
+	const { screenFill } = await import(MODEL);
+	const form = { event_id: 9, date: "2026-11-08", score: 4, ...screenFill({ work: 4.19, hobby: 0.81 }) };
+	const payload = buildPayload("checkin", form);
+	assert.equal(payload.work, 4.2);
+	assert.equal(payload.hobby, 0.8);
+	assert.equal("rest" in payload, false);
+});
+
 test("buildPayload: еда своим текстом — без offer_id", () => {
 	const form = { event_id: 5, date: "2026-11-07", text: " борщ " };
 	assert.deepEqual(buildPayload("food", form), {

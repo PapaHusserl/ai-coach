@@ -961,6 +961,10 @@ nav button[aria-selected="true"] {
 	}
 }
 
+.hoursbox .hline {
+	margin-bottom: 4px;
+}
+
 .hours {
 	display: grid;
 	gap: 4px;

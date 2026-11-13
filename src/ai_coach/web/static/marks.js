@@ -196,7 +196,9 @@ function buildForm() {
 		mealHead(box);
 	}
 	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, state.forms[tab], name, save));
-	if (tab === "checkin") box.append(hoursFields(state.forms[tab]), flowField(state.forms[tab]));
+	if (tab === "checkin") {
+		box.append(hoursFields(state.forms[tab], state.day), flowField(state.forms[tab]));
+	}
 	box.append(text, errorLine, save);
 	save.disabled = !canSave(tab, state.forms[tab]);
 	save.addEventListener("click", () => send(tab, text.value));

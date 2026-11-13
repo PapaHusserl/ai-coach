@@ -68,6 +68,33 @@ def test_api_day_garbage_date_is_400_with_text(port: int) -> None:
     assert "date" in body.decode()
 
 
+def test_api_screen_returns_json(
+    port: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "w.toml"
+    config.write_text('[calendar]\nwork = ["Work"]\n', encoding="utf-8")
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
+    status, body = request(port, "/api/screen?date=2026-11-12")
+    assert status == 200
+    assert json.loads(body) == {"missing": "config"}
+
+
+def test_api_screen_without_date_is_200(
+    port: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "w.toml"
+    config.write_text('[calendar]\nwork = ["Work"]\n', encoding="utf-8")
+    monkeypatch.setenv("AI_COACH_WORKLOAD_CONFIG", str(config))
+    status, _ = request(port, "/api/screen")
+    assert status == 200
+
+
+def test_api_screen_garbage_date_is_400_with_text(port: int) -> None:
+    status, body = request(port, "/api/screen?date=" + quote("мусор"))
+    assert status == 400
+    assert body.decode() == "date: нужна дата YYYY-MM-DD."
+
+
 def test_static_dotdot_is_404(port: int) -> None:
     status, _ = request(port, "/static/../x")
     assert status == 404

@@ -126,6 +126,10 @@ def test_pult_topic_describes_pult_marks() -> None:
         assert needle in text, needle
 
 
+def test_pult_topic_mentions_screen_fill_button() -> None:
+    assert "подставить" in topic("pult.md")
+
+
 def test_pult_topic_points_pult_windows_to_food_and_training() -> None:
     text = topic("pult.md")
     assert "Еда и тренировка - окна в `food.md` и `training.md`" in text

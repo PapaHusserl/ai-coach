@@ -182,6 +182,29 @@ function hoursValue(raw) {
 	return Number.isFinite(value) ? value : null;
 }
 
+const SCREEN_MISSING = {
+	config: "экран: не настроен",
+	silent: "экран: ActivityWatch не отвечает",
+	empty: "экран: за день пусто",
+};
+
+function hoursText(value) {
+	return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+// Строка над часами чек-ина: «экран: работа 4.2 ч · хобби 0.8 ч» (браузер — если больше нуля) или причина.
+export function screenHint(view) {
+	if (view.missing) return SCREEN_MISSING[view.missing];
+	const parts = [`работа ${hoursText(view.work)} ч`, `хобби ${hoursText(view.hobby)} ч`];
+	if (view.browser > 0) parts.push(`браузер ${hoursText(view.browser)} ч`);
+	return `экран: ${parts.join(" · ")}`;
+}
+
+// Что кнопка «подставить» кладёт в поля: работа и хобби с одним знаком, «Отдых» не трогает.
+export function screenFill(view) {
+	return { work: Math.round(view.work * 10) / 10, hobby: Math.round(view.hobby * 10) / 10 };
+}
+
 // Часы и погружение чек-ина: пустые поля не уходят.
 function checkinFields(form) {
 	const fields = {};

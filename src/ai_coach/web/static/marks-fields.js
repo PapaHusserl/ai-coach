@@ -2,6 +2,7 @@
 // Значения живут в форме вкладки; таблицы и чистые функции — marks-model.js.
 import { el } from "./dom.js";
 import { FIELDS, FLOW_CHOICES, HOURS, REQUIRED, canSave } from "./marks-model.js";
+import { screenLine } from "./screen-hint.js";
 
 // Шкала name вкладки tab; form — форма вкладки, save — кнопка «Сохранить».
 export function scale(tab, form, name, save) {
@@ -33,9 +34,20 @@ export function scale(tab, form, name, save) {
 	return wrap;
 }
 
-// Часы дня чек-ина: поля ввода, значение живёт в форме вкладки.
-export function hoursFields(form) {
+// Часы дня чек-ина: строка экрана за день day и поля ввода, значение живёт в форме вкладки.
+export function hoursFields(form, day) {
+	const box = el("div", "hoursbox");
 	const line = el("div", "hours");
+	const inputs = {};
+	box.append(
+		screenLine(day, (fill) => {
+			for (const [name, value] of Object.entries(fill)) {
+				form[name] = value;
+				inputs[name].value = value;
+			}
+		}),
+		line,
+	);
 	for (const [name, label] of Object.entries(HOURS)) {
 		const wrap = el("label", "hour", label);
 		const input = el("input");
@@ -48,10 +60,11 @@ export function hoursFields(form) {
 		input.addEventListener("input", () => {
 			form[name] = input.value;
 		});
+		inputs[name] = input;
 		wrap.append(input);
 		line.append(wrap);
 	}
-	return line;
+	return box;
 }
 
 // Погружение: да / нет, повторный клик снимает выбор.
