@@ -13,7 +13,6 @@ from ai_coach.cli.agenda import event_app
 from ai_coach.cli.decide import decide_app
 from ai_coach.cli.habits import habit_app
 from ai_coach.cli.journal import (
-    check_date,
     check_scores,
     delete_app,
     edit_app,
@@ -32,6 +31,7 @@ from ai_coach.cli.pvt import pvt
 from ai_coach.cli.recipes import recipe_app
 from ai_coach.cli.review import review_app
 from ai_coach.cli.sport_nutrition import protocol_app, supplement_app
+from ai_coach.cli.status import status
 from ai_coach.cli.supplement_log import supplement_log, supplement_take, supplement_untake
 from ai_coach.cli.todo import todo_app
 from ai_coach.cli.web import web
@@ -56,7 +56,7 @@ from ai_coach.plan import (
 )
 from ai_coach.store.db import open_db
 from ai_coach.store.journal import add_wellbeing, wellbeing_day
-from ai_coach.store.plans import get_planned_workout, list_planned_workouts
+from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
@@ -288,41 +288,7 @@ def cancel_(
         conn.close()
 
 
-@app.command()
-def status(
-    day: Annotated[str | None, typer.Option("--date", help="Один день, YYYY-MM-DD")] = None,
-    date_from: Annotated[
-        str | None, typer.Option("--from", help="С даты включительно, YYYY-MM-DD")
-    ] = None,
-    date_to: Annotated[
-        str | None, typer.Option("--to", help="По дату включительно, YYYY-MM-DD")
-    ] = None,
-) -> None:
-    """Что запланировано и отправлено (можно за день или период)."""
-    if day is not None and (date_from is not None or date_to is not None):
-        fail("--date нельзя вместе с --from/--to.")
-    for value in (day, date_from, date_to):
-        if value is not None:
-            check_date(value)
-    if day is not None:
-        date_from = day
-        date_to = day
-    start = date_from or "0000-01-01"
-    end = date_to or "9999-12-31"
-    if start > end:
-        fail("--from позже --to.")
-    conn = open_db()
-    try:
-        rows = list_planned_workouts(conn, start, end)
-    finally:
-        conn.close()
-    if not rows:
-        typer.echo("Тренировок нет.")
-    for row in rows:
-        sent = f", отправлена {row['pushed_at']}" if row["pushed_at"] else ""
-        typer.echo(
-            f"{row['id']}  {row['date']}  {row['sport']}  {row['name']}  [{row['status']}{sent}]"
-        )
+app.command()(status)
 
 
 def parse_hours(kind: str, text: str) -> float:

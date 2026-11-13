@@ -19,11 +19,10 @@ import {
 
 import { headerBusy, renderHeader } from "./header-pane.js";
 import { meetingBusy, mountMeeting } from "./meeting-pane.js";
-import { loadPantry, pantryBusy } from "./pantry-pane.js";
+import { pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
-import { loadState } from "./state-pane.js";
+import { refreshPanels, setupTabs } from "./tabs.js";
 import { loadTodo, todoBusy } from "./todo-pane.js";
-import { loadWeek } from "./week-pane.js";
 
 export * from "./pult-model.js";
 export * from "./week-model.js";
@@ -161,9 +160,7 @@ if (typeof document !== "undefined") {
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);
 			const today = view.now.slice(0, 10);
-			if (!document.querySelector('[data-panel="train"]').hidden) loadWeek(view.date, today);
-			if (!document.querySelector('[data-panel="food"]').hidden) loadPantry(view.date, today);
-			if (!document.querySelector('[data-panel="state"]').hidden) loadState(view.date);
+			refreshPanels(view.date, today);
 		} catch (error) {
 			message.textContent = `Не удалось загрузить: ${error.message}`;
 			message.hidden = false;
@@ -179,22 +176,7 @@ if (typeof document !== "undefined") {
 	};
 	reloadDay = () => load();
 	setupMarks(load);
-	const tabs = document.querySelectorAll("#tabs button");
-	for (const tab of tabs) {
-		tab.addEventListener("click", () => {
-			for (const other of tabs) other.setAttribute("aria-selected", String(other === tab));
-			for (const panel of document.querySelectorAll("[data-panel]")) {
-				panel.hidden = panel.dataset.panel !== tab.dataset.tab;
-			}
-			if (tab.dataset.tab === "train" && document.body.dataset.day) {
-				loadWeek(document.body.dataset.day, document.body.dataset.today);
-			}
-			if (tab.dataset.tab === "food" && document.body.dataset.day) {
-				loadPantry(document.body.dataset.day, document.body.dataset.today);
-			}
-			if (tab.dataset.tab === "state" && document.body.dataset.day) loadState(document.body.dataset.day);
-		});
-	}
+	setupTabs();
 	document.getElementById("prev").addEventListener("click", () => move(-1));
 	document.getElementById("next").addEventListener("click", () => move(1));
 	load();

@@ -450,3 +450,14 @@ def test_status_from_after_to_is_error(isolated: Path) -> None:
     assert result.exit_code == 1
     assert "позже" in result.output
     assert "w2026-03-10" not in result.output
+
+
+def test_registered_commands_keep_order() -> None:
+    names = []
+    for command in main.app.registered_commands:
+        assert command.callback is not None
+        names.append(command.name or command.callback.__name__)
+    assert names == [
+        "weight", "food", "focus", "slip", "pvt", "who5", "web", "shop", "login", "sync",
+        "import", "approve", "link", "push", "cancel", "status", "feel", "screen", "claude",
+    ]  # fmt: skip

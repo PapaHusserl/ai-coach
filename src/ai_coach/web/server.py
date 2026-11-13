@@ -140,75 +140,75 @@ GET_VIEWS: dict[str, Callable[..., dict[str, Any]]] = {
 }
 
 
+class Handler(BaseHTTPRequestHandler):
+    """Обработчик пульта; db - атрибут класса, make_server даёт каждому серверу свой наследник."""
+
+    db: str | Path | None = None
+
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
+
+    def send(self, status: int, body: bytes, content_type: str) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", _content_type(content_type))
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def text(self, status: int, message: str) -> None:
+        self.send(status, message.encode(), "text/plain")
+
+    def do_GET(self) -> None:
+        parts = urlsplit(self.path)
+        if parts.path == "/":
+            self.static("index.html")
+        elif parts.path in GET_VIEWS:
+            self.api(parse_qs(parts.query), GET_VIEWS[parts.path])
+        elif parts.path.startswith(STATIC_PREFIX):
+            self.static(parts.path[len(STATIC_PREFIX) :])
+        else:
+            self.text(HTTPStatus.NOT_FOUND, "Не найдено.")
+
+    def api(self, query: dict[str, list[str]], build: Callable[..., dict[str, Any]]) -> None:
+        """GET с ?date= (нет - сегодня): build(conn, day, now) JSON-ом; кривая дата - 400."""
+        now = datetime.now()
+        try:
+            day = date.fromisoformat(query["date"][0]) if "date" in query else now.date()
+        except ValueError:
+            self.text(HTTPStatus.BAD_REQUEST, "date: нужна дата YYYY-MM-DD.")
+            return
+        conn = open_db(self.db)
+        try:
+            view = build(conn, day, now, query) if build is meeting_view else build(conn, day, now)
+        except MarkError as error:
+            status = HTTPStatus.NOT_FOUND if isinstance(error, NoEvent) else HTTPStatus.BAD_REQUEST
+            self.text(status, str(error))
+            return
+        finally:
+            conn.close()
+        body = json.dumps(view, ensure_ascii=False).encode()
+        self.send(HTTPStatus.OK, body, "application/json")
+
+    def static(self, name: str) -> None:
+        file = resources.files("ai_coach.web").joinpath("static", name)
+        if not name or "/" in name or name.startswith(".") or not file.is_file():
+            self.text(HTTPStatus.NOT_FOUND, "Не найдено.")
+            return
+        kind = TYPES.get(Path(name).suffix, "application/octet-stream")
+        self.send(HTTPStatus.OK, file.read_bytes(), kind)
+
+    def refuse(self) -> None:
+        self.text(HTTPStatus.METHOD_NOT_ALLOWED, "Только GET.")
+
+    def do_POST(self) -> None:
+        status, body = post_reply(self.db, self.path, self.headers, self.rfile)
+        if status != HTTPStatus.OK:
+            print(f"POST {self.path} {int(status)} {body}", file=sys.stderr)
+        self.send(status, body.encode(), "application/json" if status < 300 else "text/plain")
+
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
+
+
 def make_server(host: str, port: int, db: str | Path | None = None) -> ThreadingHTTPServer:
     """Сервер пульта; порт 0 - любой свободный. db - путь к базе (по умолчанию как у coach)."""
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, format: str, *args: Any) -> None:
-            pass
-
-        def send(self, status: int, body: bytes, content_type: str) -> None:
-            self.send_response(status)
-            self.send_header("Content-Type", _content_type(content_type))
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def text(self, status: int, message: str) -> None:
-            self.send(status, message.encode(), "text/plain")
-
-        def do_GET(self) -> None:
-            parts = urlsplit(self.path)
-            if parts.path == "/":
-                self.static("index.html")
-            elif parts.path in GET_VIEWS:
-                self.api(parse_qs(parts.query), GET_VIEWS[parts.path])
-            elif parts.path.startswith(STATIC_PREFIX):
-                self.static(parts.path[len(STATIC_PREFIX) :])
-            else:
-                self.text(HTTPStatus.NOT_FOUND, "Не найдено.")
-
-        def api(self, query: dict[str, list[str]], build: Callable[..., dict[str, Any]]) -> None:
-            """GET с ?date= (нет - сегодня): build(conn, day, now) JSON-ом; кривая дата - 400."""
-            now = datetime.now()
-            try:
-                day = date.fromisoformat(query["date"][0]) if "date" in query else now.date()
-            except ValueError:
-                self.text(HTTPStatus.BAD_REQUEST, "date: нужна дата YYYY-MM-DD.")
-                return
-            conn = open_db(db)
-            try:
-                view = (
-                    build(conn, day, now, query) if build is meeting_view else build(conn, day, now)
-                )
-            except MarkError as error:
-                status = (
-                    HTTPStatus.NOT_FOUND if isinstance(error, NoEvent) else HTTPStatus.BAD_REQUEST
-                )
-                self.text(status, str(error))
-                return
-            finally:
-                conn.close()
-            body = json.dumps(view, ensure_ascii=False).encode()
-            self.send(HTTPStatus.OK, body, "application/json")
-
-        def static(self, name: str) -> None:
-            file = resources.files("ai_coach.web").joinpath("static", name)
-            if not name or "/" in name or name.startswith(".") or not file.is_file():
-                self.text(HTTPStatus.NOT_FOUND, "Не найдено.")
-                return
-            kind = TYPES.get(Path(name).suffix, "application/octet-stream")
-            self.send(HTTPStatus.OK, file.read_bytes(), kind)
-
-        def refuse(self) -> None:
-            self.text(HTTPStatus.METHOD_NOT_ALLOWED, "Только GET.")
-
-        def do_POST(self) -> None:
-            status, body = post_reply(db, self.path, self.headers, self.rfile)
-            if status != HTTPStatus.OK:
-                print(f"POST {self.path} {int(status)} {body}", file=sys.stderr)
-            self.send(status, body.encode(), "application/json" if status < 300 else "text/plain")
-
-        do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
-
-    return ThreadingHTTPServer((host, port), Handler)
+    return ThreadingHTTPServer((host, port), type("PultHandler", (Handler,), {"db": db}))

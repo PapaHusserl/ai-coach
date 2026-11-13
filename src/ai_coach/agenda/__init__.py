@@ -12,7 +12,6 @@ from ai_coach.agenda.service import (
     move_draft,
     move_event,
     remove_event,
-    validate_draft,
     write_event,
 )
 
@@ -24,6 +23,5 @@ __all__ = [
     "move_draft",
     "move_event",
     "remove_event",
-    "validate_draft",
     "write_event",
 ]

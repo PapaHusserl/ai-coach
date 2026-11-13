@@ -1072,3 +1072,34 @@ def test_post_meeting_calendar_error_is_400_with_text_and_row_stays(
     assert status == 400
     assert "EventKit" in body.decode()
     assert meeting_rows(db_path) == before
+
+
+def test_two_servers_answer_each_from_own_db(tmp_path: Path) -> None:
+    servers = []
+    ports = []
+    for name, title in (("a.db", "Пробежка"), ("b.db", "Плавание")):
+        path = tmp_path / name
+        conn = open_db(path)
+        add_event(
+            conn,
+            coach_event(
+                date="2026-11-07",
+                start_at="2026-11-07T09:00:00",
+                end_at="2026-11-07T10:00:00",
+                title=title,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        server = make_server("127.0.0.1", 0, path)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        servers.append(server)
+        ports.append(server.server_address[1])
+    try:
+        bodies = [request(p, "/api/day?date=2026-11-07")[1].decode() for p in ports]
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+    assert ("Пробежка" in bodies[0], "Плавание" in bodies[0]) == (True, False)
+    assert ("Плавание" in bodies[1], "Пробежка" in bodies[1]) == (True, False)
