@@ -422,6 +422,40 @@ def test_calendar_error_does_not_stop_screen(
     assert len(screen_counters(conn)) == 8
 
 
+def test_sync_two_unmarked_calendars_are_joined_with_comma(
+    conn: sqlite3.Connection, env: Env
+) -> None:
+    raw = [raw_event(uid="a", calendar="Alpha"), raw_event(uid="b", calendar="Beta")]
+    message = run(conn, env, FakeCalendar(raw))
+    assert "Alpha, Beta" in message
+
+
+def test_sync_without_unmarked_calendars_has_no_note(conn: sqlite3.Connection, env: Env) -> None:
+    message = run(conn, env, FakeCalendar([raw_event(uid="w")]))
+    assert "неразмеченные календари" not in message
+
+
+def test_sync_without_reader_uses_calendar_reader(
+    conn: sqlite3.Connection, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeCalendar([raw_event(uid="w")])
+    monkeypatch.setattr(workload_sync, "CalendarReader", lambda: fake)
+    run(conn, env, None)
+    assert [e["uid"] for e in list_calendar_events(conn, *ALL)] == ["w"]
+
+
+def test_sync_with_reader_does_not_create_calendar_reader(
+    conn: sqlite3.Connection, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def forbidden() -> FakeCalendar:
+        raise AssertionError("CalendarReader не нужен, reader передан")
+
+    monkeypatch.setattr(workload_sync, "CalendarReader", forbidden)
+    reader = FakeCalendar([raw_event(uid="w")])
+    run(conn, env, reader)
+    assert reader.calls != []
+
+
 def test_no_screen_section_says_screen_is_not_configured(
     conn: sqlite3.Connection, env: Env
 ) -> None:

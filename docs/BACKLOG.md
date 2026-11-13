@@ -154,15 +154,6 @@ updated: 2026-11-07
 чек-ин виден в списке любого дня. Пульт П1 фильтрует сам (`web/day.py`); раскладка для CLI и MCP — видимое,
 решает Влад (docs/plan-p1.md «Правки по ревью» п.1).
 
-## 58. `make smells` красный на HEAD: 4 при пороге 0
-status: idea
-priority: low
-updated: 2026-11-07
-
-На HEAD 6a69bcc (worktree, 2026-11-07) `make smells` даёт 4 при `SMELLS_MAX` 0 — в старых файлах
-(`plan/service`, `sync/workload_sync` и др.), не от П1; `make check` встаёт на smells. Причина роста — не
-установлена.
-
 ## 60. Журнал приёма курсов
 status: idea
 priority: low
@@ -258,15 +249,6 @@ priority: low
 updated: 2026-11-12
 
 Деление `stats` очереди решений по видам пунктов (слова, черновики, фаза). Находка папы, docs/plan-n29.md.
-
-## 80. `make dead` красный на HEAD: vulture в тестах П5
-status: idea
-priority: low
-updated: 2026-11-12
-
-На HEAD 8cbdd5b (2026-11-12, прогон партии 1 Н29) `make dead` падает: vulture —
-`tests/test_agenda_calendar_edit.py:285, :292: unused attribute 'side_effect'` (60 %); файл шагом Н29 не тронут,
-причина — не установлена. Рядом BACKLOG 58 (smells на HEAD сейчас 6).
 
 ## 81. Отклонение пульса покоя и HRV от личной нормы в первый день
 status: idea

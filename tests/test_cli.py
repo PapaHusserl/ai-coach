@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from ai_coach.cli import main
 from ai_coach.garmin.client import GarminAuthError, GarminError, GarminRateLimitError
 from ai_coach.store.db import open_db
-from ai_coach.store.plans import add_planned_workout
+from ai_coach.store.plans import add_planned_workout, update_planned_workout
 
 runner = CliRunner()
 
@@ -450,6 +450,39 @@ def test_status_from_after_to_is_error(isolated: Path) -> None:
     assert result.exit_code == 1
     assert "позже" in result.output
     assert "w2026-03-10" not in result.output
+
+
+def test_status_date_with_from_error_text(isolated: Path) -> None:
+    result = runner.invoke(main.app, ["status", "--date", "2026-03-10", "--from", "2026-03-01"])
+    assert result.output.strip() == "--date нельзя вместе с --from/--to."
+
+
+def test_status_from_after_to_error_text(isolated: Path) -> None:
+    result = runner.invoke(main.app, ["status", "--from", "2026-03-11", "--to", "2026-03-10"])
+    assert result.output.strip() == "--from позже --to."
+
+
+def test_status_empty_output_is_exactly_no_workouts(isolated: Path) -> None:
+    result = runner.invoke(main.app, ["status"])
+    assert result.output.strip() == "Тренировок нет."
+
+
+def test_status_unpushed_line_has_no_push_mark(isolated: Path) -> None:
+    add_workouts(["2026-03-10"])
+    out = runner.invoke(main.app, ["status"]).output
+    assert out.strip().endswith("[draft]")
+
+
+def test_status_pushed_line_shows_push_time(isolated: Path) -> None:
+    add_workouts(["2026-03-10"])
+    conn = open_db()
+    try:
+        update_planned_workout(conn, 1, {"status": "pushed", "pushed_at": "2026-03-09T08:00:00"})
+        conn.commit()
+    finally:
+        conn.close()
+    out = runner.invoke(main.app, ["status"]).output
+    assert out.strip().endswith("[pushed, отправлена 2026-03-09T08:00:00]")
 
 
 def test_registered_commands_keep_order() -> None:

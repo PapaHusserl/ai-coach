@@ -231,6 +231,50 @@ def test_two_repeating_checkins_only_vanished_one_is_removed(
     assert (row["status"], row["removed_by"]) == ("removed", "calendar")
 
 
+def test_repeating_written_event_started_before_window_is_removed_when_vanished(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    old = "2026-08-01"
+    event_id = own(
+        conn, "r1", kind="checkin", category=None, repeat="daily", date=old,
+        start_at=f"{old}T21:00:00", end_at=f"{old}T21:15:00",
+    )  # fmt: skip
+    run(conn, config, FakeCalendar([]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert (row["status"], row["removed_by"]) == ("removed", "calendar")
+
+
+def test_repeating_draft_started_before_window_is_not_touched(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    old = "2026-08-01"
+    values = coach_event(
+        kind="checkin", category=None, repeat="daily", date=old,
+        start_at=f"{old}T21:00:00", end_at=f"{old}T21:15:00", calendar_uid="r1",
+    )  # fmt: skip
+    event_id = add_event(conn, values)
+    conn.commit()
+    run(conn, config, FakeCalendar([]))
+    assert status_of(conn, event_id) == "draft"
+
+
+def test_repeating_removed_event_started_before_window_keeps_remover(
+    conn: sqlite3.Connection, config: WorkloadConfig
+) -> None:
+    old = "2026-08-01"
+    values = coach_event(
+        kind="checkin", category=None, repeat="daily", date=old, status="removed",
+        removed_by="cli", start_at=f"{old}T21:00:00", end_at=f"{old}T21:15:00", calendar_uid="r1",
+    )  # fmt: skip
+    event_id = add_event(conn, values)
+    conn.commit()
+    run(conn, config, FakeCalendar([]))
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["removed_by"] == "cli"
+
+
 def test_two_repeating_checkins_present_in_calendar_stay_written(
     conn: sqlite3.Connection, config: WorkloadConfig
 ) -> None:
