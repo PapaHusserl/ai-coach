@@ -377,3 +377,41 @@ def test_find_deviations_without_norms_is_as_before() -> None:
 
 def test_no_wellbeing_with_norms_gives_no_rows() -> None:
     assert find_deviations(None, None, None, {"score": 4, "mood": 4}) == []
+
+
+# Выжившие мутанты: полный состав строк отклонений (value и limit).
+
+
+def test_wellbeing_row_has_value_and_limit() -> None:
+    assert find_deviations({"score": 2}, None, None) == [
+        {"kind": "wellbeing", "value": 2, "limit": 2}
+    ]
+
+
+def test_readiness_row_has_value_and_limit() -> None:
+    assert find_deviations(None, metrics(readiness_score=20), None) == [
+        {"kind": "readiness", "value": 20, "limit": 33}
+    ]
+
+
+def test_hrv_row_has_value_and_limit() -> None:
+    (row,) = find_deviations(None, metrics(hrv_status="LOW"), None)
+    assert row["kind"] == "hrv"
+    assert row["value"] == "LOW"
+    assert set(row["limit"]) == {"LOW", "UNBALANCED", "BELOW"}
+
+
+def test_sleep_row_has_value_in_hours_rounded_to_tenth_and_limit() -> None:
+    assert find_deviations(None, metrics(sleep_seconds=5 * HOUR), None) == [
+        {"kind": "sleep", "value": 5.0, "limit": 6}
+    ]
+    # 18901 с = 5.2503 ч: до десятых 5.3 (не 5.25, не 5.2 от деления на 3601)
+    (row,) = find_deviations(None, metrics(sleep_seconds=18901), None)
+    assert row["value"] == 5.3
+    assert isinstance(row["value"], float)
+
+
+def test_atl_over_ctl_row_has_value_and_limit() -> None:
+    assert find_deviations(None, None, {"atl": 65.7, "ctl": 50}) == [
+        {"kind": "atl_over_ctl", "value": 15.7, "limit": 15}
+    ]
