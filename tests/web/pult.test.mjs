@@ -223,6 +223,31 @@ test("hasWindow: у встречи окно есть и без editable (про�
 	assert.equal(hasWindow({ source: "meeting", editable: false }), true);
 });
 
+test("noteText: заметка пункта тренера возвращается строкой", async () => {
+	const { noteText } = await import("../../src/ai_coach/web/static/pult.js");
+	assert.equal(noteText({ source: "item", note: "uv run coach pvt" }), "uv run coach pvt");
+});
+
+test("noteText: note null — пустая строка", async () => {
+	const { noteText } = await import("../../src/ai_coach/web/static/pult.js");
+	assert.equal(noteText({ source: "item", note: null }), "");
+});
+
+test("noteText: нет ключа note — пустая строка", async () => {
+	const { noteText } = await import("../../src/ai_coach/web/static/pult.js");
+	assert.equal(noteText({ source: "item" }), "");
+});
+
+test("noteText: пустая заметка — пустая строка", async () => {
+	const { noteText } = await import("../../src/ai_coach/web/static/pult.js");
+	assert.equal(noteText({ source: "item", note: "" }), "");
+});
+
+test("noteText: у встречи заметки нет, описание — в её окне", async () => {
+	const { noteText } = await import("../../src/ai_coach/web/static/pult.js");
+	assert.equal(noteText({ source: "meeting", note: "x" }), "");
+});
+
 test("rowStatus: «Готовка» без окна — пусто", () => {
 	assert.deepEqual(rowStatus(itemRow({ kind: "meal" }), NOW, false), { text: "", tone: "" });
 });

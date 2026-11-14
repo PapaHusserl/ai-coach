@@ -176,6 +176,10 @@ def test_pult_topic_describes_state_signals_and_charts() -> None:
         assert needle in text, needle
 
 
+def test_pult_topic_says_event_note_is_shown_under_the_item() -> None:
+    assert "заметк" in topic("pult.md")
+
+
 def test_pult_topic_describes_weight_and_sync_button() -> None:
     text = topic("pult.md")
     for needle in ("вес", "обновить", "coach sync"):

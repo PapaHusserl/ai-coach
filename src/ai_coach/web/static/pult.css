@@ -378,6 +378,18 @@ nav button[aria-selected="true"] {
 	cursor: pointer;
 }
 
+/* Заметка пункта тренера под строкой: отступ как у окна, у «всего дня» - шире (колонка 70). */
+.note {
+	color: var(--muted);
+	overflow-wrap: anywhere;
+	padding: 0 8px 6px 52px;
+	white-space: pre-wrap;
+}
+
+.agi.allday .note {
+	padding-left: 78px;
+}
+
 .tm {
 	color: var(--muted);
 	font-family: var(--f-mono);

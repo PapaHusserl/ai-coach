@@ -11,6 +11,7 @@ import {
 	hasWindow,
 	itemProgress,
 	nextRow,
+	noteText,
 	openedId,
 	part,
 	rowStatus,
@@ -100,6 +101,8 @@ function rowNode(row, view, next, openId) {
 		}, open);
 	}
 	item.append(head);
+	const note = noteText(row);
+	if (note) item.append(el("div", "note", note));
 	const progress = row.current ? itemProgress(row, view.now) : null;
 	if (progress) item.append(progressNode(progress));
 	if (open && meeting) {

@@ -82,6 +82,11 @@ export function hasWindow(row) {
 	return row.source === "item" && tabsFor(row.kind, row.survey).length > 0 && (row.kind !== "meal" || row.meal != null);
 }
 
+// Заметка пункта тренера строкой; у встречи, без заметки и у пустой - "" (описание встречи - в её окне).
+export function noteText(row) {
+	return row.source === "item" && row.note ? row.note : "";
+}
+
 // Какой пункт раскрыт: choice — id, выбранный кликом; false — свёрнуто всё; null — раскрыт идущий.
 export function openedId(choice, rows) {
 	if (choice === false) return null;
