@@ -54,5 +54,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n40.md](plan-n40.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: см. `git log -1` (Н40). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: a808cf4 (Н40). Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-14-n40.md`.
