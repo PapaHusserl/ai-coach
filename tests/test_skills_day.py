@@ -186,7 +186,7 @@ def test_help_training_topic_mentions_yes_flag() -> None:
     assert "--yes" in text.split("Отменить")[1]
 
 
-def test_help_calendar_topic_mentions_cooking() -> None:
+def test_help_day_plan_topic_mentions_cooking() -> None:
     assert "готовк" in (AGENTS / "coach-help" / "day-plan.md").read_text()
 
 

@@ -329,32 +329,6 @@ updated: 2026-11-14
 Нужно: у события пульта — свой набор вопросов (опросник), а не один шаблон на тип; тренер создаёт событие
 с нужным опросником.
 
-## 101. Правило лимита для боковых файлов скилов
-status: idea
-priority: low
-updated: 2026-11-14
-
-Находка папы-кабана при плане Н39 (docs/plan-n39.md, «Побочные находки»): `recalc.md` и `recovery.md`
-сверяются с `SKILL_LIMIT` по три раза (`tests/test_skills_workload.py:57,85,91` и `:63,202,317`), остальные
-боковые файлы скилов — ни разу.
-
-## 102. architecture.md: число тем справки устарело
-status: idea
-priority: low
-updated: 2026-11-14
-
-Находка папы-кабана при плане Н39 (docs/plan-n39.md, «Побочные находки»): `docs/architecture.md:264` называет
-12 тем справки, в каталоге их 22.
-
-## 103. Имена тестов не совпадают с тем, что проверяют
-status: idea
-priority: low
-updated: 2026-11-14
-
-Находка папы-кабана при плане Н39 (docs/plan-n39.md, «Побочные находки»):
-`test_other_agent_files_within_their_limits` держит и `coach.md`;
-`test_wellbeing_topic_deviation_thresholds_match_deviations` читает `deviations.md`.
-
 ## 104. Дневная запись с настроением засчитывается как вечерний чек-ин
 status: idea
 priority: medium
@@ -396,3 +370,12 @@ updated: 2026-11-14
 Находка папы-кабана при закрытии П11 (docs/plan-p11.md, «Риски» 11, «Правки по ревью», партия 3):
 `.claude/agents/coach-agenda.md` — 8037 Б при лимите 8192 (`tests/text_limits.py:9`), запас 155 Б. Следующая
 правка текста напоминаний упрётся в лимит.
+
+## 109. Литерал длины строки в тесте справки pult
+status: idea
+priority: low
+updated: 2026-11-14
+
+Находка папы-кабана при плане Н40 (docs/plan-n40.md, «Побочные находки» 1):
+`test_pult_topic_links_pult_todo_within_limit` (`tests/test_skills_help.py:217`) держит длину строки литералом
+`338` — лимит вне `tests/text_limits.py`, чей докстринг называет файл единственным местом лимитов.

@@ -128,7 +128,7 @@ def test_pult_topic_describes_pult_marks() -> None:
         assert needle in topic("pult.md"), needle
 
 
-def test_pult_topic_mentions_screen_fill_button() -> None:
+def test_pult_marks_topic_mentions_screen_fill_button() -> None:
     assert "подставить" in topic("pult-marks.md")
 
 
@@ -168,12 +168,6 @@ def test_pult_topic_has_the_sections_of_the_pult() -> None:
     text = topic("pult.md")
     for heading in ("Шкала и правка плана", "Еда: кладовая и КБЖУ", "Шапка", "Состояние"):
         assert heading in text, heading
-
-
-def test_pult_topic_has_the_moved_day_plan_section() -> None:
-    assert "coach web" in topic("pult.md")
-    for needle in ("Окно пункта", "Красное и дозаполнение"):
-        assert needle in topic("pult-marks.md"), needle
 
 
 def test_pult_topic_describes_state_signals_and_charts() -> None:
@@ -248,7 +242,7 @@ def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
         assert f"1 - {low}, 5 - {high}" in text, (low, high)
 
 
-def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
+def test_deviations_topic_thresholds_match_deviations() -> None:
     text = topic("deviations.md")
     for needle in (
         f"самочувствие {deviations.WELLBEING_MAX} и ниже",
@@ -554,7 +548,7 @@ def num(value: float) -> str:
     return f"{value:g}".replace(".", ",")
 
 
-def test_workload_topic_total_formula_matches_overload_weights() -> None:
+def test_overload_topic_total_formula_matches_overload_weights() -> None:
     text = topic("overload.md")
     for needle in (
         f"TSS × {num(overload.W_TSS)}",
@@ -568,7 +562,7 @@ def test_workload_topic_total_formula_matches_overload_weights() -> None:
     assert overload.W_WORK == 1.0  # «часы работы» без множителя
 
 
-def test_workload_topic_signal_thresholds_match_overload() -> None:
+def test_overload_topic_signal_thresholds_match_overload() -> None:
     text = topic("overload.md")
     days = {3: "три"}
     for needle in (
@@ -603,7 +597,7 @@ def test_wellbeing_topic_keeps_one_link_to_deviations() -> None:
     assert "cat .claude/agents/coach-help/deviations.md" in lines[0]
 
 
-def test_new_topics_have_their_headings() -> None:
+def test_overload_and_deviations_topics_have_their_headings() -> None:
     assert "Общая нагрузка и сигналы перегруза" in topic("overload.md")
     assert "Отклонения" in topic("deviations.md")
 

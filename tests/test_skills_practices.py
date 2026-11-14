@@ -4,7 +4,8 @@ import json
 import re
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS
+import pytest
+from text_limits import AGENT_LIMITS, SIDE_FILE_LIMIT
 
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE = ROOT / ".claude"
@@ -16,7 +17,7 @@ def allow() -> list[str]:
     return json.loads((CLAUDE / "settings.json").read_text())["permissions"]["allow"]
 
 
-def test_other_agent_files_within_their_limits() -> None:
+def test_agent_files_within_their_limits() -> None:
     for name, limit in AGENT_LIMITS.items():
         assert len((AGENTS / name).read_bytes()) <= limit, name
 
@@ -25,13 +26,27 @@ def test_every_agent_file_has_a_limit() -> None:
     assert {p.name for p in AGENTS.glob("*.md")} <= set(AGENT_LIMITS)
 
 
-# Лимит файла проверяет один общий тест; test_skills_workload.py — до BACKLOG 101: его
-# SKILL_LIMIT стережёт боковые файлы скилов (recalc.md, recovery.md), которых общие тесты не видят.
+def agent_side_files() -> list[Path]:
+    return sorted(
+        (p for p in AGENTS.glob("*/*.md") if p.parent.name != "coach-help"),
+        key=lambda p: (p.parent.name, p.name),
+    )
+
+
+@pytest.mark.parametrize("path", agent_side_files(), ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_agent_side_file_is_within_its_limit(path: Path) -> None:
+    assert len(path.read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_agent_side_files_are_found() -> None:
+    assert len(agent_side_files()) >= 2
+
+
+# Лимит файла проверяет один общий тест.
 LIMIT_TESTS = {
     "test_skills_practices.py",
     "test_skills_text.py",
     "test_skills_help.py",
-    "test_skills_workload.py",
 }
 
 
@@ -42,12 +57,6 @@ def test_text_limits_imported_only_by_shared_limit_tests() -> None:
         if re.search(r"^\s*(from text_limits import|import text_limits)", path.read_text(), re.M)
     }
     assert importers <= LIMIT_TESTS
-
-
-def test_workload_tests_import_only_skill_limit() -> None:
-    text = (Path(__file__).parent / "test_skills_workload.py").read_text()
-    imports = re.findall(r"^from text_limits import .*$", text, re.M)
-    assert imports == ["from text_limits import SKILL_LIMIT"]
 
 
 def test_evening_skill_asks_about_habits() -> None:

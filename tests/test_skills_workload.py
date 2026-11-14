@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-from text_limits import SKILL_LIMIT
-
 from ai_coach.load import deviations
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
@@ -49,16 +47,14 @@ def test_coach_md_offers_who5() -> None:
     assert "9е" in text
 
 
-def test_recalc_mentions_who5_low_and_fits_limit() -> None:
+def test_recalc_mentions_who5_low() -> None:
     path = ROOT / "skills" / "coach-plan" / "recalc.md"
     assert "who5_low" in path.read_text()
-    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
-def test_recovery_mentions_who5_and_fits_limit() -> None:
+def test_recovery_mentions_who5() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "who5" in path.read_text()
-    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_coach_day_mentions_who5_low() -> None:
@@ -73,16 +69,14 @@ def test_coach_md_reads_illness_signals() -> None:
     assert "illness.signals" in (ROOT / "agents" / "coach.md").read_text()
 
 
-def test_recalc_handles_illness_risk_and_fits_limit() -> None:
+def test_recalc_handles_illness_risk() -> None:
     path = ROOT / "skills" / "coach-plan" / "recalc.md"
     assert "illness_risk" in path.read_text()
-    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
-def test_recalc_and_wellbeing_mention_symptoms_and_fit_limits() -> None:
+def test_recalc_and_wellbeing_mention_symptoms() -> None:
     recalc = ROOT / "skills" / "coach-plan" / "recalc.md"
     assert "symptoms" in recalc.read_text()
-    assert len(recalc.read_bytes()) <= SKILL_LIMIT
     assert "symptoms" in WELLBEING.read_text()
 
 
@@ -189,17 +183,16 @@ def test_wellbeing_below_codes_are_in_symptoms_paragraph_not_in_precursors() -> 
     assert "план не трогай" in precursors
 
 
-def test_recovery_mentions_illness_and_fits_limit() -> None:
+def test_recovery_mentions_illness() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "illness" in path.read_text()
-    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_coach_wellbeing_mentions_workload_tool() -> None:
     assert "get_workload" in WELLBEING.read_text()
 
 
-def test_coach_wellbeing_describes_all_screen_fields() -> None:
+def test_wellbeing_fields_file_describes_all_screen_fields() -> None:
     text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
     for field in (
         "screen_work_hours",
@@ -212,7 +205,7 @@ def test_coach_wellbeing_describes_all_screen_fields() -> None:
         assert field in text
 
 
-def test_coach_wellbeing_describes_claude_fields_as_observation() -> None:
+def test_wellbeing_fields_file_describes_claude_fields_as_observation() -> None:
     text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
     for field in (
         "claude_prompts",
@@ -300,10 +293,9 @@ def test_coach_summary_points_to_sleep_signals() -> None:
     assert "sleep.signals" in (ROOT / "agents" / "coach.md").read_text()
 
 
-def test_recovery_has_caution_from_and_is_short() -> None:
+def test_recovery_has_caution_from() -> None:
     path = ROOT / "skills" / "coach-morning" / "recovery.md"
     assert "caution_from" in path.read_text()
-    assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
 def test_day_plan_role_mentions_sleep_signal() -> None:

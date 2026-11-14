@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from mcp_fakes import tool_names
-from text_limits import EVENING_SKILL_LIMIT, SKILL_LIMIT
+from text_limits import EVENING_SKILL_LIMIT, SIDE_FILE_LIMIT, SKILL_LIMIT
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 SKILLS = ROOT / "skills"
@@ -28,6 +28,26 @@ def test_skill_is_within_its_limit(path: Path) -> None:
 
 def test_skills_are_found() -> None:
     assert len(skill_files()) >= 4
+
+
+def side_files() -> list[Path]:
+    return sorted(
+        (p for p in SKILLS.glob("*/*.md") if p.name != "SKILL.md"),
+        key=lambda p: (p.parent.name, p.name),
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    side_files(),
+    ids=lambda p: f"{p.parent.name}/{p.name}",
+)
+def test_skill_side_file_is_within_its_limit(path: Path) -> None:
+    assert len(path.read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_skill_side_files_are_found() -> None:
+    assert len(side_files()) >= 11
 
 
 # --- coach-morning: ядро + файлы-опции ---
