@@ -170,7 +170,27 @@ test("KINDS: порядок, подписи и слова видов", async () 
 		{ value: "focus", label: "фокус", word: "Фокус" },
 		{ value: "rest", label: "отдых", word: "Прогулка / отдых" },
 		{ value: "meal", label: "еда", word: "Перекус" },
+		{ value: "checkin", label: "чек-ин", word: "Чек-ин" },
 	]);
+});
+
+test("SURVEYS: значения опросников и подписи кнопок", async () => {
+	const { SURVEYS } = await import(MODEL);
+	assert.deepEqual(SURVEYS.map((item) => item.value), ["evening", "feel", "focus", "none"]);
+	assert.ok(SURVEYS.every((item) => typeof item.label === "string" && item.label !== ""));
+});
+
+test("createPayload: у чек-ина survey, у задачи нет", async () => {
+	const { createPayload } = await import(MODEL);
+	const body = createPayload({ kind: "checkin", survey: "feel", title: "Оценка", ...SPAN });
+	assert.deepEqual(body, { action: "create", kind: "checkin", survey: "feel", title: "Оценка", ...SPAN });
+	const task = createPayload({ kind: "task", category: "work", survey: "feel", title: "x", ...SPAN });
+	assert.equal("survey" in task, false);
+});
+
+test("createPayload: чек-ин без названия — «Чек-ин»", async () => {
+	const { createPayload } = await import(MODEL);
+	assert.equal(createPayload({ kind: "checkin", survey: "none", title: "", ...SPAN }).title, "Чек-ин");
 });
 
 test("CATEGORIES: порядок категорий задачи", async () => {

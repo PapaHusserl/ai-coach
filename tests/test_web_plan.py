@@ -196,9 +196,9 @@ def test_create_without_calendar_config_leaves_draft_with_text(
     assert row["status"] == "draft"
 
 
-@pytest.mark.parametrize("kind", ["training", "checkin", "practice"])
+@pytest.mark.parametrize("kind", ["training", "practice"])
 def test_create_kind_outside_pult_list_is_mark_error(conn: sqlite3.Connection, kind: str) -> None:
-    with pytest.raises(MarkError, match="kind: задача, фокус, отдых или еда."):
+    with pytest.raises(MarkError, match="kind: .*чек-ин"):
         apply(conn, create(kind=kind, category=None), FakeCalendarWriter())
     assert list_events(conn, "2026-01-01", "2027-12-31") == []
 
@@ -322,7 +322,37 @@ def test_resize_without_end_at_mark_error_text_is_exact(conn: sqlite3.Connection
 def test_create_bad_kind_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError) as raised:
         apply(conn, create(kind="training", category=None), FakeCalendarWriter())
-    assert str(raised.value) == "kind: задача, фокус, отдых или еда."
+    assert str(raised.value) == "kind: задача, фокус, отдых, еда или чек-ин."
+
+
+def test_create_checkin_with_survey_writes_event_with_survey(conn: sqlite3.Connection) -> None:
+    writer = FakeCalendarWriter()
+    result = apply(conn, create(kind="checkin", survey="feel", category=None), writer)
+    assert result["status"] == "written"
+    row = get_event(conn, result["id"])
+    assert row is not None
+    assert (row["kind"], row["survey"]) == ("checkin", "feel")
+    assert len(writer.written) == 1
+
+
+def test_create_checkin_without_survey_is_mark_error_and_adds_nothing(
+    conn: sqlite3.Connection,
+) -> None:
+    with pytest.raises(MarkError, match="survey"):
+        apply(conn, create(kind="checkin", category=None), FakeCalendarWriter())
+    assert list_events(conn, "2026-01-01", "2027-12-31") == []
+
+
+def test_create_checkin_with_unknown_survey_is_mark_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError, match="survey"):
+        apply(conn, create(kind="checkin", survey="мусор", category=None), FakeCalendarWriter())
+    assert list_events(conn, "2026-01-01", "2027-12-31") == []
+
+
+def test_create_task_with_survey_is_mark_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError, match="survey только у checkin"):
+        apply(conn, create(survey="feel"), FakeCalendarWriter())
+    assert list_events(conn, "2026-01-01", "2027-12-31") == []
 
 
 def test_create_bad_title_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:

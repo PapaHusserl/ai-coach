@@ -64,14 +64,23 @@ export const KINDS = [
 	{ value: "focus", label: "фокус", word: "Фокус" },
 	{ value: "rest", label: "отдых", word: "Прогулка / отдых" },
 	{ value: "meal", label: "еда", word: "Перекус" },
+	{ value: "checkin", label: "чек-ин", word: "Чек-ин" },
+];
+// Опросники чек-ина (значения — SURVEYS в agenda/service.py), подписи кнопок.
+export const SURVEYS = [
+	{ value: "evening", label: "вечер" },
+	{ value: "feel", label: "самочувствие" },
+	{ value: "focus", label: "фокус" },
+	{ value: "none", label: "напоминание" },
 ];
 export const CATEGORIES = ["work", "personal", "hobby"]; // только у задачи, по умолчанию work
 
-// Тело POST create: пустое название — слово вида; category только у задачи.
-export function createPayload({ kind, category, title, start_at, end_at }) {
+// Тело POST create: пустое название — слово вида; category только у задачи, survey только у чек-ина.
+export function createPayload({ kind, category, survey, title, start_at, end_at }) {
 	const word = KINDS.find((item) => item.value === kind).word;
 	const body = { action: "create", kind, title: title.trim() || word, start_at, end_at };
-	return kind === "task" ? { ...body, category } : body;
+	if (kind === "task") return { ...body, category };
+	return kind === "checkin" ? { ...body, survey } : body;
 }
 
 // Повтор тренера не двигается (Н23 Р5 = 1); встреча — если сервер отдал editable (Р11 = 1).

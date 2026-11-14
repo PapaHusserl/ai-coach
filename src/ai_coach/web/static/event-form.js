@@ -1,7 +1,7 @@
 // Пульт: форма нового пункта плана (шкала и перенос туду), только DOM (зовётся в браузере).
 // Чистые функции — scale-model.js.
 import { el } from "./dom.js";
-import { CATEGORIES, KINDS, createPayload } from "./scale-model.js";
+import { CATEGORIES, KINDS, SURVEYS, createPayload } from "./scale-model.js";
 
 const clock = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
@@ -42,9 +42,10 @@ export function closeEventForm(box) {
 // fixedKind — вид без выбора (ряд видов скрыт), fail(text) — показать ошибку,
 // onDone() — после «Создать» (успех) и «Отмена»; форму закрывает сама.
 export function openEventForm(box, { day, span, title = "", fixedKind = null, fail, onDone }) {
-	const choice = { kind: fixedKind ?? "task", category: "work" };
+	const choice = { kind: fixedKind ?? "task", category: "work", survey: "feel" };
 	const kinds = el("div", "chips");
 	const categories = el("div", "chips");
+	const surveys = el("div", "chips");
 	const name = el("input");
 	name.value = title;
 	// Ряд кнопок одного выбора: нажатая помечена aria-pressed.
@@ -63,10 +64,12 @@ export function openEventForm(box, { day, span, title = "", fixedKind = null, fa
 	};
 	const refresh = () => {
 		categories.hidden = choice.kind !== "task";
+		surveys.hidden = choice.kind !== "checkin";
 		name.placeholder = KINDS.find((item) => item.value === choice.kind).word;
 	};
 	choices(kinds, KINDS.map((item) => [item.value, item.label]), "kind", refresh);
 	choices(categories, CATEGORIES.map((item) => [item, item]), "category", refresh);
+	choices(surveys, SURVEYS.map((item) => [item.value, item.label]), "survey", refresh);
 	kinds.hidden = fixedKind !== null;
 	refresh();
 	const start = timeInput(span.start);
@@ -100,7 +103,7 @@ export function openEventForm(box, { day, span, title = "", fixedKind = null, fa
 	times.append("с ", start, " до ", end);
 	const actions = el("div", "frow");
 	actions.append(save, cancel);
-	box.replaceChildren(kinds, categories, name, times, actions);
+	box.replaceChildren(kinds, categories, surveys, name, times, actions);
 	box.hidden = false;
 	name.focus();
 }

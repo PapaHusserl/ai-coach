@@ -697,6 +697,12 @@ def test_pult_marks_topic_describes_surveys_of_checkin() -> None:
         assert needle in text, needle
 
 
+def test_pult_topic_describes_creating_checkin_with_survey() -> None:
+    text = topic("pult.md")
+    for needle in ("чек-ин", "опросник"):
+        assert needle in text, needle
+
+
 def test_help_index_mentions_checkin_surveys() -> None:
     assert "чек-ин и его опросники" in HELP.read_text()
 

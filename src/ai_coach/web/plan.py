@@ -19,9 +19,9 @@ from ai_coach.store.agenda import get_event
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.workload import CalendarError, WorkloadConfigError, load_config
 
-PULT_KINDS = ("task", "focus", "rest", "meal")
+PULT_KINDS = ("task", "focus", "rest", "meal", "checkin")
 MAX_ID = 2**63 - 1  # предел INTEGER sqlite
-CREATE_FIELDS = ("kind", "title", "start_at", "end_at", "category")
+CREATE_FIELDS = ("kind", "title", "start_at", "end_at", "category", "survey")
 
 
 def default_writer() -> EventWriter:
@@ -63,9 +63,11 @@ def _create(
     writer_factory: Callable[[], EventWriter],
 ) -> dict[str, Any]:
     if payload.get("kind") not in PULT_KINDS:
-        raise MarkError("kind: задача, фокус, отдых или еда.")
+        raise MarkError("kind: задача, фокус, отдых, еда или чек-ин.")
     if not isinstance(payload.get("title", ""), str):
         raise MarkError("title: нужна строка.")
+    if payload["kind"] == "checkin" and payload.get("survey") is None:
+        raise MarkError("survey: у чек-ина нужен опросник.")
     values = {k: payload.get(k) for k in CREATE_FIELDS}
     event_id = create_draft(conn, values, now.date())
     conn.commit()
