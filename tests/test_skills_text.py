@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from mcp_fakes import tool_names
-from text_limits import AGENT_LIMITS, EVENING_SKILL_LIMIT, SKILL_LIMIT
+from text_limits import EVENING_SKILL_LIMIT, SKILL_LIMIT
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 SKILLS = ROOT / "skills"
@@ -121,12 +121,10 @@ def agent_tools() -> str:
     return agent_text().split("---")[1]
 
 
-def test_coach_md_knows_slip_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach.md"
-    text = path.read_text()
+def test_coach_md_knows_slip() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
     assert "slip" in text
     assert "get_slip_log" in text.split("---", 2)[1]
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_coach_md_has_one_window_rule() -> None:
@@ -142,10 +140,8 @@ def test_coach_md_window_rule_excludes_yes_no_before_write() -> None:
     assert "«да/нет» перед записью и остальное - текстом" in text
 
 
-def test_week_agent_reads_slip_log_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach-week.md"
-    assert "get_slip_log" in path.read_text()
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-week.md"]
+def test_week_agent_reads_slip_log() -> None:
+    assert "get_slip_log" in (ROOT / "agents" / "coach-week.md").read_text()
 
 
 def test_morning_core_mentions_meds_today() -> None:

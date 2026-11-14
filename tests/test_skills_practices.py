@@ -1,6 +1,7 @@
 """Тексты и лимиты шага v2.4: размеры промптов, allow для practice/habit, подсказки агенту."""
 
 import json
+import re
 from pathlib import Path
 
 from text_limits import AGENT_LIMITS
@@ -22,6 +23,31 @@ def test_other_agent_files_within_their_limits() -> None:
 
 def test_every_agent_file_has_a_limit() -> None:
     assert {p.name for p in AGENTS.glob("*.md")} <= set(AGENT_LIMITS)
+
+
+# Лимит файла проверяет один общий тест; test_skills_workload.py — до BACKLOG 101: его
+# SKILL_LIMIT стережёт боковые файлы скилов (recalc.md, recovery.md), которых общие тесты не видят.
+LIMIT_TESTS = {
+    "test_skills_practices.py",
+    "test_skills_text.py",
+    "test_skills_help.py",
+    "test_skills_workload.py",
+}
+
+
+def test_text_limits_imported_only_by_shared_limit_tests() -> None:
+    importers = {
+        path.name
+        for path in Path(__file__).parent.glob("*.py")
+        if re.search(r"^\s*(from text_limits import|import text_limits)", path.read_text(), re.M)
+    }
+    assert importers <= LIMIT_TESTS
+
+
+def test_workload_tests_import_only_skill_limit() -> None:
+    text = (Path(__file__).parent / "test_skills_workload.py").read_text()
+    imports = re.findall(r"^from text_limits import .*$", text, re.M)
+    assert imports == ["from text_limits import SKILL_LIMIT"]
 
 
 def test_evening_skill_asks_about_habits() -> None:

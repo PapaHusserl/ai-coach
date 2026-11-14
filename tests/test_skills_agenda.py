@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS
-
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 AGENTS = ROOT / "agents"
 ALLOW = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
@@ -16,13 +14,9 @@ def coach_text() -> str:
     return (AGENTS / "coach.md").read_text()
 
 
-def test_agenda_file_exists_and_within_limit() -> None:
+def test_agenda_file_exists_and_not_empty() -> None:
     assert AGENDA.is_file()
-    assert 0 < len(AGENDA.read_bytes()) <= AGENT_LIMITS["coach-agenda.md"]
-
-
-def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
+    assert len(AGENDA.read_bytes()) > 0
 
 
 def test_coach_md_reads_agenda_file_by_cat_and_it_is_allowed() -> None:

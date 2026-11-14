@@ -4,8 +4,6 @@ import json
 import re
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS
-
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 AGENTS = ROOT / "agents"
 ALLOW = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
@@ -15,18 +13,10 @@ def coach_text() -> str:
     return (AGENTS / "coach.md").read_text()
 
 
-def test_coach_md_within_limit() -> None:
-    assert len((AGENTS / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
-
-
-def test_coach_week_exists_and_within_limit() -> None:
+def test_coach_week_is_not_empty() -> None:
     path = AGENTS / "coach-week.md"
     assert path.is_file()
-    assert 0 < len(path.read_bytes()) <= AGENT_LIMITS["coach-week.md"]
-
-
-def test_coach_week_is_not_empty() -> None:
-    assert (AGENTS / "coach-week.md").read_text().strip()
+    assert path.read_text().strip()
 
 
 def test_coach_md_points_to_all_side_files() -> None:

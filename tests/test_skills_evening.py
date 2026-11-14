@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS, EVENING_SKILL_LIMIT
-
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE = ROOT / ".claude"
 EVENING = CLAUDE / "skills" / "coach-evening" / "SKILL.md"
@@ -12,9 +10,8 @@ def allow() -> list[str]:
     return json.loads((CLAUDE / "settings.json").read_text())["permissions"]["allow"]
 
 
-def test_evening_skill_exists_and_is_short() -> None:
+def test_evening_skill_exists() -> None:
     assert EVENING.is_file()
-    assert len(EVENING.read_bytes()) <= EVENING_SKILL_LIMIT
 
 
 def test_evening_skill_has_front_matter() -> None:
@@ -86,10 +83,6 @@ def test_evening_skill_keeps_skip_when_unknown() -> None:
     assert "Не знает - пропусти" in EVENING.read_text()
 
 
-def test_coach_md_within_limit_after_evening() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
-
-
 def test_evening_skill_has_no_application_or_window_names() -> None:
     text = EVENING.read_text().lower()
     for word in ("заголовок", "window title", "obsidian"):
@@ -146,7 +139,3 @@ def test_wellbeing_file_describes_overload_reaction() -> None:
     text = (CLAUDE / "agents" / "coach-wellbeing.md").read_text()
     assert "overload" in text
     assert "overloaded" in text
-
-
-def test_coach_stays_within_limit_after_v23() -> None:
-    assert len((CLAUDE / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]

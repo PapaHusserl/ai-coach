@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS, SKILL_LIMIT
+from text_limits import SKILL_LIMIT
 
 from ai_coach.load import deviations
 
@@ -43,12 +43,10 @@ def test_coach_wellbeing_describes_who5_reaction() -> None:
         assert needle in text, needle
 
 
-def test_coach_md_offers_who5_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach.md"
-    text = path.read_text()
+def test_coach_md_offers_who5() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
     assert "who5.due" in text
     assert "9е" in text
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_recalc_mentions_who5_low_and_fits_limit() -> None:
@@ -63,16 +61,12 @@ def test_recovery_mentions_who5_and_fits_limit() -> None:
     assert len(path.read_bytes()) <= SKILL_LIMIT
 
 
-def test_coach_day_mentions_who5_low_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach-day.md"
-    assert "who5_low" in path.read_text()
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-day.md"]
+def test_coach_day_mentions_who5_low() -> None:
+    assert "who5_low" in (ROOT / "agents" / "coach-day.md").read_text()
 
 
-def test_coach_week_reads_who5_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach-week.md"
-    assert "get_who5" in path.read_text()
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-week.md"]
+def test_coach_week_reads_who5() -> None:
+    assert "get_who5" in (ROOT / "agents" / "coach-week.md").read_text()
 
 
 def test_coach_md_reads_illness_signals() -> None:
@@ -90,7 +84,6 @@ def test_recalc_and_wellbeing_mention_symptoms_and_fit_limits() -> None:
     assert "symptoms" in recalc.read_text()
     assert len(recalc.read_bytes()) <= SKILL_LIMIT
     assert "symptoms" in WELLBEING.read_text()
-    assert len(WELLBEING.read_bytes()) <= AGENT_LIMITS["coach-wellbeing.md"]
 
 
 def test_coach_wellbeing_has_precursors_paragraph_that_keeps_the_plan() -> None:
@@ -289,10 +282,6 @@ def test_coach_mentions_workload_tool_and_wellbeing_file() -> None:
     coach = (ROOT / "agents" / "coach.md").read_text()
     assert "get_workload" in coach
     assert "coach-wellbeing.md" in coach
-
-
-def test_coach_is_still_within_limit() -> None:
-    assert len((ROOT / "agents" / "coach.md").read_bytes()) <= AGENT_LIMITS["coach.md"]
 
 
 def test_wellbeing_has_sleep_rule() -> None:

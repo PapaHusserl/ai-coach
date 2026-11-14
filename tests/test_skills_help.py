@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 from mcp_fakes import tool_names
-from text_limits import AGENT_LIMITS, HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT
+from text_limits import HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT
 
 from ai_coach import pvt
 from ai_coach.cli import main
@@ -262,22 +262,25 @@ def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
         assert needle in text, needle
 
 
-def test_sleep_topic_lists_every_symptom_word() -> None:
-    text = topic("sleep.md")
+def test_deviations_topic_lists_every_symptom_word() -> None:
+    text = topic("deviations.md")
     words = set(dict(deviations.SYMPTOMS).values())
     assert len(words) == 12
     for word in words:
         assert word in text, word
 
 
-def below_line() -> str:
-    lines = [line for line in topic("sleep.md").splitlines() if "Ниже своей нормы" in line]
-    assert len(lines) == 1
-    return lines[0]
+def below_section() -> str:
+    text = topic("deviations.md")
+    heads = [m for m in re.finditer(r"^#+ .*Ниже своей нормы.*$", text, re.MULTILINE)]
+    assert len(heads) == 1
+    rest = text[heads[0].end() :]
+    nxt = re.search(r"^#", rest, re.MULTILINE)
+    return rest[: nxt.start()] if nxt else rest
 
 
-def test_sleep_topic_below_norm_constants_match_deviations() -> None:
-    line = below_line()
+def test_deviations_topic_below_norm_constants_match_deviations() -> None:
+    section = below_section()
     for needle in (
         f"на {deviations.BELOW_DROP} и больше ниже",
         f"за {deviations.BELOW_DAYS} предыдущих дней",
@@ -285,11 +288,50 @@ def test_sleep_topic_below_norm_constants_match_deviations() -> None:
         "wellbeing_below",
         "mood_below",
     ):
-        assert needle in line, needle
+        assert needle in section, needle
 
 
-def test_sleep_topic_below_norm_says_trainer_offers_to_drop_intensity() -> None:
-    assert "снять интенсивное" in below_line()
+def test_deviations_topic_below_norm_says_trainer_offers_to_drop_intensity() -> None:
+    assert "снять интенсивное" in below_section()
+
+
+def test_deviations_topic_new_section_headings_name_get_deviations() -> None:
+    text = topic("deviations.md")
+    for title in ("Симптомы в самочувствии", "Ниже своей нормы"):
+        heads = re.findall(rf"^#+ .*{title}.*$", text, re.MULTILINE)
+        assert len(heads) == 1, title
+        assert "`get_deviations`" in heads[0], title
+
+
+def test_deviations_topic_below_norm_guess_note_is_in_what_is_it_item() -> None:
+    lines = [ln for ln in below_section().splitlines() if "Порог - догадка" in ln]
+    assert len(lines) == 1
+    assert lines[0].startswith("- Что это:")
+
+
+def test_deviations_topic_thresholds_line_does_not_point_to_sleep() -> None:
+    lines = [ln for ln in topic("deviations.md").splitlines() if "Пороги" in ln]
+    assert lines
+    assert all("sleep.md" not in ln for ln in lines)
+
+
+def test_sleep_topic_keeps_one_link_to_deviations() -> None:
+    text = topic("sleep.md")
+    assert "Симптомы в самочувствии" not in text
+    assert "Ниже своей нормы" not in text
+    lines = [ln for ln in text.splitlines() if "deviations.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/deviations.md" in lines[0]
+
+
+def test_index_names_symptoms_with_deviations_not_with_sleep() -> None:
+    lines = HELP.read_text().splitlines()
+    sleep_lines = [ln for ln in lines if "`sleep.md`" in ln]
+    dev_lines = [ln for ln in lines if "deviations.md" in ln]
+    assert sleep_lines
+    assert dev_lines
+    assert all("симптомы в тексте" not in ln for ln in sleep_lines)
+    assert any("симптомы в тексте" in ln for ln in dev_lines)
 
 
 def test_pvt_topic_has_commands_and_flags() -> None:
@@ -627,15 +669,12 @@ def test_agenda_note_has_focus_title_and_poles() -> None:
     assert "Фокус 1–5?" in text
     for pole in ("рассеян", "собран", "свеж", "выжат", "легко", "через силу"):
         assert pole in text, pole
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach-agenda.md"]
 
 
 def test_wellbeing_help_describes_slip() -> None:
-    path = TOPICS / "wellbeing.md"
-    text = path.read_text()
+    text = (TOPICS / "wellbeing.md").read_text()
     for needle in ("coach slip", "coach log slip", "get_slip_log"):
         assert needle in text
-    assert len(path.read_bytes()) <= HELP_TOPIC_LIMIT
 
 
 def test_help_index_mentions_coach_slip() -> None:

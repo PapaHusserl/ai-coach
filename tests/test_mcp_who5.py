@@ -5,7 +5,6 @@ import pytest
 from fake_clock import freeze
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, rows, tool_names
-from text_limits import AGENT_LIMITS
 
 from ai_coach.store.journal import add_who5
 
@@ -104,7 +103,5 @@ def test_snapshot_who5_counts_wellbeing_day_after_midnight(
     assert (part["days_since"], part["due"]) == (0, False)
 
 
-def test_coach_md_allows_tool_and_fits_limit() -> None:
-    path = ROOT / "agents" / "coach.md"
-    assert "mcp__ai-coach__get_who5" in path.read_text()
-    assert len(path.read_bytes()) <= AGENT_LIMITS["coach.md"]
+def test_coach_md_allows_tool() -> None:
+    assert "mcp__ai-coach__get_who5" in (ROOT / "agents" / "coach.md").read_text()

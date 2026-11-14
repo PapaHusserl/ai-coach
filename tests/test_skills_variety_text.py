@@ -3,18 +3,12 @@
 import json
 from pathlib import Path
 
-from text_limits import AGENT_LIMITS, SKILL_LIMIT
-
 from ai_coach.nutrition.groups import FOOD_GROUPS
 
 CLAUDE = Path(__file__).resolve().parent.parent / ".claude"
 AGENTS = CLAUDE / "agents"
 FOOD = CLAUDE / "skills" / "coach-food"
 ALLOW = json.loads((CLAUDE / "settings.json").read_text())["permissions"]["allow"]
-
-
-def test_food_skill_within_limit() -> None:
-    assert len((FOOD / "SKILL.md").read_bytes()) <= SKILL_LIMIT
 
 
 def test_food_skill_references_groups_file() -> None:
@@ -32,10 +26,6 @@ def test_groups_file_has_no_organ_meat_key() -> None:
 
 def test_groups_file_mentions_save_tool_param() -> None:
     assert "groups" in (FOOD / "groups.md").read_text()
-
-
-def test_nutrition_within_limit() -> None:
-    assert len((AGENTS / "coach-nutrition.md").read_bytes()) <= AGENT_LIMITS["coach-nutrition.md"]
 
 
 def test_nutrition_mentions_variety_tool_and_file() -> None:
