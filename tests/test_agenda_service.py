@@ -512,13 +512,14 @@ def test_surveys_constant() -> None:
     from ai_coach.agenda.service import SURVEYS
 
     assert SURVEYS[:4] == ("evening", "feel", "focus", "none")
+    assert "who5" in SURVEYS
 
 
 def test_checkin_with_survey_keeps_it(conn: sqlite3.Connection) -> None:
     assert check(conn, kind="checkin", category=None, survey="feel")["survey"] == "feel"
 
 
-@pytest.mark.parametrize("survey", ["evening", "focus", "none"])
+@pytest.mark.parametrize("survey", ["evening", "focus", "none", "who5"])
 def test_checkin_accepts_each_survey(conn: sqlite3.Connection, survey: str) -> None:
     assert check(conn, kind="checkin", category=None, survey=survey)["survey"] == survey
 

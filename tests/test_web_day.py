@@ -10,7 +10,7 @@ from workload_fakes import coach_event
 
 from ai_coach.profile.service import set_value
 from ai_coach.store.agenda import add_event
-from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing
+from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing, add_who5
 from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError
@@ -220,6 +220,52 @@ def test_future_checkin_of_any_survey_is_not_due(conn: sqlite3.Connection) -> No
     ]
     result = view(conn, "17:00")
     assert [by_id(result, i)["due"] for i in ids] == [False] * 4
+
+
+WHO5_ANSWERS = {"q1": 5, "q2": 4, "q3": 3, "q4": 4, "q5": 5}
+
+
+def test_past_who5_checkin_is_due_until_measure_of_the_day(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="who5")
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
+    save_mark(conn, mark(checkin, "who5", **WHO5_ANSWERS), at("15:10"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is False
+
+
+def test_who5_measure_from_coach_clears_due_and_is_shown(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="who5")
+    add_who5(
+        conn,
+        {**WHO5_ANSWERS, "score": 84, "date": D, "logged_at": f"{D} 09:00:00", "text": None},
+    )
+    conn.commit()
+    row = by_id(view(conn, "16:00"), checkin)
+    assert row["due"] is False
+    assert (row["who5"]["score"], row["who5"]["logged_at"]) == (84, f"{D} 09:00:00")
+
+
+def test_who5_key_shows_pult_measure(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="who5")
+    save_mark(conn, mark(checkin, "who5", **WHO5_ANSWERS), at("15:10"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["who5"]["score"] == 84
+
+
+def test_future_who5_checkin_is_not_due(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "18:00", "18:15", kind="checkin", category=None, survey="who5")
+    assert by_id(view(conn, "17:00"), checkin)["due"] is False
+
+
+def test_who5_measure_of_other_day_does_not_clear_due(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="who5")
+    add_who5(
+        conn,
+        {**WHO5_ANSWERS, "score": 84, "date": "2026-11-06", "logged_at": "2026-11-06 09:00:00",
+         "text": None},
+    )  # fmt: skip
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
 
 
 def test_none_checkin_mark_of_other_day_does_not_clear_due(conn: sqlite3.Connection) -> None:

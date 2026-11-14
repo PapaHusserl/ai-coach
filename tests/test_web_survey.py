@@ -27,6 +27,7 @@ def test_survey_marks_table() -> None:
         "feel": ("feel",),
         "focus": ("rating",),
         "none": ("done",),
+        "who5": ("who5",),
     }
 
 
@@ -37,6 +38,7 @@ def test_survey_marks_table() -> None:
         ("feel", ("feel",)),
         ("focus", ("rating",)),
         ("none", ("done",)),
+        ("who5", ("who5",)),
         (None, ("checkin",)),
         ("мусор", ()),
     ],

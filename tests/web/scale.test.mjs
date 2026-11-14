@@ -176,7 +176,7 @@ test("KINDS: порядок, подписи и слова видов", async () 
 
 test("SURVEYS: значения опросников и подписи кнопок", async () => {
 	const { SURVEYS } = await import(MODEL);
-	assert.deepEqual(SURVEYS.map((item) => item.value), ["evening", "feel", "focus", "none"]);
+	assert.deepEqual(SURVEYS.map((item) => item.value), ["evening", "feel", "focus", "none", "who5"]);
 	assert.ok(SURVEYS.every((item) => typeof item.label === "string" && item.label !== ""));
 });
 
@@ -186,6 +186,11 @@ test("createPayload: у чек-ина survey, у задачи нет", async () 
 	assert.deepEqual(body, { action: "create", kind: "checkin", survey: "feel", title: "Оценка", ...SPAN });
 	const task = createPayload({ kind: "task", category: "work", survey: "feel", title: "x", ...SPAN });
 	assert.equal("survey" in task, false);
+});
+
+test("SURVEYS: кнопка WHO-5 подписана «WHO-5»", async () => {
+	const { SURVEYS } = await import(MODEL);
+	assert.equal(SURVEYS.find((item) => item.value === "who5").label, "WHO-5");
 });
 
 test("createPayload: чек-ин без названия — «Чек-ин»", async () => {

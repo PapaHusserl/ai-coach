@@ -102,6 +102,21 @@ def test_checkin_with_survey_is_stored(conn: sqlite3.Connection) -> None:
     assert row["survey"] == "feel"
 
 
+def test_biweekly_who5_checkin_draft(conn: sqlite3.Connection) -> None:
+    result = create(
+        conn, kind="checkin", title="WHO-5", category=None, repeat="biweekly", survey="who5",
+        start_at=f"{TOMORROW}T09:00:00", end_at=f"{TOMORROW}T09:15:00",
+    )  # fmt: skip
+    row = get_event(conn, result["draft_id"])
+    assert row is not None
+    assert (row["survey"], row["repeat"], row["status"]) == ("who5", "biweekly", "draft")
+
+
+def test_refusal_without_survey_names_who5(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError, match="who5"):
+        create(conn, kind="checkin", category=None)
+
+
 def test_checkin_without_survey_is_rejected_with_list(conn: sqlite3.Connection) -> None:
     with pytest.raises(ToolError, match="feel"):
         create(conn, kind="checkin", category=None)

@@ -19,6 +19,7 @@ from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.food import save_food
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.survey import checkin_due, marks_of
+from ai_coach.web.who5 import save_who5
 
 ALLOWED = {
     "task": ("rating", "feel", "slip"),
@@ -150,6 +151,8 @@ def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) 
         return None
     if mark == "checkin":
         return _checkin(conn, payload, base)
+    if mark == "who5":
+        return save_who5(conn, payload, base)
     return _entry(conn, mark, payload, base)
 
 
@@ -193,6 +196,7 @@ def due(
     title: str = "",
     fact: dict[str, Any] | None = None,
     survey: str | None = None,
+    who5: bool = False,
 ) -> bool:
     """Прошедший заполняемый пункт без отметки (красный): task/focus - нет оценки, practice/rest -
     нет «сделал/пропустил», training - то же и нет факта Garmin done/different (Р3), meal - нет
@@ -206,6 +210,6 @@ def due(
         "rest": no_done,
         "training": no_done and (fact is None or fact["kind"] == "skipped"),
         "meal": title != COOKING and not marks["food"],
-        "checkin": checkin_due(survey, marks, evening),
+        "checkin": checkin_due(survey, marks, evening, who5),
     }
     return past and missing.get(kind, False)

@@ -769,6 +769,21 @@ nav button[aria-selected="true"] {
 	padding: 3px 0;
 }
 
+.w5 {
+	display: grid;
+	gap: 8px;
+}
+
+.w5row {
+	display: grid;
+	font-size: 12px;
+	gap: 4px;
+}
+
+.w5row > span {
+	overflow-wrap: anywhere;
+}
+
 .yn button {
 	border-radius: 5px;
 	color: var(--muted);
@@ -938,6 +953,10 @@ nav button[aria-selected="true"] {
 
 	.qs {
 		grid-column: 1 / -1;
+	}
+
+	.w5row {
+		font-size: 15px;
 	}
 
 	.qs button {

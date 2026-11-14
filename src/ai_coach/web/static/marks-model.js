@@ -18,7 +18,26 @@ const SURVEY_TABS = {
 	feel: ["feel"],
 	focus: ["rating"],
 	none: ["done"],
+	who5: ["who5"],
 };
+// Пять утверждений WHO-5 и подписи ответов 0–5 по порядку — дословно из coach-help/who5.md (сверяет тест).
+// Тексты — © ВОЗ, CC BY-NC-SA 3.0 IGO (WHO-UCN-MSD-MHE-2024.01); перевод ВОЗ, вариант 1999 г.
+export const WHO5_ITEMS = [
+	"Я чувствую себя бодрой(-ым) и в хорошем настроении.",
+	"Я чувствую себя спокойной(-ым) и раскованной(-ым).",
+	"Я чувствую себя активной(-ым) и энергичной(-ым).",
+	"Я просыпаюсь и чувствую себя свежей(-им) и отдохнувшей(-им).",
+	"Каждый день со мной происходят вещи, представляющие для меня интерес.",
+];
+export const WHO5_LABELS = [
+	"никогда",
+	"некоторое время",
+	"менее половины времени",
+	"более половины времени",
+	"большую часть времени",
+	"всё время",
+];
+export const WHO5_NAMES = ["q1", "q2", "q3", "q4", "q5"];
 export const TAB_LABELS = {
 	food: "Что съел",
 	rating: "Оценка",
@@ -26,6 +45,7 @@ export const TAB_LABELS = {
 	slip: "Срыв",
 	done: "Сделал",
 	checkin: "Чек-ин",
+	who5: "WHO-5",
 };
 export const FIELDS = {
 	focus: { label: "Фокус", low: "рассеян", high: "полностью собран" },
@@ -66,6 +86,7 @@ const ITEM_ERRORS = [
 	"У этого пункта пока нет окна",
 	"Текст не может быть пустым",
 	"Часы (",
+	"WHO-5 за день уже",
 ];
 
 // Вкладки окна пункта по его типу (у чек-ина — по опроснику, нет — вечерний); пусто — окна нет.
@@ -179,6 +200,7 @@ export function historyRows(marks) {
 // Можно ли сохранять вкладку: у шкал выбраны все значения, у еды — непустой текст.
 export function canSave(tab, form) {
 	if (tab === "food") return (form.text ?? "").trim() !== "";
+	if (tab === "who5") return WHO5_NAMES.every((name) => Number.isInteger(form[name]));
 	return (REQUIRED[tab] ?? []).every((name) => Number.isInteger(form[name]));
 }
 
@@ -227,6 +249,9 @@ function checkinFields(form) {
 export function buildPayload(tab, form) {
 	const payload = { event_id: form.event_id, date: form.date, mark: tab };
 	if (tab === "food" && Number.isInteger(form.offer_id)) return { ...payload, offer_id: form.offer_id };
+	if (tab === "who5") {
+		for (const name of WHO5_NAMES) payload[name] = Number(form[name]);
+	}
 	for (const name of TAB_FIELDS[tab] ?? []) {
 		if (REQUIRED[tab].includes(name) || Number.isInteger(form[name])) payload[name] = Number(form[name]);
 	}
@@ -235,6 +260,16 @@ export function buildPayload(tab, form) {
 	const text = (form.text ?? "").trim();
 	if (text) payload.text = text;
 	return payload;
+}
+
+// Строка замера WHO-5 дня: «WHO-5: 72».
+export function who5Line(view) {
+	return `WHO-5: ${view.score}`;
+}
+
+// Строка вкладки WHO-5, когда замер дня уже есть: «WHO-5 за день: 72».
+export function who5DayLine(view) {
+	return `WHO-5 за день: ${view.score}`;
 }
 
 // Что показать при ошибке: про пункт — текст сервера, остальное — «ошибка пульта (код N)».

@@ -39,7 +39,8 @@ def create_draft_event(
     остальных не задаётся. alarm_min - за сколько минут напомнить. repeat=daily / weekly /
     biweekly - только у checkin, не два на одно время суток с пересечением по дням. survey -
     опросник чек-ина, у checkin обязателен: evening (анкета вечера) / feel (самочувствие) /
-    focus (оценка фокуса) / none (без анкеты: Сделал / Пропустил); у остальных не задаётся."""
+    focus (оценка фокуса) / none (без анкеты: Сделал / Пропустил) / who5 (опросник WHO-5);
+    у остальных не задаётся."""
     if kind == "checkin" and survey is None:
         raise ToolError(f"У чек-ина нужен survey: {list(SURVEYS)}.")
     values = {

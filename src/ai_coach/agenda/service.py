@@ -25,7 +25,7 @@ from ai_coach.workload.config import CATEGORIES
 
 KINDS = ("training", "practice", "rest", "sleep", "checkin", "task", "focus", "meal")
 REST_KINDS = ("rest", "sleep")
-SURVEYS = ("evening", "feel", "focus", "none")
+SURVEYS = ("evening", "feel", "focus", "none", "who5")
 REPEATS = ("daily", "weekly", "biweekly")
 PAST_DAYS = 30
 AHEAD_DAYS = 14

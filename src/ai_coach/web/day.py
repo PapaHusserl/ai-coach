@@ -17,6 +17,7 @@ from ai_coach.web.header import header_view
 from ai_coach.web.marks import COOKING, due, empty_marks, marks_for_day
 from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.training import fact, plan_view
+from ai_coach.web.who5 import who5_view
 from ai_coach.workload.service import (
     _clip,  # pyright: ignore[reportPrivateUsage]
     _counted,  # pyright: ignore[reportPrivateUsage]
@@ -51,6 +52,7 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
     rows = sorted((moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
     marks = marks_for_day(conn, day.isoformat())
     evening = evening_done(conn, day.isoformat())
+    who5 = who5_view(conn, day.isoformat())
     meal = None
     items: list[dict[str, Any]] = []
     for r in rows:
@@ -59,8 +61,10 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
         item = {k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]}
         training = _training(conn, r, day)
         garmin = training["fact"] if training else None
-        flag = due(r["kind"], mine, evening, past, r["title"], garmin, r["survey"])
+        flag = due(r["kind"], mine, evening, past, r["title"], garmin, r["survey"], bool(who5))
         item |= {"marks": mine, "due": flag}
+        if r["kind"] == "checkin" and r["survey"] == "who5":
+            item["who5"] = who5
         if training:
             item["training"] = training
         if r["kind"] == "meal" and r["title"] != COOKING:

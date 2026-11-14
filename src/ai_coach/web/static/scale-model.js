@@ -72,6 +72,7 @@ export const SURVEYS = [
 	{ value: "feel", label: "самочувствие" },
 	{ value: "focus", label: "фокус" },
 	{ value: "none", label: "напоминание" },
+	{ value: "who5", label: "WHO-5" },
 ];
 export const CATEGORIES = ["work", "personal", "hobby"]; // только у задачи, по умолчанию work
 

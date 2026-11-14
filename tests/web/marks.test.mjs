@@ -13,6 +13,8 @@ import {
 	markSummary,
 	remainingText,
 	tabsFor,
+	who5DayLine,
+	who5Line,
 } from "../../src/ai_coach/web/static/marks.js";
 
 const empty = { ratings: [], feel: [], slips: [], done: null, food: [] };
@@ -70,6 +72,39 @@ test("tabsFor: чек-ин с опросником — одна вкладка �
 	assert.deepEqual(tabsFor("checkin", "feel"), ["feel"]);
 	assert.deepEqual(tabsFor("checkin", "focus"), ["rating"]);
 	assert.deepEqual(tabsFor("checkin", "none"), ["done"]);
+});
+
+test("tabsFor: чек-ин WHO-5 — одна вкладка who5, у задачи опросник не действует", () => {
+	assert.deepEqual(tabsFor("checkin", "who5"), ["who5"]);
+	assert.deepEqual(tabsFor("task", "who5"), ["rating", "feel", "slip"]);
+});
+
+test("TAB_LABELS: вкладка who5 — «WHO-5»", () => {
+	assert.equal(TAB_LABELS.who5, "WHO-5");
+});
+
+const who5Form = { q1: 5, q2: 4, q3: 3, q4: 4, q5: 5 };
+
+test("canSave who5: ложно, пока выбраны не все пять; ответ 0 считается выбранным", () => {
+	assert.equal(canSave("who5", {}), false);
+	assert.equal(canSave("who5", { q1: 5, q2: 4, q3: 3, q4: 4 }), false);
+	assert.equal(canSave("who5", who5Form), true);
+	assert.equal(canSave("who5", { q1: 0, q2: 0, q3: 0, q4: 0, q5: 0 }), true);
+});
+
+test("buildPayload who5: q1–q5 числами, пустой текст не уходит", () => {
+	const base = { event_id: 7, date: "2026-11-08" };
+	const body = buildPayload("who5", { ...base, q1: "5", q2: 4, q3: 0, q4: 4, q5: 5, text: " " });
+	assert.deepEqual(body, { ...base, mark: "who5", q1: 5, q2: 4, q3: 0, q4: 4, q5: 5 });
+});
+
+test("who5Line: «WHO-5: 84»", () => {
+	assert.equal(who5Line({ score: 84, logged_at: "2026-11-08 20:05:00" }), "WHO-5: 84");
+	assert.equal(who5Line({ score: 0, logged_at: "2026-11-08 20:05:00" }), "WHO-5: 0");
+});
+
+test("who5DayLine: «WHO-5 за день: 84»", () => {
+	assert.equal(who5DayLine({ score: 84, logged_at: "2026-11-08 20:05:00" }), "WHO-5 за день: 84");
 });
 
 test("tabsFor: чек-ин без опросника (null) — вечерний", () => {

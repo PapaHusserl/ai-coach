@@ -424,7 +424,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "checkin, не два на одно время суток с пересечением по дням; "
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
         "all_day - на весь день; survey - опросник чек-ина, у checkin обязателен: evening / "
-        "feel / focus / none, у остальных не задаётся. Ответ: draft_id. В календарь кладёт "
+        "feel / focus / none / who5, у остальных не задаётся. Ответ: draft_id. В календарь кладёт "
         "пользователь командой coach event write.",
     ),
     "create_day_plan": (

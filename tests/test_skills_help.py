@@ -703,6 +703,27 @@ def test_pult_topic_describes_creating_checkin_with_survey() -> None:
         assert needle in text, needle
 
 
+def test_agenda_note_maps_who5_reminder_to_who5_survey() -> None:
+    text = (AGENTS / "coach-agenda.md").read_text()
+    assert "survey=who5" in text
+    assert "`who5`" in text
+
+
+def test_pult_marks_topic_names_who5_survey() -> None:
+    assert "WHO-5" in topic("pult-marks.md")
+
+
+def test_calendar_topic_names_who5_reminder_in_pult() -> None:
+    text = topic("calendar.md")
+    assert "WHO-5" in text[text.index("есть опросник") :]
+
+
+def test_who5_topic_describes_pult_survey_and_skips_repeat_when_measured() -> None:
+    text = topic("who5.md")
+    assert "в пульте" in text
+    assert "из пульта" in text
+
+
 def test_help_index_mentions_checkin_surveys() -> None:
     assert "чек-ин и его опросники" in HELP.read_text()
 

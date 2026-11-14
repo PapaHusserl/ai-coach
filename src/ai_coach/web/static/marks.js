@@ -14,16 +14,19 @@ import {
 	remainingText,
 	tabLabel,
 	tabsFor,
+	who5DayLine,
+	who5Line,
 } from "./marks-model.js";
 import { el } from "./dom.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
 import { offersBlock } from "./offers-pane.js";
 import { toast } from "./toast.js";
 import { fillTraining } from "./training-pane.js";
+import { who5Fields } from "./who5-fields.js";
 
 export * from "./marks-model.js";
 
-const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, who5: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -180,6 +183,10 @@ function buildForm() {
 		box.append(errorLine, doneChoices());
 		return;
 	}
+	if (tab === "who5" && state.who5) {
+		box.append(el("p", "saved", who5DayLine(state.who5))); // замер за день один (Р11)
+		return;
+	}
 	const food = tab === "food";
 	const save = el("button", "save", saveLabel(food, []));
 	save.type = "button";
@@ -196,6 +203,7 @@ function buildForm() {
 		mealHead(box);
 	}
 	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, state.forms[tab], name, save));
+	if (tab === "who5") box.append(who5Fields(state.forms[tab], save));
 	if (tab === "checkin") {
 		box.append(hoursFields(state.forms[tab], state.day), flowField(state.forms[tab]));
 	}
@@ -223,10 +231,12 @@ function buildTabs(kind, survey) {
 }
 
 function buildHistory(row) {
-	ui.sub.textContent = row.due ? "не отмечено" : markSummary(row.marks, row.training?.fact);
+	const summary = [markSummary(row.marks, row.training?.fact), row.who5 ? who5Line(row.who5) : ""];
+	ui.sub.textContent = row.due ? "не отмечено" : summary.filter(Boolean).join(" · ");
 	ui.sub.classList.toggle("bad", Boolean(row.due));
 	ui.history.replaceChildren();
 	for (const entry of historyRows(row.marks)) ui.history.append(el("li", "", `${entry.time} · ${entry.text}`));
+	if (row.who5) ui.history.append(el("li", "", `${row.who5.logged_at.slice(11, 16)} · ${who5Line(row.who5)}`));
 }
 
 function startPane(row, view) {
@@ -247,6 +257,7 @@ export function mountMarks(item, row, view) {
 	const pane = paneNode();
 	state.meal = row.meal ?? null;
 	state.training = row.training ?? null;
+	state.who5 = row.who5 ?? null;
 	state.past = isPast(row, view.now);
 	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);
