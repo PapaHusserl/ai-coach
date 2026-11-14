@@ -290,7 +290,7 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - `workload/claude.py`: `scan_claude` / `read_claude` читают основные файлы `~/.claude/projects/<каталог>/*.jsonl` (без `subagents/`, сессии `coach` пропускаются целиком) и за день 04:00–04:00 считают `claude_prompts`, `claude_prompts_evening` (с 19:00), `claude_decisions` (вопросы `AskUserQuestion`), `claude_repos`, `claude_switches`; kind `CLAUDE_COUNTERS` в `day_counters`, `source='claude'`, без миграции. У `claude_repos` в `raw_json` — `{"repos": [{repo, prompts}]}` (короткие имена папок проектов). Коммиты и время не считаются; в `total`, сигналы, обзор и план дня не входит (наблюдение).
 - Источники: `coach sync` (`claude_counters`, замечания «каталог не найден» / «записей не распознано») и `coach claude [--days N]` (имена не печатает); путь — `[paths] claude_projects`, по умолчанию `~/.claude/projects`.
 - MCP: `get_workload` отдаёт `claude_*` целыми (None — не считалось), при `events=true` на один день — ещё `claude_repos_names` (`workload_day`). Сводка: ключ `claude` (7 дней, `prompts/evening/decisions/repos/switches`, без имён), `workload` и `workload_ahead` без `claude_*`; `workload` — свой лимит `WORKLOAD_CHARS` 5 000 (7 дней вместо 6 при `SNAPSHOT_CHARS` 4 000).
-- Справка — `coach-help/claude.md`; отчёт разведки — `docs/research-claude.md`.
+- Справка — `coach-help/claude-code.md`; отчёт разведки — `docs/research-claude.md`.
 
 ## Н19: срыв в момент (партия 1)
 - Миграция 0027: `slip_log(id, date, logged_at, text NOT NULL CHECK (length(trim(text)) > 0))`, индекс по `date`; отдельная таблица, как `focus_log`. Текст — свободные эмоции как есть, без силы и списка поводов.

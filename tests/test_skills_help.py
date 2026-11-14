@@ -121,13 +121,36 @@ def test_wellbeing_topic_has_scale_poles() -> None:
 
 
 def test_pult_topic_describes_pult_marks() -> None:
-    text = topic("pult.md")
-    for needle in ("окно", "сделал", "дозаполн", "истори", "coach web", "чек-ин", "в сети"):
+    text = topic("pult-marks.md")
+    for needle in ("окно", "сделал", "дозаполн", "истори", "чек-ин"):
         assert needle in text, needle
+    for needle in ("coach web", "в сети"):
+        assert needle in topic("pult.md"), needle
 
 
 def test_pult_topic_mentions_screen_fill_button() -> None:
-    assert "подставить" in topic("pult.md")
+    assert "подставить" in topic("pult-marks.md")
+
+
+def test_pult_marks_topic_has_the_moved_sections() -> None:
+    text = topic("pult-marks.md")
+    for needle in ("Окно пункта", "Куда пишется", "Красное и дозаполнение"):
+        assert needle in text, needle
+
+
+def test_pult_topic_has_no_moved_sections_and_one_link_to_marks() -> None:
+    text = topic("pult.md")
+    for needle in ("Окно пункта:", "Куда пишется:", "Красное и дозаполнение:"):
+        assert needle not in text, needle
+    lines = [ln for ln in text.splitlines() if "pult-marks.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/pult-marks.md" in lines[0]
+
+
+def test_help_index_mentions_pult_marks_overload_deviations() -> None:
+    text = HELP.read_text(encoding="utf-8")
+    for name in ("pult-marks.md", "overload.md", "deviations.md"):
+        assert f"coach-help/{name}" in text or f"`{name}`" in text, name
 
 
 def test_pult_topic_points_pult_windows_to_food_and_training() -> None:
@@ -148,9 +171,9 @@ def test_pult_topic_has_the_sections_of_the_pult() -> None:
 
 
 def test_pult_topic_has_the_moved_day_plan_section() -> None:
-    text = topic("pult.md")
-    for needle in ("coach web", "Окно пункта", "Красное и дозаполнение"):
-        assert needle in text, needle
+    assert "coach web" in topic("pult.md")
+    for needle in ("Окно пункта", "Красное и дозаполнение"):
+        assert needle in topic("pult-marks.md"), needle
 
 
 def test_pult_topic_describes_state_signals_and_charts() -> None:
@@ -226,7 +249,7 @@ def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
 
 
 def test_wellbeing_topic_deviation_thresholds_match_deviations() -> None:
-    text = topic("wellbeing.md")
+    text = topic("deviations.md")
     for needle in (
         f"самочувствие {deviations.WELLBEING_MAX} и ниже",
         f"настроение {deviations.MOOD_MAX} и ниже",
@@ -379,27 +402,34 @@ def test_help_index_lists_who5() -> None:
         assert needle in text, needle
 
 
+def test_claude_topic_is_renamed_to_claude_code() -> None:
+    assert not any(p.name.lower() == "claude.md" for p in topic_files())
+    assert (TOPICS / "claude-code.md").is_file()
+    assert "claude-code.md" in HELP.read_text()
+    assert "Bash(cat .claude/agents/coach-help/claude-code.md)" in allow()
+
+
 def test_claude_topic_has_commands_and_fields() -> None:
-    text = topic("claude.md")
+    text = topic("claude-code.md")
     needles = ("coach sync", "uv run coach claude", "--days", "04:00", "30 дней")
     for needle in (*needles, *CLAUDE_COUNTERS):
         assert needle in text, needle
 
 
 def test_claude_topic_describes_mcp_access() -> None:
-    text = topic("claude.md")
+    text = topic("claude-code.md")
     for needle in ("get_workload", "events=true", "claude_repos_names", "`claude`"):
         assert needle in text, needle
 
 
 def test_claude_topic_says_what_is_not_counted() -> None:
-    text = topic("claude.md")
+    text = topic("claude-code.md")
     for needle in ("субагент", "коммит", "не попадают"):
         assert needle in text, needle
 
 
 def test_help_index_lists_claude() -> None:
-    assert "claude.md" in HELP.read_text()
+    assert "claude-code.md" in HELP.read_text()
 
 
 def test_pvt_topic_has_metric_poles() -> None:
@@ -443,11 +473,6 @@ def test_workload_topic() -> None:
         "coach screen",
         "coach review done",
         "workload.toml",
-        "total_streak",
-        "evening_streak",
-        "weekend_work",
-        "recovery_drop",
-        "todo_growth",
         "challenge",
         "hindrance",
         "screen_challenge_hours",
@@ -455,6 +480,13 @@ def test_workload_topic() -> None:
         "coach screen --days",
         "предложи разметку",
     ):
+        assert needle in text, needle
+
+
+def test_overload_topic_names_every_signal() -> None:
+    text = topic("overload.md")
+    signals = ("total_streak", "evening_streak", "weekend_work", "recovery_drop", "todo_growth")
+    for needle in signals:
         assert needle in text, needle
 
 
@@ -481,7 +513,7 @@ def num(value: float) -> str:
 
 
 def test_workload_topic_total_formula_matches_overload_weights() -> None:
-    text = topic("workload.md")
+    text = topic("overload.md")
     for needle in (
         f"TSS × {num(overload.W_TSS)}",
         f"часы хобби × {num(overload.W_HOBBY)}",
@@ -495,7 +527,7 @@ def test_workload_topic_total_formula_matches_overload_weights() -> None:
 
 
 def test_workload_topic_signal_thresholds_match_overload() -> None:
-    text = topic("workload.md")
+    text = topic("overload.md")
     days = {3: "три"}
     for needle in (
         f"не меньше {num(overload.TOTAL_HIGH)} {days[overload.TOTAL_STREAK_DAYS]} дня подряд",
@@ -511,6 +543,27 @@ def test_workload_topic_signal_thresholds_match_overload() -> None:
     ):
         assert needle in text, needle
     assert overload.WEEKEND_WORK_MIN == 1.0  # «не меньше часа»
+
+
+def test_workload_topic_keeps_one_link_to_overload() -> None:
+    text = topic("workload.md")
+    assert "## Общая нагрузка и сигналы перегруза" not in text
+    lines = [ln for ln in text.splitlines() if "overload.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/overload.md" in lines[0]
+
+
+def test_wellbeing_topic_keeps_one_link_to_deviations() -> None:
+    text = topic("wellbeing.md")
+    assert "## Отклонения" not in text
+    lines = [ln for ln in text.splitlines() if "deviations.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/deviations.md" in lines[0]
+
+
+def test_new_topics_have_their_headings() -> None:
+    assert "Общая нагрузка и сигналы перегруза" in topic("overload.md")
+    assert "Отклонения" in topic("deviations.md")
 
 
 def cli_commands(app: typer.Typer, prefix: str = "") -> set[str]:
