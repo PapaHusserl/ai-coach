@@ -137,7 +137,36 @@ def test_coach_md_keeps_yes_before_editing_or_deleting_food_entries() -> None:
     text = (ROOT / "agents" / "coach.md").read_text()
     step = next(line for line in text.splitlines() if line.startswith("3. Спроси"))
     assert "только после «да»" in step
-    assert "coach-help/food.md" in step
+    assert "cat .claude/agents/coach/records.md" in step
+
+
+def test_coach_records_file_exists_and_is_not_empty() -> None:
+    assert (ROOT / "agents" / "coach" / "records.md").read_text().strip()
+
+
+def test_coach_records_file_holds_edit_and_delete_commands() -> None:
+    text = (ROOT / "agents" / "coach" / "records.md").read_text()
+    assert "uv run coach log" in text
+    assert "uv run coach edit|delete food|weight <id>" in text
+
+
+def test_coach_records_file_points_to_food_help_and_kbzhu_reset() -> None:
+    text = (ROOT / "agents" / "coach" / "records.md").read_text()
+    assert "coach-help/food.md" in text
+    assert "сбрасывает КБЖУ" in text
+
+
+def test_coach_md_keeps_edit_delete_commands_only_in_records_file() -> None:
+    lines = (ROOT / "agents" / "coach.md").read_text().splitlines()
+    rest = [line for line in lines if not line.startswith("Что можно")]
+    for line in rest:
+        assert "uv run coach edit|delete" not in line
+        assert "coach log food|weight" not in line
+
+
+def test_allow_can_read_coach_records_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach/records.md)" in allow
 
 
 def test_get_deviations_description_names_mood_and_stress() -> None:
