@@ -365,3 +365,19 @@ Claude Code».
    текст `overload.md:7` дословный). Правит доеба: вернуть `TSS × `.
 4. `tests/test_skills_help.py:476–480` — пять имён сигналов ищутся в `workload.md`, а раздел уехал в `overload.md`:
    правит доеба — иглы на `overload.md` («Тесты», первый пункт: те же иглы в новой теме).
+
+Партия 2, круг 1 (мама, свекровь, 2026-11-14):
+
+1. `coach.md` шаг 3 — команды из `coach-help/food.md` без `uv run`, allow — на `uv run coach …` (мама): кабан
+   добавил образец `uv run coach edit|delete food|weight <id>`; `coach.md` 16294 Б.
+2. Счёт красной проверки (мама): новых тестов 11, красных на HEAD 10, плюс переименование
+   `test_skill_is_within_its_limit` (доеба).
+3. Тесты на значения лимитов `test_raised_limits_match_the_plan`, `test_unchanged_agent_limits_stay` — вне плана
+   (свекровь): решение папы — удалить; `tests/text_limits.py` — единственное место лимитов (:13), подъём
+   держит сверка диффа с «Правилом». Удаляет доеба.
+4. Строка allow `Bash(cat .claude/agents/coach-wellbeing/fields.md)` (свекровь: кто вписал) — добавил Влад,
+   2026-11-14 10:21, по пункту «Вне репо».
+
+Партия 2, круг 2: свекровь — чисто; мама — код можно мержить, ⚠️ счёт «10 `+def test_` vs 9 из 9»: десятая
+строка — переименование `test_skill_is_at_most_3072_bytes` → `test_skill_is_within_its_limit`
+(`tests/test_skills_text.py`), новых тестов 9, все красные на HEAD (сверено `git diff 53e670b -- tests`).

@@ -21,7 +21,7 @@ def extra_files(skill: str) -> list[Path]:
 
 
 @pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
-def test_skill_is_at_most_3072_bytes(path: Path) -> None:
+def test_skill_is_within_its_limit(path: Path) -> None:
     limit = EVENING_SKILL_LIMIT if path.parent.name == "coach-evening" else SKILL_LIMIT
     assert len(path.read_bytes()) <= limit
 

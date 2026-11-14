@@ -8,10 +8,10 @@ AGENT_LIMITS = {
     "coach-week.md": 6144,
     "coach-agenda.md": 8192,
     "coach-day.md": 6144,
-    "coach-decisions.md": 4096,
+    "coach-decisions.md": 6144,
     "coach-help.md": 6144,
 }
-SKILL_LIMIT = 3072
-EVENING_SKILL_LIMIT = 4096
+SKILL_LIMIT = 4096
+EVENING_SKILL_LIMIT = 5120
 HELP_INDEX_LIMIT = 6144
 HELP_TOPIC_LIMIT = 8192

@@ -3,6 +3,8 @@ from pathlib import Path
 
 from text_limits import AGENT_LIMITS, SKILL_LIMIT
 
+from ai_coach.load import deviations
+
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
 
@@ -111,6 +113,79 @@ def test_recalc_lists_below_norm_codes_in_the_deviations_sentence() -> None:
     assert "не пересчёт" not in text
 
 
+def test_recalc_lists_every_deviation_code_once_in_full() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    for needle in (
+        "BELOW",
+        "LOW",
+        "UNBALANCED",
+        "symptoms",
+        "wellbeing_below",
+        "mood_below",
+        f"самочувствие ≤ {deviations.WELLBEING_MAX}",
+        f"настроение ≤ {deviations.MOOD_MAX}",
+        f"стресс ≥ {deviations.STRESS_MIN}",
+        f"readiness < {deviations.READINESS_MIN}",
+        f"ATL − CTL > {deviations.ATL_OVER_CTL_MAX}",
+        f"сон < {deviations.SLEEP_MIN_HOURS} ч",
+    ):
+        assert needle in text, needle
+
+
+def test_recalc_names_every_bad_hrv_status() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    assert [s for s in deviations.BAD_HRV_STATUSES if s not in text] == []
+
+
+def test_coach_md_step_5_has_no_threshold_list_and_points_to_recalc() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
+    step = next(line for line in text.splitlines() if line.startswith("5. Адаптация плана"))
+    assert "recalc.md" in step
+    assert "get_deviations" in step
+    for needle in ("≤ 2", "≥ 4", "< 33", "> 15", "< 6"):
+        assert needle not in step, needle
+
+
+def test_coach_md_keeps_yes_before_editing_or_deleting_food_entries() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
+    step = next(line for line in text.splitlines() if line.startswith("3. Спроси"))
+    assert "только после «да»" in step
+    assert "coach-help/food.md" in step
+
+
+def test_get_deviations_description_names_mood_and_stress() -> None:
+    from ai_coach.mcp_server.server import TOOLS
+
+    description = TOOLS["get_deviations"][1]
+    assert "настроение" in description
+    assert "стресс" in description
+
+
+def test_deviations_docstring_names_mood_and_stress() -> None:
+    from ai_coach.mcp_server import tools
+
+    doc = tools.deviations.__doc__ or ""
+    assert "настроение" in doc
+    assert "стресс" in doc
+
+
+def test_wellbeing_fields_file_holds_day_fields() -> None:
+    text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
+    for needle in ("work_hours", "screen_work_hours", "claude_prompts", "todo_closed"):
+        assert needle in text, needle
+
+
+def test_wellbeing_agent_links_fields_file_instead_of_listing_fields() -> None:
+    text = WELLBEING.read_text()
+    assert "coach-wellbeing/fields.md" in text
+    assert "screen_hindrance_hours" not in text
+
+
+def test_allow_can_read_wellbeing_fields_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach-wellbeing/fields.md)" in allow
+
+
 def test_wellbeing_below_codes_are_in_symptoms_paragraph_not_in_precursors() -> None:
     text = WELLBEING.read_text()
     symptoms = paragraph(text, "Симптомы в тексте")
@@ -132,7 +207,7 @@ def test_coach_wellbeing_mentions_workload_tool() -> None:
 
 
 def test_coach_wellbeing_describes_all_screen_fields() -> None:
-    text = WELLBEING.read_text()
+    text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
     for field in (
         "screen_work_hours",
         "screen_hobby_hours",
@@ -145,7 +220,7 @@ def test_coach_wellbeing_describes_all_screen_fields() -> None:
 
 
 def test_coach_wellbeing_describes_claude_fields_as_observation() -> None:
-    text = WELLBEING.read_text()
+    text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
     for field in (
         "claude_prompts",
         "claude_prompts_evening",

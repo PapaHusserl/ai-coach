@@ -5,6 +5,7 @@
       "Bash(uv run coach slip:*)",
       "Bash(cat .claude/agents/coach-decisions.md)",
       "Bash(uv run coach decide:*)",
+      "Bash(cat .claude/agents/coach-wellbeing/fields.md)",
       "Bash(cat .claude/agents/coach-help/decisions.md)",
       "Bash(cat .claude/agents/coach-help/day-plan.md)",
       "Bash(cat .claude/agents/coach-help/claude-code.md)",
