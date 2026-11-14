@@ -79,7 +79,7 @@ function minutesBetween(a, b) {
 export function hasWindow(row) {
 	if (row.source === "meeting") return true;
 	// У «Готовки» (kind meal без ключа meal) окна нет, Р7.
-	return row.source === "item" && tabsFor(row.kind).length > 0 && (row.kind !== "meal" || row.meal != null);
+	return row.source === "item" && tabsFor(row.kind, row.survey).length > 0 && (row.kind !== "meal" || row.meal != null);
 }
 
 // Какой пункт раскрыт: choice — id, выбранный кликом; false — свёрнуто всё; null — раскрыт идущий.

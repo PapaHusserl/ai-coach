@@ -28,7 +28,7 @@ def list_done(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, 
 
 def add_event(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     """values: kind, title, date, start_at, end_at, created_at; не обязательно all_day, note,
-    category, alarm_min, repeat, workout_id, practice_id, status (по умолчанию draft)."""
+    category, survey, alarm_min, repeat, workout_id, practice_id, status (по умолчанию draft)."""
     return insert(conn, "coach_events", values)
 
 

@@ -11,7 +11,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft, move_draft
 from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
-from ai_coach.agenda.service import shifted
+from ai_coach.agenda.service import SURVEYS, shifted
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import cap, parse_day, period
 from ai_coach.store.agenda import get_event
@@ -30,13 +30,18 @@ def create_draft_event(
     workout_id: int | None = None,
     practice_id: int | None = None,
     all_day: bool = False,
+    survey: str | None = None,
 ) -> dict[str, Any]:
     """Черновик события календаря (status=draft). kind: training / practice / rest / sleep /
     checkin / task / focus / meal; start_at, end_at - местное время YYYY-MM-DDTHH:MM; день
     начала от 30 дней назад до 14 вперёд; не длиннее 24 часов. category (work / personal /
     hobby / rest) - для нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у
     остальных не задаётся. alarm_min - за сколько минут напомнить. repeat=daily / weekly /
-    biweekly - только у checkin, не два на одно время суток с пересечением по дням."""
+    biweekly - только у checkin, не два на одно время суток с пересечением по дням. survey -
+    опросник чек-ина, у checkin обязателен: evening (анкета вечера) / feel (самочувствие) /
+    focus (оценка фокуса) / none (без анкеты: Сделал / Пропустил); у остальных не задаётся."""
+    if kind == "checkin" and survey is None:
+        raise ToolError(f"У чек-ина нужен survey: {list(SURVEYS)}.")
     values = {
         "kind": kind,
         "title": title,
@@ -49,6 +54,7 @@ def create_draft_event(
         "workout_id": workout_id,
         "practice_id": practice_id,
         "all_day": all_day,
+        "survey": survey,
     }
     try:
         with conn:
@@ -121,6 +127,7 @@ def move_draft_event(conn: sqlite3.Connection, event_id: int, start_at: str) -> 
 def agenda(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
     """События тренера (черновики и записанные в календарь) с днём начала в периоде, плюс
     активный повторяющийся чек-ин: id, kind, title, date, start_at, end_at, all_day, note,
-    category, alarm_min, repeat, workout_id, practice_id, status."""
+    category, survey (опросник чек-ина или null), alarm_min, repeat, workout_id, practice_id,
+    status."""
     period(date_from, date_to)
     return cap(agenda_rows(conn, date_from, date_to))

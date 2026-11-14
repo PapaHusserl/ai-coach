@@ -354,3 +354,36 @@ updated: 2026-11-14
 Находка папы-кабана при плане Н39 (docs/plan-n39.md, «Побочные находки»):
 `test_other_agent_files_within_their_limits` держит и `coach.md`;
 `test_wellbeing_topic_deviation_thresholds_match_deviations` читает `deviations.md`.
+
+## 104. Дневная запись с настроением засчитывается как вечерний чек-ин
+status: idea
+priority: medium
+updated: 2026-11-14
+
+Находка папы-кабана при плане П11 (docs/plan-p11.md, «Побочные находки» п. 1): `evening_done`
+(`store/journal.py:227`) считает вечерним чек-ином любую запись дня с настроением или стрессом, в том числе
+`coach feel --mood` днём из CLI. Смежно с BACKLOG 88.
+
+## 105. Заметка события не видна в пульте
+status: idea
+priority: low
+updated: 2026-11-14
+
+Находка папы-кабана при плане П11 (docs/plan-p11.md, «Побочные находки» п. 2): `note` события в пульте не
+показывается, а у напоминаний в ней команда (`uv run coach pvt`, `coach focus …`).
+
+## 106. Описание get_agenda называет шесть видов событий из восьми
+status: idea
+priority: low
+updated: 2026-11-14
+
+Находка папы-кабана при плане П11 (docs/plan-p11.md, «Побочные находки» п. 3): `mcp_server/server.py:310` —
+нет `focus` и `meal`.
+
+## 107. Тренер не видит отметок «сделал / пропустил»
+status: idea
+priority: low
+updated: 2026-11-14
+
+Находка папы-кабана при плане П11 (docs/plan-p11.md, «Побочные находки» п. 4): `done_log` читает только пульт —
+тренер не видит, что практика, отдых или напоминание отмечены.

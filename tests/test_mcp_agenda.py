@@ -87,7 +87,7 @@ def test_draft_31_days_back_is_rejected(conn: sqlite3.Connection) -> None:
 
 def test_checkin_daily_draft(conn: sqlite3.Connection) -> None:
     result = create(
-        conn, kind="checkin", title="Чек-ин", category=None, repeat="daily",
+        conn, kind="checkin", title="Чек-ин", category=None, repeat="daily", survey="evening",
         start_at=f"{TOMORROW}T21:00:00", end_at=f"{TOMORROW}T21:15:00", alarm_min=0,
     )  # fmt: skip
     row = get_event(conn, result["draft_id"])
@@ -95,9 +95,46 @@ def test_checkin_daily_draft(conn: sqlite3.Connection) -> None:
     assert row["repeat"] == "daily"
 
 
+def test_checkin_with_survey_is_stored(conn: sqlite3.Connection) -> None:
+    result = create(conn, kind="checkin", category=None, survey="feel")
+    row = get_event(conn, result["draft_id"])
+    assert row is not None
+    assert row["survey"] == "feel"
+
+
+def test_checkin_without_survey_is_rejected_with_list(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError, match="feel"):
+        create(conn, kind="checkin", category=None)
+    assert count(conn, "draft") == 0
+
+
+def test_checkin_with_unknown_survey_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        create(conn, kind="checkin", category=None, survey="мусор")
+    assert count(conn, "draft") == 0
+
+
+def test_task_without_survey_has_null_survey(conn: sqlite3.Connection) -> None:
+    row = get_event(conn, create(conn)["draft_id"])
+    assert row is not None
+    assert row["survey"] is None
+
+
+def test_survey_on_task_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        create(conn, survey="feel")
+    assert count(conn, "draft") == 0
+
+
+def test_get_agenda_returns_survey(conn: sqlite3.Connection) -> None:
+    create(conn, kind="checkin", category=None, survey="focus")
+    rows = call(conn, "get_agenda", date_from=TOMORROW, date_to=TOMORROW)["rows"]
+    assert [r["survey"] for r in rows] == ["focus"]
+
+
 def checkin(conn: sqlite3.Connection, clock: str) -> Any:
     return create(
-        conn, kind="checkin", title="Чек-ин", category=None, repeat="daily",
+        conn, kind="checkin", title="Чек-ин", category=None, repeat="daily", survey="evening",
         start_at=f"{TOMORROW}T{clock}:00", end_at=f"{TOMORROW}T{clock}:15",
     )  # fmt: skip
 
@@ -207,7 +244,9 @@ def test_move_draft_event_missing_is_rejected(conn: sqlite3.Connection) -> None:
 
 
 def test_move_draft_event_repeating_is_rejected(conn: sqlite3.Connection) -> None:
-    draft_id = create(conn, kind="checkin", category=None, repeat="daily")["draft_id"]
+    draft_id = create(conn, kind="checkin", category=None, repeat="daily", survey="evening")[
+        "draft_id"
+    ]
     with pytest.raises(ToolError, match="поставить заново"):
         call(conn, "move_draft_event", event_id=draft_id, start_at=f"{AFTER}T15:30")
 

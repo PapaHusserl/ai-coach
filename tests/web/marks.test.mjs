@@ -65,6 +65,28 @@ test("tabsFor по типам", () => {
 	assert.deepEqual(tabsFor("sleep"), []);
 });
 
+test("tabsFor: чек-ин с опросником — одна вкладка своего опросника", () => {
+	assert.deepEqual(tabsFor("checkin", "evening"), ["checkin"]);
+	assert.deepEqual(tabsFor("checkin", "feel"), ["feel"]);
+	assert.deepEqual(tabsFor("checkin", "focus"), ["rating"]);
+	assert.deepEqual(tabsFor("checkin", "none"), ["done"]);
+});
+
+test("tabsFor: чек-ин без опросника (null) — вечерний", () => {
+	assert.deepEqual(tabsFor("checkin", null), ["checkin"]);
+	assert.deepEqual(tabsFor("checkin", undefined), ["checkin"]);
+});
+
+test("tabsFor: опросник у не-чек-ина не действует", () => {
+	assert.deepEqual(tabsFor("task", "feel"), ["rating", "feel", "slip"]);
+	assert.deepEqual(tabsFor("practice", "none"), ["done", "feel", "slip"]);
+});
+
+test("tabLabel: у чек-ина done — «Сделал», не «Итог»", async () => {
+	const { tabLabel } = await model();
+	assert.equal(tabLabel("checkin", "done"), "Сделал");
+});
+
 test("TAB_LABELS.food — «Что съел»", () => {
 	assert.equal(TAB_LABELS.food, "Что съел");
 });

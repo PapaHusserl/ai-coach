@@ -11,7 +11,13 @@ const TABS = {
 	"rest": ["done", "feel", "slip"],
 	"training": ["done", "feel", "slip"],
 	"meal": ["food", "feel", "slip"],
-	"checkin": ["checkin"],
+};
+// Вкладка чек-ина — по опроснику события (зеркало SURVEY_MARKS в web/survey.py, сверяет тест).
+const SURVEY_TABS = {
+	evening: ["checkin"],
+	feel: ["feel"],
+	focus: ["rating"],
+	none: ["done"],
 };
 export const TAB_LABELS = {
 	food: "Что съел",
@@ -62,8 +68,9 @@ const ITEM_ERRORS = [
 	"Часы (",
 ];
 
-// Вкладки окна пункта по его типу; пусто — окна нет.
-export function tabsFor(kind) {
+// Вкладки окна пункта по его типу (у чек-ина — по опроснику, нет — вечерний); пусто — окна нет.
+export function tabsFor(kind, survey = null) {
+	if (kind === "checkin") return SURVEY_TABS[survey ?? "evening"] ?? [];
 	return TABS[kind] ?? [];
 }
 

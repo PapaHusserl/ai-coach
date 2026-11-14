@@ -671,6 +671,36 @@ def test_agenda_note_has_focus_title_and_poles() -> None:
         assert pole in text, pole
 
 
+def test_agenda_note_names_survey_field_and_every_survey() -> None:
+    text = (AGENTS / "coach-agenda.md").read_text()
+    assert "`survey`" in text
+    for name in ("evening", "feel", "focus", "none"):
+        assert f"`{name}`" in text, name
+
+
+def test_agenda_note_says_survey_is_required_and_old_checkins_are_recreated() -> None:
+    text = (AGENTS / "coach-agenda.md").read_text()
+    assert "обязателен" in text
+    assert "снять" in text
+    assert "заново" in text
+
+
+def test_agenda_note_maps_reminders_to_surveys() -> None:
+    text = (AGENTS / "coach-agenda.md").read_text()
+    for needle in ("survey=evening", "survey=focus", "survey=none"):
+        assert needle in text, needle
+
+
+def test_pult_marks_topic_describes_surveys_of_checkin() -> None:
+    text = topic("pult-marks.md")
+    for needle in ("опросник", "без анкеты", "Сделал / Пропустил / Снять отметку"):
+        assert needle in text, needle
+
+
+def test_help_index_mentions_checkin_surveys() -> None:
+    assert "чек-ин и его опросники" in HELP.read_text()
+
+
 def test_wellbeing_help_describes_slip() -> None:
     text = (TOPICS / "wellbeing.md").read_text()
     for needle in ("coach slip", "coach log slip", "get_slip_log"):

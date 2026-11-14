@@ -207,6 +207,10 @@ test("hasWindow: еда без ключа meal («Готовка») — окна
 	assert.equal(hasWindow(itemRow({ kind: "meal" })), false);
 });
 
+test("hasWindow: чек-ин «без анкеты» — окно есть (Сделал / Пропустил)", () => {
+	assert.equal(hasWindow(itemRow({ kind: "checkin", survey: "none" })), true);
+});
+
 test("hasWindow: у остальных видов ключ meal не нужен", () => {
 	assert.equal(hasWindow(itemRow({ kind: "task" })), true);
 });

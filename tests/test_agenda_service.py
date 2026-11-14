@@ -500,6 +500,49 @@ def test_move_draft_of_rest_event_keeps_category(conn: sqlite3.Connection) -> No
     assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
 
 
+def test_move_draft_of_old_checkin_keeps_survey_null(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, kind="checkin", category=None)
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["survey"] is None
+
+
+def test_surveys_constant() -> None:
+    from ai_coach.agenda.service import SURVEYS
+
+    assert SURVEYS[:4] == ("evening", "feel", "focus", "none")
+
+
+def test_checkin_with_survey_keeps_it(conn: sqlite3.Connection) -> None:
+    assert check(conn, kind="checkin", category=None, survey="feel")["survey"] == "feel"
+
+
+@pytest.mark.parametrize("survey", ["evening", "focus", "none"])
+def test_checkin_accepts_each_survey(conn: sqlite3.Connection, survey: str) -> None:
+    assert check(conn, kind="checkin", category=None, survey=survey)["survey"] == survey
+
+
+def test_checkin_without_survey_gives_none(conn: sqlite3.Connection) -> None:
+    result = check(conn, kind="checkin", category=None)
+    assert "survey" in result
+    assert result["survey"] is None
+
+
+def test_unknown_survey_is_error_with_list(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="feel"):
+        check(conn, kind="checkin", category=None, survey="мусор")
+
+
+def test_survey_on_task_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, survey="feel")
+
+
+def test_task_without_survey_gives_none(conn: sqlite3.Connection) -> None:
+    assert check(conn)["survey"] is None
+
+
 def test_move_draft_repeating_is_refused_with_hint(conn: sqlite3.Connection) -> None:
     event_id = stored(conn, **CHECKIN)
     with pytest.raises(AgendaError, match="снять .* и поставить заново"):

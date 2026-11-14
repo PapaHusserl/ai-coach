@@ -227,6 +227,26 @@ def test_list_shows_two_earlier_repeating_checkins(isolated: Path) -> None:
     assert result.output.index("Напомни 11:00") < result.output.index("Напомни 15:00")
 
 
+def test_list_shows_survey_of_checkin(isolated: Path) -> None:
+    seed(
+        isolated, kind="checkin", category=None, survey="feel", title="Оценка самочувствия",
+        date="2026-10-10", start_at="2026-10-10T15:00:00", end_at="2026-10-10T15:15:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert result.exit_code == 0, result.output
+    assert "опросник: feel" in result.output
+
+
+def test_list_checkin_without_survey_has_no_survey_tail(isolated: Path) -> None:
+    seed(
+        isolated, kind="checkin", category=None, title="Старый чек-ин",
+        date="2026-10-10", start_at="2026-10-10T21:00:00", end_at="2026-10-10T21:15:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert "Старый чек-ин" in result.output
+    assert "опросник" not in result.output
+
+
 def test_list_works_without_coach_section_and_does_not_touch_calendar(
     isolated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

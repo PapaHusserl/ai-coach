@@ -308,9 +308,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "События тренера в календаре (date_from, date_to - YYYY-MM-DD, до 92 дней): черновики "
         "(draft) и записанные в календарь (written) с днём начала в периоде, плюс активный "
         "повторяющийся чек-ин: id, kind (training/practice/rest/sleep/checkin/task), title, date, "
-        "start_at, end_at, all_day, note, category (для нагрузки или null), alarm_min, repeat, "
-        "workout_id, practice_id, status. Записывает в календарь пользователь командой "
-        "coach event write.",
+        "start_at, end_at, all_day, note, category (для нагрузки или null), survey (опросник "
+        "чек-ина или null), alarm_min, repeat, workout_id, practice_id, status. Записывает в "
+        "календарь пользователь командой coach event write.",
     ),
     "get_sport_nutrition": (
         tools.sport_nutrition,
@@ -423,8 +423,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "alarm_min - за сколько минут напомнить; repeat=daily / weekly / biweekly - только у "
         "checkin, не два на одно время суток с пересечением по дням; "
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
-        "all_day - на весь день. Ответ: draft_id. В календарь кладёт пользователь командой "
-        "coach event write.",
+        "all_day - на весь день; survey - опросник чек-ина, у checkin обязателен: evening / "
+        "feel / focus / none, у остальных не задаётся. Ответ: draft_id. В календарь кладёт "
+        "пользователь командой coach event write.",
     ),
     "create_day_plan": (
         agenda.create_day_plan,

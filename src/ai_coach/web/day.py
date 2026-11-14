@@ -32,6 +32,7 @@ ITEM_FIELDS = (
     "status",
     "note",
     "workout_id",
+    "survey",
 )
 SECONDS_IN_MINUTE = 60
 
@@ -58,7 +59,8 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
         item = {k: r[k] for k in ITEM_FIELDS} | {"repeat": r["repeat"]}
         training = _training(conn, r, day)
         garmin = training["fact"] if training else None
-        item |= {"marks": mine, "due": due(r["kind"], mine, evening, past, r["title"], garmin)}
+        flag = due(r["kind"], mine, evening, past, r["title"], garmin, r["survey"])
+        item |= {"marks": mine, "due": flag}
         if training:
             item["training"] = training
         if r["kind"] == "meal" and r["title"] != COOKING:

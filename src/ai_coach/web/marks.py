@@ -18,6 +18,7 @@ from ai_coach.store.workload import upsert_counter
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.food import save_food
 from ai_coach.web.repeat import moved, on_day
+from ai_coach.web.survey import checkin_due, marks_of
 
 ALLOWED = {
     "task": ("rating", "feel", "slip"),
@@ -26,8 +27,7 @@ ALLOWED = {
     "rest": ("done", "feel", "slip"),
     "training": ("done", "feel", "slip"),
     "meal": ("food", "feel", "slip"),
-    "checkin": ("checkin",),
-}
+}  # у checkin отметки задаёт опросник: web/survey.py
 COOKING = "Готовка"  # пункт meal из agenda/day_layout.py: окна нет, красным не бывает
 MAX_ID = 2**63 - 1  # предел INTEGER sqlite
 MIN_SCORE = 1
@@ -87,7 +87,7 @@ def _event(conn: sqlite3.Connection, payload: dict[str, Any]) -> tuple[dict[str,
 
 
 def _kinds(row: dict[str, Any], mark: Any) -> None:
-    kinds = ALLOWED.get(row["kind"])
+    kinds = marks_of(row["survey"]) if row["kind"] == "checkin" else ALLOWED.get(row["kind"])
     if kinds is None or (row["kind"] == "meal" and row["title"] == COOKING):
         raise MarkError("У этого пункта пока нет окна отметок.")
     if mark not in kinds:
@@ -192,10 +192,11 @@ def due(
     past: bool,
     title: str = "",
     fact: dict[str, Any] | None = None,
+    survey: str | None = None,
 ) -> bool:
     """Прошедший заполняемый пункт без отметки (красный): task/focus - нет оценки, practice/rest -
     нет «сделал/пропустил», training - то же и нет факта Garmin done/different (Р3), meal - нет
-    записи еды (у «Готовки» окна нет), checkin - чек-ин вечера за день не сделан."""
+    записи еды (у «Готовки» окна нет), checkin - нет отметки его опросника (web/survey.py)."""
     no_done = marks["done"] is None
     no_rating = not marks["ratings"]
     missing = {
@@ -205,6 +206,6 @@ def due(
         "rest": no_done,
         "training": no_done and (fact is None or fact["kind"] == "skipped"),
         "meal": title != COOKING and not marks["food"],
-        "checkin": not evening,
+        "checkin": checkin_due(survey, marks, evening),
     }
     return past and missing.get(kind, False)

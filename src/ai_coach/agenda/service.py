@@ -25,6 +25,7 @@ from ai_coach.workload.config import CATEGORIES
 
 KINDS = ("training", "practice", "rest", "sleep", "checkin", "task", "focus", "meal")
 REST_KINDS = ("rest", "sleep")
+SURVEYS = ("evening", "feel", "focus", "none")
 REPEATS = ("daily", "weekly", "biweekly")
 PAST_DAYS = 30
 AHEAD_DAYS = 14
@@ -73,6 +74,17 @@ def _category(kind: str, given: str | None) -> str | None:
     return None
 
 
+def _survey(kind: str, given: str | None) -> str | None:
+    """Опросник чек-ина (имя из SURVEYS); у остальных видов не задаётся. Без него - None."""
+    if given is None:
+        return None
+    if kind != "checkin":
+        raise AgendaError(f"survey только у checkin, а kind={kind}.")
+    if given not in SURVEYS:
+        raise AgendaError(f"survey должен быть из {list(SURVEYS)}, получено: {given!r}")
+    return given
+
+
 def _links(conn: sqlite3.Connection, workout_id: Any, practice_id: Any) -> None:
     if workout_id is not None:
         workout = get_planned_workout(conn, workout_id)
@@ -97,10 +109,10 @@ def validate_draft(
 ) -> dict[str, Any]:
     """Проверенные значения черновика для add_event (без status, created_at). values: kind, title,
     start_at, end_at (местное время ISO); не обязательно all_day, note, category, alarm_min,
-    repeat, workout_id, practice_id. Начало раньше конца, событие не длиннее MAX_HOURS, день
-    начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat (daily, weekly, biweekly) только у
-    checkin и не два активных на одно время суток с пересечением по дням; тренировка и практика
-    живы; категория по умолчанию только у rest и sleep (rest)."""
+    repeat, survey (только у checkin), workout_id, practice_id. Начало раньше конца, событие не
+    длиннее MAX_HOURS, день начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat (daily,
+    weekly, biweekly) только у checkin и не два активных на одно время суток с пересечением по
+    дням; тренировка и практика живы; категория по умолчанию только у rest и sleep (rest)."""
     today = today or date.today()
     kind = values["kind"]
     if kind not in KINDS:
@@ -139,6 +151,7 @@ def validate_draft(
         "all_day": int(bool(values.get("all_day"))),
         "note": note,
         "category": _category(kind, values.get("category")),
+        "survey": _survey(kind, values.get("survey")),
         "alarm_min": alarm,
         "repeat": repeat,
         "workout_id": values.get("workout_id"),

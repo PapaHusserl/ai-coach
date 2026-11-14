@@ -155,9 +155,82 @@ def test_item_fields_whitelist(conn: sqlite3.Connection) -> None:
         "marks",
         "due",
         "workout_id",
+        "survey",
     }
     assert row["note"] == "заметка"
     assert row["workout_id"] is None
+
+
+def test_item_survey_is_null_for_non_checkin(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "10:00")
+    assert by_id(view(conn, "09:30"), task)["survey"] is None
+
+
+def test_item_survey_of_checkin_is_given(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "20:00", "20:15", kind="checkin", category=None, survey="focus")
+    assert by_id(view(conn, "20:05"), checkin)["survey"] == "focus"
+
+
+def test_past_feel_checkin_is_due_until_own_feel_mark(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="feel")
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
+    save_mark(conn, mark(checkin, "feel", score=4), at("15:10"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is False
+
+
+def test_evening_done_does_not_clear_feel_checkin(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="feel")
+    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 20:30:00", "score": 3, "mood": 3})
+    conn.commit()
+    assert by_id(view(conn, "21:00"), checkin)["due"] is True
+
+
+def test_past_focus_checkin_is_due_until_rating(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="focus")
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
+    save_mark(conn, mark(checkin, "rating", focus=4, fatigue=2, effort=3), at("15:10"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is False
+
+
+@pytest.mark.parametrize("done", [1, 0])
+def test_none_checkin_is_due_without_mark_and_not_with_it(
+    conn: sqlite3.Connection, done: int
+) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="none")
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
+    save_mark(conn, mark(checkin, "done", done=done), at("15:10"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is False
+
+
+def test_none_checkin_unmarked_returns_to_due(conn: sqlite3.Connection) -> None:
+    checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="none")
+    save_mark(conn, mark(checkin, "done", done=1), at("15:10"))
+    save_mark(conn, mark(checkin, "done", done=None), at("15:12"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
+
+
+def test_future_checkin_of_any_survey_is_not_due(conn: sqlite3.Connection) -> None:
+    ids = [
+        item(conn, "18:00", "18:15", kind="checkin", category=None, survey=s)
+        for s in ("evening", "feel", "focus", "none")
+    ]
+    result = view(conn, "17:00")
+    assert [by_id(result, i)["due"] for i in ids] == [False] * 4
+
+
+def test_none_checkin_mark_of_other_day_does_not_clear_due(conn: sqlite3.Connection) -> None:
+    checkin = item(
+        conn, "15:00", "15:15", day="2026-11-05", kind="checkin", category=None,
+        survey="none", repeat="daily",
+    )  # fmt: skip
+    payload = {"event_id": checkin, "date": "2026-11-06", "mark": "done", "done": 1}
+    save_mark(conn, payload, at("16:00"))
+    conn.commit()
+    assert by_id(view(conn, "16:00"), checkin)["due"] is True
 
 
 def by_id(result: dict[str, Any], event_id: int) -> dict[str, Any]:

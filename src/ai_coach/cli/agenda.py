@@ -29,9 +29,10 @@ IDS_HELP = "id событий"
 
 def describe_event(row: dict[str, Any]) -> str:
     repeat = f"  повтор: {row['repeat']}" if row["repeat"] else ""
+    survey = f"  опросник: {row['survey']}" if row["survey"] else ""
     return (
         f"{row['id']}  {row['status']}  {row['start_at']} - {row['end_at'][11:16]}  "
-        f"{row['kind']}  {row['title']}{repeat}"
+        f"{row['kind']}  {row['title']}{repeat}{survey}"
     )
 
 

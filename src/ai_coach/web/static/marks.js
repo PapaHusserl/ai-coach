@@ -204,10 +204,10 @@ function buildForm() {
 	save.addEventListener("click", () => send(tab, text.value));
 }
 
-function buildTabs(kind) {
+function buildTabs(kind, survey) {
 	const tabs = ui.tabs;
 	tabs.replaceChildren();
-	for (const tab of tabsFor(kind)) {
+	for (const tab of tabsFor(kind, survey)) {
 		const button = el("button", "tab", tabLabel(kind, tab));
 		button.type = "button";
 		button.setAttribute("role", "tab");
@@ -215,7 +215,7 @@ function buildTabs(kind) {
 		button.addEventListener("click", () => {
 			state.tab = tab;
 			showError("");
-			buildTabs(kind);
+			buildTabs(kind, survey);
 			buildForm();
 		});
 		tabs.append(button);
@@ -232,12 +232,12 @@ function buildHistory(row) {
 function startPane(row, view) {
 	state.id = row.id;
 	state.day = view.date;
-	state.tab = tabsFor(row.kind)[0];
+	state.tab = tabsFor(row.kind, row.survey)[0];
 	state.future = isFuture(row, view.now);
 	state.forms = drafts[`${view.date}:${row.id}`] ??= {};
 	state.offer = 0;
 	showError("");
-	buildTabs(row.kind);
+	buildTabs(row.kind, row.survey);
 	buildForm();
 }
 

@@ -571,3 +571,93 @@ def test_other_marks_have_empty_food(conn: sqlite3.Connection) -> None:
     eid = event(conn, "practice")
     save_mark(conn, payload(eid, "done", done=1), at("10:30"))
     assert marks_for_day(conn, D)[eid]["food"] == []
+
+
+def survey_checkin(conn: sqlite3.Connection, survey: str | None) -> int:
+    return event(conn, "checkin", "20:00", "20:15", category=None, survey=survey)
+
+
+NO_SUCH_MARK = "У этого пункта нет такой отметки."
+
+
+def test_feel_checkin_writes_feel_with_event_id_and_keeps_evening(
+    conn: sqlite3.Connection,
+) -> None:
+    eid = survey_checkin(conn, "feel")
+    save_mark(conn, payload(eid, "feel", score=4, text="ок"), at("20:05"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["event_id"], row["score"], row["text"]) == (eid, 4, "ок")
+    assert (row["mood"], row["stress"]) == (None, None)
+    assert not evening_done(conn, D)
+
+
+@pytest.mark.parametrize("mark", ["checkin", "rating", "done"])
+def test_feel_checkin_refuses_other_marks(conn: sqlite3.Connection, mark: str) -> None:
+    eid = survey_checkin(conn, "feel")
+    with pytest.raises(MarkError, match=NO_SUCH_MARK):
+        save_mark(conn, payload(eid, mark, score=4), at("20:05"))
+    assert list_wellbeing(conn, D, D) == []
+
+
+def test_focus_checkin_writes_rating_with_event_id(conn: sqlite3.Connection) -> None:
+    eid = survey_checkin(conn, "focus")
+    save_mark(conn, payload(eid, "rating", **RATING), at("20:05"))
+    [row] = list_focus(conn, D, D)
+    assert (row["event_id"], row["focus"], row["fatigue"], row["effort"]) == (eid, 4, 2, 3)
+
+
+@pytest.mark.parametrize("mark", ["checkin", "feel", "done"])
+def test_focus_checkin_refuses_other_marks(conn: sqlite3.Connection, mark: str) -> None:
+    eid = survey_checkin(conn, "focus")
+    with pytest.raises(MarkError, match=NO_SUCH_MARK):
+        save_mark(conn, payload(eid, mark, score=4, **RATING), at("20:05"))
+    assert list_wellbeing(conn, D, D) == []
+
+
+def test_none_checkin_done_upserts_and_unmarks(conn: sqlite3.Connection) -> None:
+    eid = survey_checkin(conn, "none")
+    assert save_mark(conn, payload(eid, "done", done=1), at("20:05")) is None
+    [row] = list_done(conn, D, D)
+    assert (row["event_id"], row["done"]) == (eid, 1)
+    save_mark(conn, payload(eid, "done", done=0), at("20:10"))
+    assert [r["done"] for r in list_done(conn, D, D)] == [0]
+    save_mark(conn, payload(eid, "done", done=None), at("20:12"))
+    assert list_done(conn, D, D) == []
+
+
+@pytest.mark.parametrize("mark", ["checkin", "feel", "rating", "slip"])
+def test_none_checkin_refuses_other_marks(conn: sqlite3.Connection, mark: str) -> None:
+    eid = survey_checkin(conn, "none")
+    with pytest.raises(MarkError, match=NO_SUCH_MARK):
+        save_mark(conn, payload(eid, mark, score=4, text="x", **RATING), at("20:05"))
+    assert list_wellbeing(conn, D, D) == []
+
+
+@pytest.mark.parametrize("survey", [None, "evening"])
+def test_evening_and_old_checkin_write_checkin_mark(
+    conn: sqlite3.Connection, survey: str | None
+) -> None:
+    eid = survey_checkin(conn, survey)
+    save_mark(conn, payload(eid, "checkin", score=4, mood=3), at("20:05"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["event_id"], row["mood"]) == (eid, 3)
+    assert evening_done(conn, D)
+
+
+@pytest.mark.parametrize("survey", [None, "evening"])
+def test_evening_and_old_checkin_refuse_done(conn: sqlite3.Connection, survey: str | None) -> None:
+    eid = survey_checkin(conn, survey)
+    with pytest.raises(MarkError, match=NO_SUCH_MARK):
+        save_mark(conn, payload(eid, "done", done=1), at("20:05"))
+
+
+def test_survey_of_task_does_not_change_its_marks(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "task", survey="feel")
+    save_mark(conn, payload(eid, "rating", **RATING), at("10:30"))
+    assert len(list_focus(conn, D, D)) == 1
+
+
+def test_unknown_survey_in_base_gives_no_marks(conn: sqlite3.Connection) -> None:
+    eid = survey_checkin(conn, "мусор")
+    with pytest.raises(MarkError):
+        save_mark(conn, payload(eid, "checkin", score=4), at("20:05"))
