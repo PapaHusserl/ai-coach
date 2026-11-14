@@ -26,6 +26,17 @@ def list_done(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, 
     return fetch_all(conn, sql, (start, end))
 
 
+def list_done_events(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
+    """Отметки с датой start..end включительно (в т.ч. по снятым событиям), по дате:
+    date, event_id, kind, title, done, logged_at."""
+    sql = (
+        "SELECT l.date, l.event_id, e.kind, e.title, l.done, l.logged_at "
+        "FROM done_log l JOIN coach_events e ON e.id = l.event_id "
+        "WHERE l.date BETWEEN ? AND ? ORDER BY l.date, l.logged_at, l.id"
+    )
+    return fetch_all(conn, sql, (start, end))
+
+
 def add_event(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     """values: kind, title, date, start_at, end_at, created_at; не обязательно all_day, note,
     category, survey, alarm_min, repeat, workout_id, practice_id, status (по умолчанию draft)."""

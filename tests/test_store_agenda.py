@@ -80,3 +80,38 @@ def test_find_by_uid(conn: sqlite3.Connection) -> None:
 def test_find_by_uid_unknown_is_none(conn: sqlite3.Connection) -> None:
     add_event(conn, coach_event())
     assert find_by_uid(conn, "nope") is None
+
+
+def test_list_done_events_joins_kind_and_title(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.agenda import list_done_events, mark_done
+
+    event_id = add_event(conn, coach_event(kind="practice", title="Растяжка"))
+    mark_done(conn, event_id, "2026-10-10", 0, "2026-10-10T21:00:00")
+    found = list_done_events(conn, "2026-10-10", "2026-10-10")
+    assert len(found) == 1
+    row = found[0]
+    assert (row["event_id"], row["kind"], row["title"], row["done"]) == (
+        event_id,
+        "practice",
+        "Растяжка",
+        0,
+    )
+    assert (row["date"], row["logged_at"]) == ("2026-10-10", "2026-10-10T21:00:00")
+
+
+def test_list_done_events_period_inclusive_sorted_by_date(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.agenda import list_done_events, mark_done
+
+    event_id = add_event(conn, coach_event(kind="practice"))
+    for day in ("2026-10-11", "2026-10-09", "2026-10-10", "2026-10-08", "2026-10-12"):
+        mark_done(conn, event_id, day, 1, f"{day}T21:00:00")
+    found = list_done_events(conn, "2026-10-09", "2026-10-11")
+    assert [r["date"] for r in found] == ["2026-10-09", "2026-10-10", "2026-10-11"]
+
+
+def test_list_done_events_keeps_mark_of_removed_event(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.agenda import list_done_events, mark_done
+
+    event_id = add_event(conn, coach_event(kind="rest", status="removed"))
+    mark_done(conn, event_id, "2026-10-10", 1, "2026-10-10T21:00:00")
+    assert len(list_done_events(conn, "2026-10-10", "2026-10-10")) == 1

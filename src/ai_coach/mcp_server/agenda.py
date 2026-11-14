@@ -14,7 +14,7 @@ from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
 from ai_coach.agenda.service import SURVEYS, shifted
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import cap, parse_day, period
-from ai_coach.store.agenda import get_event
+from ai_coach.store.agenda import get_event, list_done_events
 
 
 def create_draft_event(
@@ -132,3 +132,10 @@ def agenda(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, 
     status."""
     period(date_from, date_to)
     return cap(agenda_rows(conn, date_from, date_to))
+
+
+def done_log(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
+    """Отметки «сделал / пропустил» пунктов за период (включительно): date, event_id, kind,
+    title, done (1 - сделал, 0 - пропустил), logged_at. Только чтение: отмечает пользователь."""
+    period(date_from, date_to)
+    return cap(list_done_events(conn, date_from, date_to), newest=True)

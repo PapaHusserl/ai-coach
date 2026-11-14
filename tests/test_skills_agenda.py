@@ -72,5 +72,31 @@ def test_side_roles_point_to_agenda_file() -> None:
         assert "coach-agenda.md" in (AGENTS / name).read_text(), name
 
 
+ERRORS = AGENTS / "coach-agenda" / "errors.md"
+ERRORS_CAT = "cat .claude/agents/coach-agenda/errors.md"
+
+
+def test_agenda_errors_side_file_is_not_empty() -> None:
+    assert ERRORS.is_file()
+    assert len(ERRORS.read_bytes()) > 0
+
+
+def test_agenda_file_names_errors_side_file_with_cat() -> None:
+    assert ERRORS_CAT in AGENDA.read_text()
+
+
+def test_agenda_errors_side_file_is_allowed() -> None:
+    assert f"Bash({ERRORS_CAT})" in ALLOW
+
+
+def test_calendar_not_set_text_lives_in_errors_side_file_only() -> None:
+    assert "Календарь коуча не задан" in ERRORS.read_text()
+    assert "Календарь коуча не задан" not in AGENDA.read_text()
+
+
+def test_agenda_file_names_done_log_tool() -> None:
+    assert "get_done_log" in AGENDA.read_text()
+
+
 def test_evening_role_does_not_mention_agenda() -> None:
     assert "coach-agenda" not in EVENING.read_text()

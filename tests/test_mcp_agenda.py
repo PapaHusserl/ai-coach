@@ -1,14 +1,17 @@
 """MCP шага v2.6: create_draft_event, cancel_draft_event, get_agenda, snapshot agenda."""
 
+import asyncio
 import sqlite3
 from datetime import date, timedelta
 from typing import Any
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, call_text
+from mcp_fakes import call, call_text, db_file
 from workload_fakes import coach_event
 
+from ai_coach.agenda.service import KINDS
+from ai_coach.mcp_server import build_server
 from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.agenda import add_event, get_event
 
@@ -347,3 +350,14 @@ def test_snapshot_with_20_long_events_fits_max_chars(conn: sqlite3.Connection) -
         put(conn, day, title="Длинное название " * 5, note="Очень длинная заметка " * 10)
     text = call_text(conn, "get_morning_snapshot", date=DAY)
     assert len(text) <= SNAPSHOT_MAX_CHARS
+
+
+def tool_description(conn: sqlite3.Connection, name: str) -> str:
+    server = build_server(db_file(conn))
+    return next(t.description or "" for t in asyncio.run(server.list_tools()) if t.name == name)
+
+
+@pytest.mark.parametrize("tool", ["get_agenda", "create_draft_event"])
+def test_tool_description_names_every_kind(conn: sqlite3.Connection, tool: str) -> None:
+    text = tool_description(conn, tool)
+    assert [kind for kind in KINDS if kind not in text] == []

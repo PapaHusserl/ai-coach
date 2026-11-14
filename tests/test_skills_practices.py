@@ -22,6 +22,11 @@ def test_agent_files_within_their_limits() -> None:
         assert len((AGENTS / name).read_bytes()) <= limit, name
 
 
+def test_agenda_file_keeps_reserve_below_limit() -> None:
+    size = len((AGENTS / "coach-agenda.md").read_bytes())
+    assert AGENT_LIMITS["coach-agenda.md"] - size >= 200
+
+
 def test_every_agent_file_has_a_limit() -> None:
     assert {p.name for p in AGENTS.glob("*.md")} <= set(AGENT_LIMITS)
 

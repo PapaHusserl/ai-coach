@@ -40,6 +40,7 @@ EXPECTED_TOOLS = {
     "get_phases",
     "get_plan",
     "get_plan_actual",
+    "get_done_log",
     "get_load",
     "get_weights",
     "get_food",

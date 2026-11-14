@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from ai_coach.agenda.service import KINDS
 from ai_coach.mcp_server import (
     agenda,
     decisions,
@@ -307,10 +308,18 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         agenda.agenda,
         "События тренера в календаре (date_from, date_to - YYYY-MM-DD, до 92 дней): черновики "
         "(draft) и записанные в календарь (written) с днём начала в периоде, плюс активный "
-        "повторяющийся чек-ин: id, kind (training/practice/rest/sleep/checkin/task), title, date, "
+        "повторяющийся чек-ин: id, kind (" + "/".join(KINDS) + "), title, date, "
         "start_at, end_at, all_day, note, category (для нагрузки или null), survey (опросник "
         "чек-ина или null), alarm_min, repeat, workout_id, practice_id, status. Записывает в "
         "календарь пользователь командой coach event write.",
+    ),
+    "get_done_log": (
+        agenda.done_log,
+        "Отметки «сделал / пропустил» пунктов календаря за период (date_from, date_to - "
+        "YYYY-MM-DD, до 92 дней): date, event_id, kind, title, done (1 - сделал, 0 - "
+        "пропустил), logged_at. Бывают у практики, отдыха, тренировки и чек-ина без анкеты. "
+        "Нет строки за день - не отмечено. У тренировки главнее факт get_plan_actual, "
+        "отметка - слова пользователя. Отмечает пользователь в пульте.",
     ),
     "get_sport_nutrition": (
         tools.sport_nutrition,
