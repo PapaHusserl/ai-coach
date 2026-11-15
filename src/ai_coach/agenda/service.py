@@ -121,7 +121,7 @@ def shifted(
         end = start + length
     else:
         end = parse_moment(end_at, "end_at")
-    values = {**row, "start_at": start.isoformat(), "end_at": end.isoformat()}
+    values = {**row, "start_at": start.isoformat(), "end_at": end.isoformat(), "survey": None}
     checked = validate_draft(conn, values, today)
     return {k: checked[k] for k in ("start_at", "end_at", "date")}
 

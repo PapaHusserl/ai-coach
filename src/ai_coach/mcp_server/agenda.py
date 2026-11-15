@@ -39,11 +39,11 @@ def create_draft_event(
     hobby / rest) - для нагрузки, у rest и sleep по умолчанию rest, у task обязательна, у
     остальных не задаётся. alarm_min - за сколько минут напомнить. repeat=daily / weekly /
     biweekly - только у checkin, не два на одно время суток с пересечением по дням. survey -
-    опросник чек-ина, у checkin обязателен: evening (анкета вечера) / feel (самочувствие) /
-    focus (оценка фокуса) / none (без анкеты: Сделал / Пропустил) / who5 (опросник WHO-5);
-    у остальных не задаётся."""
+    у checkin обязателен: evening (анкета вечера) / feel (самочувствие) / focus (оценка
+    фокуса) / none (без анкеты: Сделал / Пропустил) / who5 (опросник WHO-5) или form:<имя>
+    активной формы (get_forms); у остальных видов - только form:<имя>."""
     if kind == "checkin" and survey is None:
-        raise ToolError(f"У чек-ина нужен survey: {list(SURVEYS)}.")
+        raise ToolError(f"У чек-ина нужен survey: {list(SURVEYS)} или form:<имя>.")
     values = {
         "kind": kind,
         "title": title,
@@ -129,8 +129,8 @@ def move_draft_event(conn: sqlite3.Connection, event_id: int, start_at: str) -> 
 def agenda(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
     """События тренера (черновики и записанные в календарь) с днём начала в периоде, плюс
     активный повторяющийся чек-ин: id, kind, title, date, start_at, end_at, all_day, note,
-    category, survey (опросник чек-ина или null), alarm_min, repeat, workout_id, practice_id,
-    status."""
+    category, survey (опросник чек-ина, form:<имя> формы или null), alarm_min, repeat,
+    workout_id, practice_id, status."""
     period(date_from, date_to)
     return cap(agenda_rows(conn, date_from, date_to))
 

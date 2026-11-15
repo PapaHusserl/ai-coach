@@ -11,6 +11,7 @@ from ai_coach.agenda.draft import KINDS
 from ai_coach.mcp_server import (
     agenda,
     decisions,
+    forms,
     habits,
     links,
     meal,
@@ -32,7 +33,7 @@ INSTRUCTIONS = (
     "truncated=true — что-то отрезано (у рядов по датам остаются самые новые строки). "
     "Записать можно только черновики (create_draft_workout, cancel_draft_workout — только draft, "
     "create_draft_event, create_day_plan, cancel_draft_event — только draft, move_draft_event — "
-    "двигает только draft, propose_phase) и "
+    "двигает только draft, propose_phase, create_form, archive_form — формы после «да») и "
     "КБЖУ записи еды, "
     "у которой его ещё нет, вместе с группами продуктов (save_food_nutrition), и группы "
     "старым записям без групп (save_food_groups); варианты блюд к пункту еды "
@@ -310,8 +311,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(draft) и записанные в календарь (written) с днём начала в периоде, плюс активный "
         "повторяющийся чек-ин: id, kind (" + "/".join(KINDS) + "), title, date, "
         "start_at, end_at, all_day, note, category (для нагрузки или null), survey (опросник "
-        "чек-ина или null), alarm_min, repeat, workout_id, practice_id, status. Записывает в "
-        "календарь пользователь командой coach event write.",
+        "чек-ина, form:<имя> формы или null), alarm_min, repeat, workout_id, practice_id, "
+        "status. Записывает в календарь пользователь командой coach event write.",
     ),
     "get_done_log": (
         agenda.done_log,
@@ -432,8 +433,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "alarm_min - за сколько минут напомнить; repeat=daily / weekly / biweekly - только у "
         "checkin, не два на одно время суток с пересечением по дням; "
         "workout_id / practice_id - связь с тренировкой плана или практикой; note - заметка; "
-        "all_day - на весь день; survey - опросник чек-ина, у checkin обязателен: evening / "
-        "feel / focus / none / who5, у остальных не задаётся. Ответ: draft_id. В календарь кладёт "
+        "all_day - на весь день; survey - у checkin обязателен: evening / feel / focus / none / "
+        "who5 или form:<имя> активной формы (get_forms); у остальных видов - только "
+        "form:<имя>. Ответ: draft_id. В календарь кладёт "
         "пользователь командой coach event write.",
     ),
     "create_day_plan": (
@@ -467,6 +469,34 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "propose_phase": (
         tools.propose_phase,
         "Предложить фазу (proposed); принимает пользователь. Кладёт пункт в очередь решений.",
+    ),
+    "create_form": (
+        forms.create_form,
+        "Завести форму для событий календаря - только после «да» пользователя на показанный "
+        "состав. name - латиница, цифры, _, с буквы, до 24 знаков, не feel/evening/focus/none/"
+        "who5; title - название до 24 знаков; fields - от 1 до 8 полей {key, type, label до 40 "
+        "знаков, required (true/false, по умолчанию true), unit, min, max, low, high, options}. "
+        "type: number (границы min, max; unit - единица до 8 знаков, только у number), scale "
+        "(целое 1-5; обязательны полюса low и high до 24 знаков; ключ score - «Самочувствие», "
+        "пишется и в журнал самочувствия, полюсов у него нет), yesno, choice (options - от 2 до "
+        "6 вариантов, каждый до 24 знаков, выбирается один). Форма не правится: новая или "
+        "archive_form. Событие с формой: create_draft_event(survey=form:<name>).",
+    ),
+    "archive_form": (
+        forms.archive_form,
+        "Снять форму по имени: новые события с ней не создаются, созданные работают.",
+    ),
+    "get_forms": (
+        forms.forms,
+        "Активные формы: name, title, fields (список полей объектом: key, type, label, required, "
+        "unit, min, max, low, high, options), created_at.",
+    ),
+    "get_form_log": (
+        forms.form_log,
+        "Ответы форм за период (date_from, date_to - YYYY-MM-DD, до 92 дней): id, date, time, "
+        "event_id, form, values (ответы по ключам полей), score (оценка самочувствия, если у "
+        "формы есть поле score), text. Нет строк - ответов не было. Выводов нет. Отвечает "
+        "пользователь в пульте.",
     ),
 }
 

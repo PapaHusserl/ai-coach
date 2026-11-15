@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from ai_coach.store.agenda import active_repeats
+from ai_coach.store.forms import get_form
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.practices import get_practice
 from ai_coach.workload.config import CATEGORIES
@@ -12,6 +13,7 @@ from ai_coach.workload.config import CATEGORIES
 KINDS = ("training", "practice", "rest", "sleep", "checkin", "task", "focus", "meal")
 REST_KINDS = ("rest", "sleep")
 SURVEYS = ("evening", "feel", "focus", "none", "who5")
+FORM_PREFIX = "form:"
 REPEATS = ("daily", "weekly", "biweekly")
 PAST_DAYS = 30
 AHEAD_DAYS = 14
@@ -49,14 +51,25 @@ def _category(kind: str, given: str | None) -> str | None:
     return None
 
 
-def _survey(kind: str, given: str | None) -> str | None:
-    """Опросник чек-ина (имя из SURVEYS); у остальных видов не задаётся. Без него - None."""
+def _survey(conn: sqlite3.Connection, kind: str, given: str | None) -> str | None:
+    """form:<имя> активной формы - у любого вида; готовый опросник (имя из SURVEYS) - только у
+    checkin. Без survey - None."""
     if given is None:
         return None
+    if given.startswith(FORM_PREFIX):
+        form = get_form(conn, given[len(FORM_PREFIX) :])
+        if form is None or form["archived_at"] is not None:
+            raise AgendaError(f"Формы {given!r} нет или она снята: активные - get_forms.")
+        return given
     if kind != "checkin":
-        raise AgendaError(f"survey только у checkin, а kind={kind}.")
+        raise AgendaError(
+            f"survey только у checkin, а kind={kind}; у остальных видов - form:<имя> (get_forms)."
+        )
     if given not in SURVEYS:
-        raise AgendaError(f"survey должен быть из {list(SURVEYS)}, получено: {given!r}")
+        raise AgendaError(
+            f"survey должен быть из {list(SURVEYS)} или form:<имя> (активные - get_forms), "
+            f"получено: {given!r}"
+        )
     return given
 
 
@@ -84,7 +97,8 @@ def validate_draft(
 ) -> dict[str, Any]:
     """Проверенные значения черновика для add_event (без status, created_at). values: kind, title,
     start_at, end_at (местное время ISO); не обязательно all_day, note, category, alarm_min,
-    repeat, survey (только у checkin), workout_id, practice_id. Начало раньше конца, событие не
+    repeat, survey (готовый - только у checkin, form:<имя> активной формы - у любого вида),
+    workout_id, practice_id. Начало раньше конца, событие не
     длиннее MAX_HOURS, день начала от PAST_DAYS назад до AHEAD_DAYS вперёд; repeat (daily,
     weekly, biweekly) только у checkin и не два активных на одно время суток с пересечением по
     дням; тренировка и практика живы; категория по умолчанию только у rest и sleep (rest)."""
@@ -126,7 +140,7 @@ def validate_draft(
         "all_day": int(bool(values.get("all_day"))),
         "note": note,
         "category": _category(kind, values.get("category")),
-        "survey": _survey(kind, values.get("survey")),
+        "survey": _survey(conn, kind, values.get("survey")),
         "alarm_min": alarm,
         "repeat": repeat,
         "workout_id": values.get("workout_id"),

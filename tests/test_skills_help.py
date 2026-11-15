@@ -662,8 +662,7 @@ def test_readme_mentions_help() -> None:
 
 
 def test_agenda_note_has_focus_title_and_poles() -> None:
-    path = AGENTS / "coach-agenda.md"
-    text = path.read_text()
+    text = (AGENTS / "coach-agenda" / "checkins.md").read_text()
     assert "Фокус 1–5?" in text
     for pole in ("рассеян", "собран", "свеж", "выжат", "легко", "через силу"):
         assert pole in text, pole
@@ -685,6 +684,7 @@ def test_agenda_note_says_survey_is_required_and_old_checkins_are_recreated() ->
 
 def test_agenda_note_maps_reminders_to_surveys() -> None:
     text = (AGENTS / "coach-agenda.md").read_text()
+    text += (AGENTS / "coach-agenda" / "checkins.md").read_text()
     for needle in ("survey=evening", "survey=focus", "survey=none"):
         assert needle in text, needle
 
@@ -703,6 +703,7 @@ def test_pult_topic_describes_creating_checkin_with_survey() -> None:
 
 def test_agenda_note_maps_who5_reminder_to_who5_survey() -> None:
     text = (AGENTS / "coach-agenda.md").read_text()
+    text += (AGENTS / "coach-agenda" / "checkins.md").read_text()
     assert "survey=who5" in text
     assert "`who5`" in text
 
@@ -738,3 +739,19 @@ def test_help_index_mentions_coach_slip() -> None:
 
 def test_slip_command_is_allowed() -> None:
     assert "Bash(uv run coach slip:*)" in allow()
+
+
+def test_forms_topic_exists_and_names_form_tools() -> None:
+    text = topic("forms.md")
+    for name in ("create_form", "archive_form", "get_forms", "get_form_log"):
+        assert re.search(rf"\b{name}\b", text), name
+
+
+def test_forms_topic_names_field_types() -> None:
+    text = topic("forms.md")
+    for needle in ("число", "шкала", "да/нет", "выбор"):
+        assert needle in text, needle
+
+
+def test_help_index_points_to_forms_topic() -> None:
+    assert "coach-help/forms.md" in HELP.read_text()

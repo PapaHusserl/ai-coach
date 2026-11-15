@@ -237,6 +237,26 @@ def test_list_shows_survey_of_checkin(isolated: Path) -> None:
     assert "опросник: feel" in result.output
 
 
+def test_list_shows_form_survey_of_checkin(isolated: Path) -> None:
+    seed(
+        isolated, kind="checkin", category=None, survey="form:temp", title="Температура",
+        date="2026-10-10", start_at="2026-10-10T15:00:00", end_at="2026-10-10T15:15:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert result.exit_code == 0, result.output
+    assert "опросник: form:temp" in result.output
+
+
+def test_list_shows_form_survey_of_training(isolated: Path) -> None:
+    seed(
+        isolated, kind="training", category=None, survey="form:temp", title="Бег",
+        date="2026-10-10", start_at="2026-10-10T15:00:00", end_at="2026-10-10T16:00:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert result.exit_code == 0, result.output
+    assert "опросник: form:temp" in result.output
+
+
 def test_list_checkin_without_survey_has_no_survey_tail(isolated: Path) -> None:
     seed(
         isolated, kind="checkin", category=None, title="Старый чек-ин",

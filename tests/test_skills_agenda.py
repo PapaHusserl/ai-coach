@@ -8,6 +8,9 @@ AGENTS = ROOT / "agents"
 ALLOW = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
 AGENDA = AGENTS / "coach-agenda.md"
 EVENING = ROOT / "skills" / "coach-evening" / "SKILL.md"
+CHECKINS = AGENTS / "coach-agenda" / "checkins.md"
+CHECKINS_CAT = "cat .claude/agents/coach-agenda/checkins.md"
+FORM_TOOLS = ("create_form", "archive_form", "get_forms", "get_form_log")
 
 
 def coach_text() -> str:
@@ -39,7 +42,7 @@ def test_agenda_file_mentions_tools_and_commands() -> None:
 
 
 def test_agenda_file_mentions_focus() -> None:
-    text = AGENDA.read_text()
+    text = CHECKINS.read_text()
     assert "coach focus" in text
     assert "Фокус 1–5?" in text
 
@@ -96,6 +99,47 @@ def test_calendar_not_set_text_lives_in_errors_side_file_only() -> None:
 
 def test_agenda_file_names_done_log_tool() -> None:
     assert "get_done_log" in AGENDA.read_text()
+
+
+def test_coach_md_has_form_tools() -> None:
+    head = coach_text().split("---")[1]
+    for name in FORM_TOOLS:
+        assert f"mcp__ai-coach__{name}" in head
+
+
+def test_agenda_checkins_side_file_is_not_empty() -> None:
+    assert CHECKINS.is_file()
+    assert len(CHECKINS.read_bytes()) > 0
+
+
+def test_agenda_file_names_checkins_side_file_with_cat() -> None:
+    assert CHECKINS_CAT in AGENDA.read_text()
+
+
+def test_agenda_checkins_side_file_is_allowed() -> None:
+    assert f"Bash({CHECKINS_CAT})" in ALLOW
+
+
+def test_checkins_side_file_keeps_the_three_reminders() -> None:
+    text = CHECKINS.read_text()
+    for needle in ("Обзор недели", "WHO-5", "Фокус 1–5?"):
+        assert needle in text, needle
+
+
+def test_reminders_moved_out_of_agenda_file() -> None:
+    text = AGENDA.read_text()
+    for needle in ("Обзор недели", "Фокус 1–5?"):
+        assert needle not in text, needle
+
+
+def test_checkins_side_file_describes_forms() -> None:
+    text = CHECKINS.read_text()
+    for needle in (*FORM_TOOLS, "form:<имя>"):
+        assert needle in text, needle
+
+
+def test_agenda_file_says_form_survey_fits_any_kind() -> None:
+    assert "survey=form:<имя>" in AGENDA.read_text()
 
 
 def test_evening_role_does_not_mention_agenda() -> None:

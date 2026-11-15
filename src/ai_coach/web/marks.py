@@ -4,6 +4,7 @@ import sqlite3
 from datetime import date, datetime
 from typing import Any
 
+from ai_coach.agenda.forms import MAX_SCORE, MIN_SCORE
 from ai_coach.store.agenda import ACTIVE, get_event, mark_done, unmark_done
 from ai_coach.store.journal import add_focus, add_slip, add_wellbeing
 from ai_coach.store.workload import upsert_counter
@@ -23,8 +24,6 @@ ALLOWED = {
 }  # у checkin отметки задаёт опросник: web/survey.py
 COOKING = "Готовка"  # пункт meal из agenda/day_layout.py: окна нет, красным не бывает
 MAX_ID = 2**63 - 1  # предел INTEGER sqlite
-MIN_SCORE = 1
-MAX_SCORE = 5
 MAX_HOURS = 24  # как cli/main.py MAX_HOURS
 HOURS = ("work", "hobby", "rest")
 CHECKIN_SCORES = {

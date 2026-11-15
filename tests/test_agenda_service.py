@@ -546,6 +546,100 @@ def test_task_without_survey_gives_none(conn: sqlite3.Connection) -> None:
     assert check(conn)["survey"] is None
 
 
+def put_form(conn: sqlite3.Connection, name: str = "temp", archived: bool = False) -> None:
+    import json
+
+    from ai_coach.store.forms import add_form, archive_form
+
+    fields = [{"key": "temperature", "type": "number", "label": "Температура"}]
+    add_form(
+        conn,
+        {
+            "name": name,
+            "title": "Температура",
+            "fields_json": json.dumps(fields, ensure_ascii=False),
+            "created_at": "2026-10-01 10:00:00",
+        },
+    )
+    if archived:
+        archive_form(conn, name, "2026-10-05 10:00:00")
+
+
+def test_checkin_with_live_form_keeps_value(conn: sqlite3.Connection) -> None:
+    put_form(conn)
+    result = check(conn, kind="checkin", category=None, survey="form:temp")
+    assert result["survey"] == "form:temp"
+
+
+def test_checkin_with_unknown_form_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, kind="checkin", category=None, survey="form:нет")
+
+
+def test_checkin_with_archived_form_is_error(conn: sqlite3.Connection) -> None:
+    put_form(conn, archived=True)
+    with pytest.raises(AgendaError):
+        check(conn, kind="checkin", category=None, survey="form:temp")
+
+
+def test_unknown_survey_refusal_names_get_forms(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError, match="get_forms"):
+        check(conn, kind="checkin", category=None, survey="мусор")
+
+
+@pytest.mark.parametrize("kind", ["training", "rest", "sleep"])
+def test_form_on_other_kind_keeps_value(conn: sqlite3.Connection, kind: str) -> None:
+    put_form(conn)
+    assert check(conn, kind=kind, category=None, survey="form:temp")["survey"] == "form:temp"
+
+
+def test_form_on_task_keeps_value(conn: sqlite3.Connection) -> None:
+    put_form(conn)
+    assert check(conn, survey="form:temp")["survey"] == "form:temp"
+
+
+def test_unknown_form_on_training_is_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, kind="training", category=None, survey="form:нет")
+
+
+def test_archived_form_on_task_is_error(conn: sqlite3.Connection) -> None:
+    put_form(conn, archived=True)
+    with pytest.raises(AgendaError):
+        check(conn, survey="form:temp")
+
+
+def test_ready_survey_on_training_is_still_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(AgendaError):
+        check(conn, kind="training", category=None, survey="evening")
+
+
+def test_move_draft_after_form_archived_keeps_survey(conn: sqlite3.Connection) -> None:
+    put_form(conn, archived=True)
+    event_id = stored(conn, kind="checkin", category=None, survey="form:temp")
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["survey"] == "form:temp"
+
+
+def test_move_draft_with_unknown_survey_in_base_keeps_survey(conn: sqlite3.Connection) -> None:
+    event_id = stored(conn, kind="checkin", category=None, survey="form:нет")
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["survey"] == "form:нет"
+
+
+def test_move_draft_of_training_with_archived_form_keeps_survey(conn: sqlite3.Connection) -> None:
+    put_form(conn, archived=True)
+    event_id = stored(conn, kind="training", category=None, survey="form:temp")
+    assert move_draft(conn, event_id, NEW_START, TODAY)["date"] == "2026-10-12"
+    row = get_event(conn, event_id)
+    assert row is not None
+    assert row["survey"] == "form:temp"
+
+
 def test_move_draft_repeating_is_refused_with_hint(conn: sqlite3.Connection) -> None:
     event_id = stored(conn, **CHECKIN)
     with pytest.raises(AgendaError, match="снять .* и поставить заново"):

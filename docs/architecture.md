@@ -292,6 +292,9 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - MCP: `get_workload` отдаёт `claude_*` целыми (None — не считалось), при `events=true` на один день — ещё `claude_repos_names` (`workload_day`). Сводка: ключ `claude` (7 дней, `prompts/evening/decisions/repos/switches`, без имён), `workload` и `workload_ahead` без `claude_*`; `workload` — свой лимит `WORKLOAD_CHARS` 5 000 (7 дней вместо 6 при `SNAPSHOT_CHARS` 4 000).
 - Справка — `coach-help/claude-code.md`; отчёт разведки — `docs/research-claude.md`.
 
+## П12: формы (партия 2)
+- Миграция 0034: `forms(name PK, title, fields_json, created_at, archived_at)` и `form_log(id, date, time, event_id, form, values_json, text, wellbeing_id)`; повтор ответа — новая строка. `store/forms.py` (`add_form`, `get_form`, `list_forms`, `archive_form`, `add_form_entry`, `list_form_log`), `agenda/forms.py` (`check_form`, `check_answers`; типы `number`, `scale`, `yesno`, `choice`; ключ `score` — «Самочувствие»), `mcp_server/forms.py` (`create_form`, `archive_form`, `get_forms`, `get_form_log`). Значение `coach_events.survey = "form:<имя>"` допустимо у любого вида (`agenda/draft.py: _survey` проверяет активность формы при создании; перенос события форму не перепроверяет); готовое имя опросника — только у `checkin`.
+
 ## Н19: срыв в момент (партия 1)
 - Миграция 0027: `slip_log(id, date, logged_at, text NOT NULL CHECK (length(trim(text)) > 0))`, индекс по `date`; отдельная таблица, как `focus_log`. Текст — свободные эмоции как есть, без силы и списка поводов.
 - `store/journal.py`: `add_slip`, `list_slip`. CLI (`cli/journal.py`): `coach slip "текст" [--at HH:MM]` (слова без кавычек склеиваются; `--at` — время сегодняшнего дня самочувствия, будущее — ошибка; дата — `wellbeing_day`), `coach log slip [--date D]`. Записи только добавляются.

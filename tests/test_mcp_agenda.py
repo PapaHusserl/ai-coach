@@ -144,6 +144,50 @@ def test_survey_on_task_is_rejected(conn: sqlite3.Connection) -> None:
     assert count(conn, "draft") == 0
 
 
+def make_form(conn: sqlite3.Connection, name: str = "temp") -> None:
+    fields = [{"key": "temperature", "type": "number", "label": "Температура", "unit": "°C"}]
+    call(conn, "create_form", name=name, title="Температура", fields=fields)
+
+
+def test_checkin_with_form_is_stored(conn: sqlite3.Connection) -> None:
+    make_form(conn)
+    row = get_event(
+        conn, create(conn, kind="checkin", category=None, survey="form:temp")["draft_id"]
+    )
+    assert row is not None
+    assert (row["survey"], row["status"]) == ("form:temp", "draft")
+
+
+def test_training_with_form_is_draft(conn: sqlite3.Connection) -> None:
+    make_form(conn)
+    row = get_event(
+        conn, create(conn, kind="training", category=None, survey="form:temp")["draft_id"]
+    )
+    assert row is not None
+    assert (row["survey"], row["status"]) == ("form:temp", "draft")
+
+
+def test_unknown_form_is_rejected(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ToolError):
+        create(conn, kind="checkin", category=None, survey="form:нет")
+    assert count(conn, "draft") == 0
+
+
+def test_archived_form_is_rejected(conn: sqlite3.Connection) -> None:
+    make_form(conn)
+    call(conn, "archive_form", name="temp")
+    with pytest.raises(ToolError):
+        create(conn, kind="checkin", category=None, survey="form:temp")
+    assert count(conn, "draft") == 0
+
+
+def test_get_agenda_returns_form_survey(conn: sqlite3.Connection) -> None:
+    make_form(conn)
+    create(conn, kind="checkin", category=None, survey="form:temp")
+    rows = call(conn, "get_agenda", date_from=TOMORROW, date_to=TOMORROW)["rows"]
+    assert [r["survey"] for r in rows] == ["form:temp"]
+
+
 def test_get_agenda_returns_survey(conn: sqlite3.Connection) -> None:
     create(conn, kind="checkin", category=None, survey="focus")
     rows = call(conn, "get_agenda", date_from=TOMORROW, date_to=TOMORROW)["rows"]

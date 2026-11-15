@@ -83,6 +83,10 @@ EXPECTED_TOOLS = {
     "create_meal_offers",
     "cancel_meal_offers",
     "get_decisions",
+    "create_form",
+    "archive_form",
+    "get_forms",
+    "get_form_log",
 }
 
 
