@@ -114,7 +114,9 @@ export function nextRow(rows, view) {
 // Статус справа в строке (Р4): {text, tone}; tone — live | good | bad | "". isNext — ближайший ли это пункт.
 export function rowStatus(row, now, isNext) {
 	if (row.current) return { text: "идёт", tone: "live" };
-	if (row.source === "meeting" || !hasWindow(row)) return { text: "", tone: "" };
+	if (row.source === "meeting") return { text: "", tone: "" };
+	// Окна нет, но ответа нет: прошедший чек-ин или сон с потерянной формой всё равно красный.
+	if (!hasWindow(row)) return row.due && isPast(row, now) ? { text: "не заполнено", tone: "bad" } : { text: "", tone: "" };
 	const known = isPast(row, now)
 		? pastStatus(row)
 		: isNext && { text: `через ${part(minutesBetween(now, row.start_at))}`, tone: "" };

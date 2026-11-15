@@ -763,5 +763,15 @@ def test_forms_topic_names_field_types() -> None:
         assert needle in text, needle
 
 
+def test_agenda_checkins_form_rule_only_on_explicit_request() -> None:
+    text = " ".join((AGENTS / "coach-agenda" / "checkins.md").read_text().split())
+    assert "только по явной просьбе" in text
+
+
+def test_forms_topic_says_recurring_item_turns_red_every_past_day() -> None:
+    text = " ".join(topic("forms.md").split())
+    assert "каждый прошедший день" in text
+
+
 def test_help_index_points_to_forms_topic() -> None:
     assert "coach-help/forms.md" in HELP.read_text()

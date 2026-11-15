@@ -235,6 +235,25 @@ test("rowStatus: прошедшая задача с потерянной фор�
 	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
 });
 
+test("rowStatus: прошедший чек-ин с потерянной формой и due — «не заполнено»", () => {
+	const row = itemRow({ kind: "checkin", survey: "form:нет", due: true });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
+});
+
+test("rowStatus: прошедший сон с потерянной формой и due — «не заполнено»", () => {
+	const row = itemRow({ kind: "sleep", survey: "form:нет", due: true });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
+});
+
+test("rowStatus: прошедшая «Готовка» с формой — пусто", () => {
+	const row = itemRow({ kind: "meal", survey: "form:temp" });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "", tone: "" });
+});
+
+test("rowStatus: прошедший сон без формы — пусто", () => {
+	assert.deepEqual(rowStatus(itemRow({ kind: "sleep" }), NOW, false), { text: "", tone: "" });
+});
+
 test("hasWindow: «Готовка» с формой — окна нет", () => {
 	assert.equal(hasWindow(itemRow({ kind: "meal", survey: "form:temp" })), false);
 });
