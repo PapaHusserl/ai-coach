@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from ai_coach.agenda.draft import FORM_PREFIX
+
 SURVEY_MARKS = {
     "evening": ("checkin",),
     "feel": ("feel",),
@@ -9,6 +11,11 @@ SURVEY_MARKS = {
     "none": ("done",),
     "who5": ("who5",),
 }
+
+
+def is_form(survey: str | None) -> bool:
+    """Значение form:<имя> - форма тренера; её отметка и «красное» - в marks.py и day_marks.py."""
+    return survey is not None and survey.startswith(FORM_PREFIX)
 
 
 def marks_of(survey: str | None) -> tuple[str, ...]:

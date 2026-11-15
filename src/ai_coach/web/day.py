@@ -14,6 +14,7 @@ from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
 from ai_coach.web.day_marks import due, empty_marks, marks_for_day
 from ai_coach.web.food import meal_view, offers_view
+from ai_coach.web.forms import form_view
 from ai_coach.web.header import header_view
 from ai_coach.web.marks import COOKING
 from ai_coach.web.repeat import moved, on_day
@@ -66,6 +67,8 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
         item |= {"marks": mine, "due": flag}
         if r["kind"] == "checkin" and r["survey"] == "who5":
             item["who5"] = who5
+        if form := form_view(conn, r["survey"]):
+            item["form"] = form
         if training:
             item["training"] = training
         if r["kind"] == "meal" and r["title"] != COOKING:

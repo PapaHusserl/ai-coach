@@ -99,6 +99,21 @@ def test_due_survey_does_not_touch_other_kinds() -> None:
     assert due("task", marks(ratings=[RATED]), True, True, survey="feel") is False
 
 
+@pytest.mark.parametrize(
+    ("survey", "expected"),
+    [("form:temp", True), ("feel", False), (None, False), ("formtemp", False)],
+)
+def test_is_form_is_the_form_prefix(survey: str | None, expected: bool) -> None:
+    from ai_coach.web.survey import is_form
+
+    assert is_form(survey) is expected
+
+
+def test_form_survey_gives_no_checkin_marks_and_is_not_checkin_due() -> None:
+    assert marks_of("form:temp") == ()
+    assert checkin_due("form:temp", marks(), evening=False) is False
+
+
 def test_survey_tabs_in_js_equal_survey_marks_in_python() -> None:
     script = (STATIC / "marks-model.js").read_text(encoding="utf-8")
     block = script.split("const SURVEY_TABS = {", 1)[1].split("};", 1)[0]

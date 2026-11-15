@@ -165,6 +165,83 @@ test("historyRows: запись еды стоит по времени среди
 	assert.ok(rows[0].text.includes("омлет"));
 });
 
+const TEMP_FORM = {
+	name: "temp",
+	title: "Температура",
+	fields: [{ key: "temperature", type: "number", label: "Температура", unit: "°C" }],
+};
+const answerOf = (values, extra = {}) => ({ values, score: null, text: null, logged_at: "2026-11-08 20:05:00", ...extra });
+
+test("tabsFor: форма у чек-ина — одна вкладка form", () => {
+	assert.deepEqual(tabsFor("checkin", "form:temp"), ["form"]);
+});
+
+test("tabsFor: форма у не-чек-ина — штатные вкладки и form последней", () => {
+	assert.deepEqual(tabsFor("task", "form:temp"), ["rating", "feel", "slip", "form"]);
+	assert.deepEqual(tabsFor("training", "form:rpe"), ["done", "feel", "slip", "form"]);
+});
+
+test("tabsFor: сон — только form, без формы — пусто", () => {
+	assert.deepEqual(tabsFor("sleep", "form:temp"), ["form"]);
+	assert.deepEqual(tabsFor("sleep"), []);
+});
+
+test("markSummary: у чек-ина с формой — строка формы", () => {
+	const marks = { ...empty, forms: [answerOf({ temperature: 37.2 })] };
+	assert.equal(markSummary(marks, null, TEMP_FORM), "37.2 °C");
+});
+
+test("markSummary: оценка пункта и строка формы через «·»", () => {
+	const ratings = [{ focus: 4, fatigue: 3, effort: 2, text: "", logged_at: "2026-11-08 11:00:00" }];
+	const marks = { ...empty, ratings, forms: [answerOf({ temperature: 37.2 })] };
+	assert.equal(markSummary(marks, null, TEMP_FORM), "4/3/2 · 37.2 °C");
+});
+
+test("markSummary: берётся последний ответ формы", () => {
+	const marks = { ...empty, forms: [answerOf({ temperature: 37.2 }), answerOf({ temperature: 38 })] };
+	assert.equal(markSummary(marks, null, TEMP_FORM), "38 °C");
+});
+
+test("markSummary: оценка формы входит в строку", () => {
+	const fields = [{ key: "score", type: "scale", label: "Самочувствие" }, ...TEMP_FORM.fields];
+	const marks = { ...empty, forms: [answerOf({ temperature: 37.2 }, { score: 4 })] };
+	assert.equal(markSummary(marks, null, { ...TEMP_FORM, fields }), "самочувствие 4 · 37.2 °C");
+});
+
+test("markSummary: без формы и без ключа forms работает как раньше", () => {
+	assert.equal(markSummary(empty), "");
+	assert.equal(markSummary({ ...empty, forms: [] }, null, TEMP_FORM), "");
+});
+
+test("historyRows: одна строка на ответ формы, вкладка form, по времени", () => {
+	const marks = {
+		...empty,
+		forms: [answerOf({ temperature: 37.2 }), answerOf({ temperature: 38 }, { logged_at: "2026-11-08 21:10:00" })],
+		feel: [{ score: 4, text: "", logged_at: "2026-11-08 20:30:00" }],
+	};
+	const rows = historyRows(marks, TEMP_FORM);
+	assert.deepEqual(rows.map((r) => [r.time, r.tab]), [["20:05", "form"], ["20:30", "feel"], ["21:10", "form"]]);
+	assert.ok(rows[0].text.includes("37.2 °C"));
+	assert.ok(rows[2].text.includes("38 °C"));
+});
+
+test("errorText: отказ ответа формы — текст сервера", () => {
+	const text = "Ответ формы не принят: Температура — от 34 до 43.";
+	assert.equal(errorText(400, text), text);
+});
+
+test("historyRows: строка ответа формы с текстом — без названия формы", () => {
+	const marks = { ...empty, forms: [answerOf({ temperature: 37.2 }, { score: 4, text: "кашель" })] };
+	const fields = [{ key: "score", type: "scale", label: "Самочувствие" }, ...TEMP_FORM.fields];
+	const [row] = historyRows(marks, { ...TEMP_FORM, fields });
+	assert.deepEqual(row, { time: "20:05", tab: "form", text: "самочувствие 4 · 37.2 °C — кашель" });
+});
+
+test("historyRows: ответ без значений — название формы", () => {
+	const [row] = historyRows({ ...empty, forms: [answerOf({})] }, TEMP_FORM);
+	assert.equal(row.text, "Температура");
+});
+
 test("foodSummary: записей нет — пусто", () => {
 	assert.equal(foodSummary({ remaining: null, food: [] }), "");
 });

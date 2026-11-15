@@ -310,7 +310,9 @@ def test_item_error_prefixes_of_pult_js_match_mark_errors() -> None:
     script = (root / "static" / "marks-model.js").read_text(encoding="utf-8")
     block = script.split("const ITEM_ERRORS = [", 1)[1].split("];", 1)[0]
     prefixes = re.findall(r'"([^"]+)"', block)
-    source = "".join((root / name).read_text(encoding="utf-8") for name in ("marks.py", "who5.py"))
+    source = "".join(
+        (root / name).read_text(encoding="utf-8") for name in ("marks.py", "who5.py", "forms.py")
+    )
     texts = re.findall(r'MarkError\(\s*f?"([^"]*)"', source)
     assert prefixes
     for prefix in prefixes:

@@ -6,8 +6,14 @@ import { screenLine } from "./screen-hint.js";
 
 // Шкала name вкладки tab; form — форма вкладки, save — кнопка «Сохранить».
 export function scale(tab, form, name, save) {
-	const field = FIELDS[name];
 	const optional = !REQUIRED[tab].includes(name);
+	return scaleRow(FIELDS[name], optional, form, name, () => {
+		save.disabled = !canSave(tab, form);
+	});
+}
+
+// Строка шкалы 1–5: field {label, low, high}, значение — form[name], changed — после каждого клика.
+export function scaleRow(field, optional, form, name, changed) {
 	// Строка: название, кнопки 1–5, полюса словами (Р8); у обязательной пустой шкалы название красное.
 	const wrap = el("div", "sr");
 	const line = el("div", "qs");
@@ -24,7 +30,7 @@ export function scale(tab, form, name, save) {
 		button.addEventListener("click", () => {
 			form[name] = optional && form[name] === value ? null : value;
 			mark();
-			save.disabled = !canSave(tab, form);
+			changed();
 		});
 		buttons.push(button);
 		line.append(button);

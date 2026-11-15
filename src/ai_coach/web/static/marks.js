@@ -18,6 +18,8 @@ import {
 	who5Line,
 } from "./marks-model.js";
 import { el } from "./dom.js";
+import { formFields } from "./form-fields.js";
+import { formCanSave, formPayload, withFormTab } from "./form-model.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
 import { offersBlock } from "./offers-pane.js";
 import { toast } from "./toast.js";
@@ -26,7 +28,7 @@ import { who5Fields } from "./who5-fields.js";
 
 export * from "./marks-model.js";
 
-const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, who5: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, who5: null, form: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -71,7 +73,7 @@ async function sendNow(tab, text, extra) {
 	showError("");
 	const forms = state.forms;
 	const form = { ...forms[tab], ...extra, event_id: state.id, date: state.day, text };
-	const body = JSON.stringify(buildPayload(tab, form));
+	const body = JSON.stringify(tab === "form" ? formPayload(state.form.fields, form) : buildPayload(tab, form));
 	let status = 0;
 	let reply = "";
 	try {
@@ -161,6 +163,22 @@ function mealHead(box) {
 	box.append(ui.saved, ui.left, ui.offers);
 }
 
+// Поля вкладки tab (шкалы, WHO-5, форма тренера, часы и погружение чек-ина); save — кнопка «Сохранить».
+function tabFields(tab, save) {
+	const form = state.forms[tab];
+	const nodes = (TAB_FIELDS[tab] ?? []).map((name) => scale(tab, form, name, save));
+	if (tab === "who5") nodes.push(who5Fields(form, save));
+	if (tab === "form") nodes.push(formFields(state.form.fields, form, save));
+	if (tab === "checkin") nodes.push(hoursFields(form, state.day), flowField(form));
+	return nodes;
+}
+
+// Заполнено ли всё нужное для «Сохранить» на вкладке tab.
+function tabReady(tab) {
+	const form = state.forms[tab];
+	return tab === "form" ? formCanSave(state.form.fields, form.values) : canSave(tab, form);
+}
+
 function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
@@ -202,21 +220,16 @@ function buildForm() {
 		ui.text = text;
 		mealHead(box);
 	}
-	for (const name of TAB_FIELDS[tab] ?? []) box.append(scale(tab, state.forms[tab], name, save));
-	if (tab === "who5") box.append(who5Fields(state.forms[tab], save));
-	if (tab === "checkin") {
-		box.append(hoursFields(state.forms[tab], state.day), flowField(state.forms[tab]));
-	}
-	box.append(text, errorLine, save);
-	save.disabled = !canSave(tab, state.forms[tab]);
+	box.append(...tabFields(tab, save), text, errorLine, save);
+	save.disabled = !tabReady(tab);
 	save.addEventListener("click", () => send(tab, text.value));
 }
 
 function buildTabs(kind, survey) {
 	const tabs = ui.tabs;
 	tabs.replaceChildren();
-	for (const tab of tabsFor(kind, survey)) {
-		const button = el("button", "tab", tabLabel(kind, tab));
+	for (const tab of withFormTab(tabsFor(kind, survey), state.form)) {
+		const button = el("button", "tab", tab === "form" ? state.form.title : tabLabel(kind, tab));
 		button.type = "button";
 		button.setAttribute("role", "tab");
 		button.setAttribute("aria-selected", String(tab === state.tab));
@@ -231,18 +244,18 @@ function buildTabs(kind, survey) {
 }
 
 function buildHistory(row) {
-	const summary = [markSummary(row.marks, row.training?.fact), row.who5 ? who5Line(row.who5) : ""];
+	const summary = [markSummary(row.marks, row.training?.fact, row.form), row.who5 ? who5Line(row.who5) : ""];
 	ui.sub.textContent = row.due ? "не отмечено" : summary.filter(Boolean).join(" · ");
 	ui.sub.classList.toggle("bad", Boolean(row.due));
 	ui.history.replaceChildren();
-	for (const entry of historyRows(row.marks)) ui.history.append(el("li", "", `${entry.time} · ${entry.text}`));
+	for (const entry of historyRows(row.marks, row.form)) ui.history.append(el("li", "", `${entry.time} · ${entry.text}`));
 	if (row.who5) ui.history.append(el("li", "", `${row.who5.logged_at.slice(11, 16)} · ${who5Line(row.who5)}`));
 }
 
 function startPane(row, view) {
 	state.id = row.id;
 	state.day = view.date;
-	state.tab = tabsFor(row.kind, row.survey)[0];
+	state.tab = withFormTab(tabsFor(row.kind, row.survey), row.form)[0];
 	state.future = isFuture(row, view.now);
 	state.forms = drafts[`${view.date}:${row.id}`] ??= {};
 	state.offer = 0;
@@ -258,6 +271,7 @@ export function mountMarks(item, row, view) {
 	state.meal = row.meal ?? null;
 	state.training = row.training ?? null;
 	state.who5 = row.who5 ?? null;
+	state.form = row.form ?? null;
 	state.past = isPast(row, view.now);
 	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);

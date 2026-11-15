@@ -10,8 +10,9 @@ from ai_coach.store.journal import add_focus, add_slip, add_wellbeing
 from ai_coach.store.workload import upsert_counter
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.food import save_food
+from ai_coach.web.forms import save_form
 from ai_coach.web.repeat import moved, on_day
-from ai_coach.web.survey import marks_of
+from ai_coach.web.survey import is_form, marks_of
 from ai_coach.web.who5 import save_who5
 
 ALLOWED = {
@@ -80,6 +81,8 @@ def _event(conn: sqlite3.Connection, payload: dict[str, Any]) -> tuple[dict[str,
 
 def _kinds(row: dict[str, Any], mark: Any) -> None:
     kinds = marks_of(row["survey"]) if row["kind"] == "checkin" else ALLOWED.get(row["kind"])
+    if is_form(row["survey"]):
+        kinds = (*(kinds or ()), "form")  # у вида без штатных отметок (сон) - только она
     if kinds is None or (row["kind"] == "meal" and row["title"] == COOKING):
         raise MarkError("У этого пункта пока нет окна отметок.")
     if mark not in kinds:
@@ -144,4 +147,6 @@ def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) 
         return _checkin(conn, payload, base)
     if mark == "who5":
         return save_who5(conn, payload, base)
+    if mark == "form":
+        return save_form(conn, payload, base, row["survey"])
     return _entry(conn, mark, payload, base)

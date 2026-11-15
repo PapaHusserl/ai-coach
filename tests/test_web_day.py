@@ -375,7 +375,9 @@ def test_kinds_without_window_are_never_due_and_have_empty_marks(
     for event_id in ids:
         row = by_id(result, event_id)
         assert row["due"] is False
-        assert row["marks"] == {"ratings": [], "feel": [], "slips": [], "done": None, "food": []}
+        assert row["marks"] == {
+            "ratings": [], "feel": [], "slips": [], "done": None, "food": [], "forms": [],
+        }  # fmt: skip
         assert "meal" not in row
 
 

@@ -11,6 +11,7 @@ import math
 import re
 from typing import Any, cast
 
+from ai_coach.agenda.bounds import limits, within
 from ai_coach.agenda.draft import SURVEYS, AgendaError
 
 MIN_SCORE = 1
@@ -117,11 +118,6 @@ def check_form(form: dict[str, Any]) -> None:
         raise AgendaError("Ключи полей не должны повторяться.")
 
 
-def _within(field: dict[str, Any], value: float) -> bool:
-    low, high = field.get("min"), field.get("max")
-    return (low is None or value >= low) and (high is None or value <= high)
-
-
 def _answer(field: dict[str, Any], value: Any) -> Any:
     key, kind = field["key"], field["type"]
     if kind == "yesno":
@@ -129,12 +125,15 @@ def _answer(field: dict[str, Any], value: Any) -> Any:
     elif kind == "choice":
         ok = isinstance(value, str) and value in field["options"]
     elif kind == "scale":
-        ok = isinstance(value, int) and not isinstance(value, bool)
-        ok = ok and MIN_SCORE <= value <= MAX_SCORE
+        ok = (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and MIN_SCORE <= value <= MAX_SCORE
+        )
     else:
-        ok = isinstance(value, int | float) and not isinstance(value, bool)
-        ok = ok and math.isfinite(value)
-        ok = ok and _within(field, value)
+        ok = isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+        if ok and not within(field, value):
+            raise AgendaError(f"{field['label']} — {limits(field)}.")
     if not ok:
         raise AgendaError(f"{key}: ответ не подходит полю ({kind}), получено: {value!r}")
     return value

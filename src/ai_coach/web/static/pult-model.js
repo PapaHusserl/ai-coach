@@ -1,5 +1,6 @@
 // Пульт: модель плана дня — чистые функции без DOM (тесты — tests/web/pult.test.mjs, импорт через pult.js).
 
+import { withFormTab } from "./form-model.js";
 import { isFuture, isPast, markSummary, tabsFor } from "./marks-model.js";
 
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -68,6 +69,7 @@ const KIND_LABELS = {
 	meal: "еда",
 	training: "тренировка",
 	checkin: "чек-ин",
+	sleep: "сон",
 };
 
 // Минуты от a до b, ISO-строки одного формата ("2026-11-07T09:05:00").
@@ -79,7 +81,8 @@ function minutesBetween(a, b) {
 export function hasWindow(row) {
 	if (row.source === "meeting") return true;
 	// У «Готовки» (kind meal без ключа meal) окна нет, Р7.
-	return row.source === "item" && tabsFor(row.kind, row.survey).length > 0 && (row.kind !== "meal" || row.meal != null);
+	const tabs = withFormTab(tabsFor(row.kind, row.survey), row.form);
+	return row.source === "item" && tabs.length > 0 && (row.kind !== "meal" || row.meal != null);
 }
 
 // Заметка пункта тренера строкой; у встречи, без заметки и у пустой - "" (описание встречи - в её окне).
@@ -98,7 +101,7 @@ export function openedId(choice, rows) {
 // Статус прошедшего пункта с окном: красный «не заполнено», зелёная сводка или null.
 function pastStatus(row) {
 	if (row.due) return { text: "не заполнено", tone: "bad" };
-	const summary = markSummary(row.marks, row.training?.fact);
+	const summary = markSummary(row.marks, row.training?.fact, row.form);
 	return summary ? { text: summary, tone: "good" } : null;
 }
 

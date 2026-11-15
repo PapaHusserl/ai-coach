@@ -2,6 +2,8 @@
 // Полюса шкал — слова из coach-help/wellbeing.md (тест в tests/test_skills_help.py держит расхождение).
 // Окно тренировки (шаги, факт, зоны) — training-model.js.
 
+import { formRows, lastFormLine } from "./form-model.js";
+
 export * from "./training-model.js";
 
 const TABS = {
@@ -87,15 +89,17 @@ const ITEM_ERRORS = [
 	"Текст не может быть пустым",
 	"Часы (",
 	"WHO-5 за день уже",
+	"Ответ формы не принят",
 ];
 
 // Вкладки окна пункта по его типу (у чек-ина — по опроснику, нет — вечерний); пусто — окна нет.
+// Форма (survey = form:<имя>) — вкладка form: у чек-ина и сна единственная, у остальных последняя.
 export function tabsFor(kind, survey = null) {
-	if (kind === "checkin") return SURVEY_TABS[survey ?? "evening"] ?? [];
-	return TABS[kind] ?? [];
+	const own = (kind === "checkin" ? SURVEY_TABS[survey ?? "evening"] : TABS[kind]) ?? [];
+	return survey?.startsWith("form:") ? [...own, "form"] : own;
 }
 
-// Подпись вкладки: у тренировки «Сделал» называется «Итог» (над ним шаги или факт).
+// Подпись вкладки: у тренировки «Сделал» называется «Итог» (над ним шаги или факт); у формы — её название, берёт marks.js.
 export function tabLabel(kind, tab) {
 	return kind === "training" && tab === "done" ? "Итог" : TAB_LABELS[tab];
 }
@@ -112,8 +116,8 @@ export function isFuture(row, now) {
 const FACT_WORDS = { done: "✓ по плану", different: "выполнено иначе" };
 
 // Краткая отметка в строке пункта: последняя оценка, «сделал / пропустил» и факт Garmin тренировки
-// (без отметки «сделал»); без них — последнее самочувствие.
-export function markSummary(marks, fact = null) {
+// (без отметки «сделал»); без них — последнее самочувствие; затем последний ответ формы пункта form.
+export function markSummary(marks, fact = null, form = null) {
 	const parts = [];
 	const last = marks.ratings.at(-1);
 	if (last) parts.push(`${last.focus}/${last.fatigue}/${last.effort}`);
@@ -122,7 +126,7 @@ export function markSummary(marks, fact = null) {
 	else if (fact && FACT_WORDS[fact.kind]) parts.push(FACT_WORDS[fact.kind]);
 	const feel = marks.feel?.at(-1);
 	if (parts.length === 0 && feel) parts.push(`самочувствие ${feel.score}`);
-	return parts.join(" · ");
+	return [...parts, lastFormLine(marks, form)].filter(Boolean).join(" · ");
 }
 
 // Что записано у пункта еды: тексты записей через запятую; нет записей — "".
@@ -173,7 +177,7 @@ function feelHead(r) {
 }
 
 // Все отметки пункта по времени: {time: "HH:MM", tab, text}.
-export function historyRows(marks) {
+export function historyRows(marks, form = null) {
 	const withText = (head, text) => (text ? `${head} — ${text}` : head);
 	const rows = [
 		...marks.ratings.map((r) => ({
@@ -188,6 +192,7 @@ export function historyRows(marks) {
 		})),
 		...marks.slips.map((r) => ({ at: r.logged_at, tab: "slip", text: withText("Срыв", r.text) })),
 		...marks.food.map((r) => ({ at: r.logged_at, tab: "food", text: `Съел — ${r.text}` })),
+		...formRows(marks, form, withText),
 	];
 	if (marks.done) {
 		const word = marks.done.done === 1 ? "Сделал" : "Пропустил";

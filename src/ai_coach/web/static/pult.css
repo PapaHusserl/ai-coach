@@ -768,9 +768,40 @@ nav button[aria-selected="true"] {
 }
 
 .qs,
-.yn {
+.yn,
+.fnum,
+.fch {
 	display: flex;
 	gap: 3px;
+}
+
+.ff {
+	display: grid;
+	gap: 8px;
+}
+
+.fnum {
+	align-items: center;
+	gap: 6px;
+}
+
+.fnum input {
+	width: 7em;
+}
+
+.fnum .h {
+	color: var(--muted);
+	font-size: 11px;
+}
+
+.fch {
+	flex-wrap: wrap;
+}
+
+.fch button {
+	border-radius: 5px;
+	font-size: 11px;
+	padding: 3px 9px;
 }
 
 .qs button {

@@ -215,6 +215,48 @@ test("hasWindow: у остальных видов ключ meal не нужен"
 	assert.equal(hasWindow(itemRow({ kind: "task" })), true);
 });
 
+test("hasWindow: сон с формой — окно есть, без формы — нет", () => {
+	const form = { name: "temp", title: "Температура", fields: [] };
+	assert.equal(hasWindow(itemRow({ kind: "sleep", survey: "form:temp", form })), true);
+	assert.equal(hasWindow(itemRow({ kind: "sleep" })), false);
+});
+
+test("hasWindow: форма не найдена (нет ключа form) — у чек-ина и сна окна нет", () => {
+	assert.equal(hasWindow(itemRow({ kind: "checkin", survey: "form:нет" })), false);
+	assert.equal(hasWindow(itemRow({ kind: "sleep", survey: "form:нет" })), false);
+});
+
+test("hasWindow: форма не найдена — у задачи окно со штатными вкладками", () => {
+	assert.equal(hasWindow(itemRow({ kind: "task", survey: "form:нет" })), true);
+});
+
+test("rowStatus: прошедшая задача с потерянной формой и due — «не заполнено»", () => {
+	const row = itemRow({ survey: "form:нет", due: true });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "не заполнено", tone: "bad" });
+});
+
+test("hasWindow: «Готовка» с формой — окна нет", () => {
+	assert.equal(hasWindow(itemRow({ kind: "meal", survey: "form:temp" })), false);
+});
+
+test("rowStatus: прошедший пункт с формой — строка формы в сводке", () => {
+	const form = { name: "temp", title: "Температура", fields: [{ key: "temperature", type: "number", label: "Температура", unit: "°C" }] };
+	const forms = [{ values: { temperature: 37.2 }, score: null, text: null, logged_at: "2026-11-07 10:30:00" }];
+	const row = itemRow({ kind: "checkin", survey: "form:temp", form, marks: { ...noMarks, forms } });
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "37.2 °C", tone: "good" });
+});
+
+test("rowStatus: будущий сон с формой — слово «сон»", () => {
+	const row = itemRow({
+		kind: "sleep",
+		survey: "form:temp",
+		form: { name: "temp", title: "Температура", fields: [] },
+		start_at: "2026-11-07T23:00:00",
+		end_at: "2026-11-08T07:00:00",
+	});
+	assert.deepEqual(rowStatus(row, NOW, false), { text: "сон", tone: "" });
+});
+
 test("hasWindow: у встречи окно есть (Р7 = 1)", () => {
 	assert.equal(hasWindow({ source: "meeting", editable: true, recurring: false }), true);
 });
