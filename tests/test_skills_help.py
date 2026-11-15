@@ -661,11 +661,21 @@ def test_readme_mentions_help() -> None:
     assert "coach-help.md" in (ROOT / "README.md").read_text()
 
 
-def test_agenda_note_has_focus_title_and_poles() -> None:
+def test_agenda_focus_note_points_to_pult_and_has_no_poles() -> None:
     text = (AGENTS / "coach-agenda" / "checkins.md").read_text()
-    assert "Фокус 1–5?" in text
+    lines = [line for line in text.splitlines() if "Фокус 1–5?" in line]
+    assert len(lines) == 1
+    assert "в пульте" in lines[0]
     for pole in ("рассеян", "собран", "свеж", "выжат", "легко", "через силу"):
-        assert pole in text, pole
+        assert pole not in lines[0], pole
+
+
+def test_calendar_focus_reminder_points_to_pult_without_coach_focus_command() -> None:
+    text = topic("calendar.md")
+    lines = [line for line in text.splitlines() if "Фокус 1–5?" in line]
+    assert len(lines) == 1
+    assert "coach focus" not in lines[0]
+    assert "в пульте" in lines[0]
 
 
 def test_agenda_note_names_survey_field_and_every_survey() -> None:

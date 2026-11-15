@@ -193,6 +193,40 @@ test("SURVEYS: кнопка WHO-5 подписана «WHO-5»", async () => {
 	assert.equal(SURVEYS.find((item) => item.value === "who5").label, "WHO-5");
 });
 
+test("surveyChoices: без форм — пять готовых опросников", async () => {
+	const { SURVEYS, surveyChoices } = await import(MODEL);
+	assert.deepEqual(surveyChoices([]), SURVEYS);
+});
+
+test("surveyChoices: форма — шестая кнопка с названием и значением form:<имя>", async () => {
+	const { SURVEYS, surveyChoices } = await import(MODEL);
+	const choices = surveyChoices([{ name: "temp", title: "Температура" }]);
+	assert.equal(choices.length, SURVEYS.length + 1);
+	assert.deepEqual(choices.slice(0, SURVEYS.length), SURVEYS);
+	assert.deepEqual(choices.at(-1), { value: "form:temp", label: "Температура" });
+});
+
+test("surveyChoices: две формы идут по порядку после готовых", async () => {
+	const { surveyChoices } = await import(MODEL);
+	const choices = surveyChoices([
+		{ name: "temp", title: "Температура" },
+		{ name: "rpe", title: "Тяжесть" },
+	]);
+	assert.deepEqual(choices.slice(-2).map((item) => item.value), ["form:temp", "form:rpe"]);
+});
+
+test("createPayload: у чек-ина с формой survey — form:<имя>", async () => {
+	const { createPayload } = await import(MODEL);
+	const body = createPayload({ kind: "checkin", survey: "form:temp", title: "Замер", ...SPAN });
+	assert.equal(body.survey, "form:temp");
+});
+
+test("createPayload: у задачи survey не уходит и при form:<имя> (Р16 = 1)", async () => {
+	const { createPayload } = await import(MODEL);
+	const task = createPayload({ kind: "task", category: "work", survey: "form:temp", title: "x", ...SPAN });
+	assert.equal("survey" in task, false);
+});
+
 test("createPayload: чек-ин без названия — «Чек-ин»", async () => {
 	const { createPayload } = await import(MODEL);
 	assert.equal(createPayload({ kind: "checkin", survey: "none", title: "", ...SPAN }).title, "Чек-ин");

@@ -1,7 +1,7 @@
 // Пульт: форма нового пункта плана (шкала и перенос туду), только DOM (зовётся в браузере).
 // Чистые функции — scale-model.js.
 import { el } from "./dom.js";
-import { CATEGORIES, KINDS, SURVEYS, createPayload } from "./scale-model.js";
+import { CATEGORIES, KINDS, createPayload, surveyChoices } from "./scale-model.js";
 
 const clock = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
@@ -39,9 +39,9 @@ export function closeEventForm(box) {
 }
 
 // Форма в box. day — "YYYY-MM-DD", span — {start, end} в минутах, title — начальное название,
-// fixedKind — вид без выбора (ряд видов скрыт), fail(text) — показать ошибку,
+// fixedKind — вид без выбора (ряд видов скрыт), forms — формы дня [{name, title}], fail(text) — показать ошибку,
 // onDone() — после «Создать» (успех) и «Отмена»; форму закрывает сама.
-export function openEventForm(box, { day, span, title = "", fixedKind = null, fail, onDone }) {
+export function openEventForm(box, { day, span, title = "", fixedKind = null, forms = [], fail, onDone }) {
 	const choice = { kind: fixedKind ?? "task", category: "work", survey: "feel" };
 	const kinds = el("div", "chips");
 	const categories = el("div", "chips");
@@ -69,7 +69,7 @@ export function openEventForm(box, { day, span, title = "", fixedKind = null, fa
 	};
 	choices(kinds, KINDS.map((item) => [item.value, item.label]), "kind", refresh);
 	choices(categories, CATEGORIES.map((item) => [item, item]), "category", refresh);
-	choices(surveys, SURVEYS.map((item) => [item.value, item.label]), "survey", refresh);
+	choices(surveys, surveyChoices(forms).map((item) => [item.value, item.label]), "survey", refresh);
 	kinds.hidden = fixedKind !== null;
 	refresh();
 	const start = timeInput(span.start);

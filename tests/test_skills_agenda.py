@@ -41,10 +41,24 @@ def test_agenda_file_mentions_tools_and_commands() -> None:
     assert "uv run coach event remove" in text
 
 
-def test_agenda_file_mentions_focus() -> None:
-    text = CHECKINS.read_text()
-    assert "coach focus" in text
-    assert "Фокус 1–5?" in text
+def reminder_line(text: str, needle: str) -> str:
+    lines = [line for line in text.splitlines() if needle in line]
+    assert len(lines) == 1, needle
+    return lines[0]
+
+
+def test_agenda_focus_reminder_line_has_survey_and_empty_note_without_command() -> None:
+    line = reminder_line(CHECKINS.read_text(), "Фокус 1–5?")
+    assert "survey=focus" in line
+    assert "заметка пустая" in line
+    assert "coach focus" not in line
+    assert "uv run coach" not in line
+
+
+def test_agenda_who5_reminder_line_has_empty_note_without_command() -> None:
+    line = reminder_line(CHECKINS.read_text(), "survey=who5")
+    assert "заметка пустая" in line
+    assert "coach who5" not in line
 
 
 def test_event_texts_do_not_say_one_for_all() -> None:

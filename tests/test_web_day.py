@@ -91,6 +91,48 @@ def test_day_view_has_header_with_weight_of_the_day(conn: sqlite3.Connection) ->
     assert set(header) == {"weight", "sync", "metrics"}
 
 
+def put_form(
+    conn: sqlite3.Connection, name: str, title: str, created_at: str = "2026-11-01 08:00:00"
+) -> None:
+    from ai_coach.store.forms import add_form
+
+    fields = '[{"key": "temperature", "type": "number", "label": "Температура"}]'
+    add_form(
+        conn,
+        {"name": name, "title": title, "fields_json": fields, "created_at": created_at},
+    )
+    conn.commit()
+
+
+def test_day_view_forms_is_empty_without_forms(conn: sqlite3.Connection) -> None:
+    assert view(conn, "12:00")["forms"] == []
+
+
+def test_day_view_forms_lists_active_forms_with_name_and_title(conn: sqlite3.Connection) -> None:
+    put_form(conn, "temp", "Температура")
+    forms = view(conn, "12:00")["forms"]
+    assert forms == [{"name": "temp", "title": "Температура"}]
+
+
+def test_day_view_forms_are_ordered_by_creation_time_oldest_first(
+    conn: sqlite3.Connection,
+) -> None:
+    put_form(conn, "rpe", "Тяжесть", "2026-11-03 08:00:00")
+    put_form(conn, "temp", "Температура", "2026-11-01 08:00:00")
+    put_form(conn, "aaa", "Первая по имени", "2026-11-05 08:00:00")
+    assert [f["name"] for f in view(conn, "12:00")["forms"]] == ["temp", "rpe", "aaa"]
+
+
+def test_day_view_forms_skips_archived_form(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.forms import archive_form
+
+    put_form(conn, "temp", "Температура")
+    put_form(conn, "rpe", "Тяжесть")
+    archive_form(conn, "temp", "2026-11-05 09:00:00")
+    conn.commit()
+    assert [f["name"] for f in view(conn, "12:00")["forms"]] == ["rpe"]
+
+
 def three(conn: sqlite3.Connection) -> list[int]:
     return [
         item(conn, "09:00", "10:00"),

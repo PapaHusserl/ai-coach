@@ -156,6 +156,7 @@ function openForm(min, ctx) {
 	openEventForm(ui.form, {
 		day: ctx.day,
 		span: newSpan(min, ctx.frame),
+		forms: ctx.forms,
 		fail,
 		onDone: () => {
 			formOpen = false;
@@ -200,7 +201,7 @@ export function renderScale(view, reload, open) {
 		fail("");
 	}
 	shownDay = view.date;
-	const ctx = { frame: frameOf(view), day: view.date, reload, open };
+	const ctx = { frame: frameOf(view), day: view.date, forms: view.forms, reload, open };
 	const rows = [
 		...view.items.map((row) => ({ ...row, source: "item" })),
 		...view.meetings.map((row) => ({ ...row, source: "meeting" })),

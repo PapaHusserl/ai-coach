@@ -9,6 +9,7 @@ from typing import Any
 from ai_coach.agenda.service import agenda_rows
 from ai_coach.profile.service import current_profile, profile_nutrition
 from ai_coach.store.agenda import own_uids
+from ai_coach.store.forms import list_forms
 from ai_coach.store.journal import evening_done
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
@@ -150,4 +151,5 @@ def day_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, An
         "elapsed_min": elapsed,
         "left_min": left,
         "header": header_view(conn, day, now),
+        "forms": [{"name": f["name"], "title": f["title"]} for f in list_forms(conn)],
     }

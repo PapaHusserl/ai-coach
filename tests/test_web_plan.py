@@ -355,6 +355,49 @@ def test_create_task_with_survey_is_mark_error(conn: sqlite3.Connection) -> None
     assert list_events(conn, "2026-01-01", "2027-12-31") == []
 
 
+def put_form(conn: sqlite3.Connection, name: str = "temp") -> None:
+    from ai_coach.store.forms import add_form
+
+    fields = '[{"key": "temperature", "type": "number", "label": "Температура"}]'
+    add_form(
+        conn,
+        {
+            "name": name,
+            "title": "Температура",
+            "fields_json": fields,
+            "created_at": "2026-10-10 08:00:00",
+        },
+    )
+    conn.commit()
+
+
+def test_create_checkin_with_form_writes_event_with_form_survey(conn: sqlite3.Connection) -> None:
+    put_form(conn)
+    result = apply(
+        conn, create(kind="checkin", survey="form:temp", category=None), FakeCalendarWriter()
+    )
+    row = get_event(conn, result["id"])
+    assert row is not None
+    assert (row["kind"], row["survey"]) == ("checkin", "form:temp")
+
+
+def test_create_checkin_with_unknown_form_is_mark_error(conn: sqlite3.Connection) -> None:
+    with pytest.raises(MarkError):
+        apply(conn, create(kind="checkin", survey="form:temp", category=None), FakeCalendarWriter())
+    assert list_events(conn, "2026-01-01", "2027-12-31") == []
+
+
+def test_create_checkin_with_archived_form_is_mark_error(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.forms import archive_form
+
+    put_form(conn)
+    archive_form(conn, "temp", "2026-10-10 09:00:00")
+    conn.commit()
+    with pytest.raises(MarkError):
+        apply(conn, create(kind="checkin", survey="form:temp", category=None), FakeCalendarWriter())
+    assert list_events(conn, "2026-01-01", "2027-12-31") == []
+
+
 def test_create_bad_title_mark_error_text_is_exact(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError) as raised:
         apply(conn, create(title=5), FakeCalendarWriter())

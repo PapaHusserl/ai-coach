@@ -74,6 +74,12 @@ export const SURVEYS = [
 	{ value: "none", label: "напоминание" },
 	{ value: "who5", label: "WHO-5" },
 ];
+
+// Кнопки опросников: готовые, затем формы дня [{name, title}] в порядке входа.
+export const surveyChoices = (forms) => [
+	...SURVEYS,
+	...forms.map((form) => ({ value: `form:${form.name}`, label: form.title })),
+];
 export const CATEGORIES = ["work", "personal", "hobby"]; // только у задачи, по умолчанию work
 
 // Тело POST create: пустое название — слово вида; category только у задачи, survey только у чек-ина.
