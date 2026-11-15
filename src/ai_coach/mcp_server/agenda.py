@@ -11,7 +11,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft, move_draft
 from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
-from ai_coach.agenda.service import SURVEYS, shifted
+from ai_coach.agenda.draft import SURVEYS
+from ai_coach.agenda.service import shifted
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import cap, parse_day, period
 from ai_coach.store.agenda import get_event, list_done_events

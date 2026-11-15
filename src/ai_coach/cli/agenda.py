@@ -17,7 +17,7 @@ from ai_coach.agenda import (
     write_event,
 )
 from ai_coach.agenda.calendar_write import CalendarWriter
-from ai_coach.agenda.service import AHEAD_DAYS, PAST_DAYS
+from ai_coach.agenda.draft import AHEAD_DAYS, PAST_DAYS
 from ai_coach.cli.journal import check_date, fail
 from ai_coach.store.agenda import get_event
 from ai_coach.store.db import open_db

@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_coach.agenda.service import KINDS
+from ai_coach.agenda.draft import KINDS
 from ai_coach.mcp_server import (
     agenda,
     decisions,

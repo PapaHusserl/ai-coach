@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from workload_fakes import coach_event, stored_event
 
+from ai_coach.agenda import AgendaError
 from ai_coach.agenda.day_layout import (
     BREAK_MIN,
     COOK_MIN,
@@ -23,7 +24,7 @@ from ai_coach.agenda.day_layout import (
     plan_day,
 )
 from ai_coach.agenda.day_plan import TRAINING_PAD_MIN, create_day_plan
-from ai_coach.agenda.service import AgendaError, agenda_rows
+from ai_coach.agenda.service import agenda_rows
 from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import MIN_SLOT, STEP_MIN, busy_spans, free_slots
 from ai_coach.store.agenda import add_event, get_event

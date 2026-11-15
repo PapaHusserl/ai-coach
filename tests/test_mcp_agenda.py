@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, db_file
 from workload_fakes import coach_event
 
-from ai_coach.agenda.service import KINDS
+from ai_coach.agenda.draft import KINDS
 from ai_coach.mcp_server import build_server
 from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.agenda import add_event, get_event

@@ -66,7 +66,7 @@ export const KINDS = [
 	{ value: "meal", label: "еда", word: "Перекус" },
 	{ value: "checkin", label: "чек-ин", word: "Чек-ин" },
 ];
-// Опросники чек-ина (значения — SURVEYS в agenda/service.py), подписи кнопок.
+// Опросники чек-ина (значения — SURVEYS в agenda/draft.py), подписи кнопок.
 export const SURVEYS = [
 	{ value: "evening", label: "вечер" },
 	{ value: "feel", label: "самочувствие" },

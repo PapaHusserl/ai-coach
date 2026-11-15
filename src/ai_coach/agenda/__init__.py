@@ -4,8 +4,8 @@
 отсюда только черновики и чтение.
 """
 
+from ai_coach.agenda.draft import AgendaError
 from ai_coach.agenda.service import (
-    AgendaError,
     agenda_rows,
     cancel_event,
     create_draft,

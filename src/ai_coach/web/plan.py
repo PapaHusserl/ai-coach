@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Any
 
 from ai_coach.agenda.calendar_write import CalendarWriter
+from ai_coach.agenda.draft import AgendaError
 from ai_coach.agenda.service import (
-    AgendaError,
     EventWriter,
     create_draft,
     move_draft,

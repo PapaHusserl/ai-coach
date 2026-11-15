@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 from mcp_fakes import tool_names
-from text_limits import HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT
+from text_limits import HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT, PULT_TODO_LINK_LIMIT
 
 from ai_coach import pvt
 from ai_coach.cli import main
@@ -215,7 +215,7 @@ def test_pult_todo_topic_describes_foreign_meetings() -> None:
 def test_pult_topic_links_pult_todo_within_limit() -> None:
     lines = [ln for ln in topic("pult.md").splitlines() if "pult-todo.md" in ln]
     assert len(lines) == 1
-    assert len(lines[0].encode()) <= 338
+    assert len(lines[0].encode()) <= PULT_TODO_LINK_LIMIT
 
 
 def test_help_index_mentions_pult_todo_topic() -> None:

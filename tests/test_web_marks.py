@@ -21,8 +21,9 @@ from ai_coach.store.journal import (
     list_wellbeing,
 )
 from ai_coach.store.workload import list_counters
+from ai_coach.web.day_marks import marks_for_day
 from ai_coach.web.errors import MarkError, NoEvent
-from ai_coach.web.marks import marks_for_day, save_mark
+from ai_coach.web.marks import save_mark
 
 D = "2026-11-08"
 

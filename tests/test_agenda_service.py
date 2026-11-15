@@ -5,17 +5,19 @@ from typing import Any
 import pytest
 from workload_fakes import FakeCalendarWriter, FlakyCommitConn, coach_event
 
-from ai_coach.agenda.service import (
+from ai_coach.agenda.draft import (
     AHEAD_DAYS,
     MAX_HOURS,
     PAST_DAYS,
     AgendaError,
+    validate_draft,
+)
+from ai_coach.agenda.service import (
     agenda_rows,
     cancel_event,
     move_draft,
     move_event,
     remove_event,
-    validate_draft,
     write_event,
 )
 from ai_coach.store.agenda import add_event, get_event
@@ -509,7 +511,7 @@ def test_move_draft_of_old_checkin_keeps_survey_null(conn: sqlite3.Connection) -
 
 
 def test_surveys_constant() -> None:
-    from ai_coach.agenda.service import SURVEYS
+    from ai_coach.agenda.draft import SURVEYS
 
     assert SURVEYS[:4] == ("evening", "feel", "focus", "none")
     assert "who5" in SURVEYS

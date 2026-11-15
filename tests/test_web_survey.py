@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from ai_coach.web.marks import due
+from ai_coach.web.day_marks import due
 from ai_coach.web.survey import SURVEY_MARKS, checkin_due, marks_of
 
 STATIC = Path(__file__).parent.parent / "src" / "ai_coach" / "web" / "static"

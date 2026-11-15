@@ -19,7 +19,8 @@ from ai_coach.agenda.day_layout import (
     Training,
     plan_day,
 )
-from ai_coach.agenda.service import AHEAD_DAYS, AgendaError, agenda_rows, create_draft
+from ai_coach.agenda.draft import AHEAD_DAYS, AgendaError
+from ai_coach.agenda.service import agenda_rows, create_draft
 from ai_coach.agenda.sleep_limits import sleep_limits
 from ai_coach.agenda.slots import busy_spans, ceil_step
 from ai_coach.sport_nutrition import workout_duration_min
