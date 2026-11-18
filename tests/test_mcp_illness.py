@@ -1,5 +1,6 @@
 """get_illness(date) и секция illness в snapshot. Синтетические данные."""
 
+import asyncio
 import json
 import sqlite3
 from datetime import date, timedelta
@@ -7,9 +8,10 @@ from pathlib import Path
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, call_text, tool_names
+from mcp_fakes import call, call_text, db_file, tool_names
 
-from ai_coach.load.illness import illness_report
+from ai_coach.load.illness import STREAK_DAYS, SWC_K, illness_report
+from ai_coach.mcp_server import build_server
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
 
 DAY = "2026-11-02"
@@ -71,6 +73,29 @@ def test_answer_matches_illness_report(conn: sqlite3.Connection) -> None:
     assert answer == expected
     assert answer["streak"] == 2
     assert answer["signals"][0]["kind"] == "illness_risk"
+
+
+def one_out_day(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    put(conn, 1, 50, 60)
+
+
+def test_one_out_day_gives_one_corridor_out_in_tool_and_snapshot(conn: sqlite3.Connection) -> None:
+    one_out_day(conn)
+    expected = [{"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS}]
+    assert call(conn, "get_illness", date=DAY)["signals"] == expected
+    assert call(conn, "get_morning_snapshot", date=DAY)["illness"]["signals"] == expected
+
+
+def test_get_illness_description_names_signal_and_corridor(conn: sqlite3.Connection) -> None:
+    server = build_server(db_file(conn))
+    tools = asyncio.run(server.list_tools())
+    text = next(t.description or "" for t in tools if t.name == "get_illness")
+    swc = f"{SWC_K:g}".replace(".", ",")
+    assert "corridor_out" in text
+    assert f"±{swc} SD" in text
+    assert "выше или HRV ниже" in text
+    assert "выше и HRV ниже" not in text
 
 
 def test_answer_has_seven_days(conn: sqlite3.Connection) -> None:

@@ -65,12 +65,25 @@ test("trendSeries: вес — числа kg", async () => {
 });
 
 const CODES = [
-	"short_night", "sleep_debt", "illness_risk", "total_streak", "evening_streak", "weekend_work",
+	"short_night", "sleep_debt", "illness_risk", "corridor_out", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "readiness", "hrv", "sleep", "atl_over_ctl",
 ];
 
-test("SIGNAL_WORDS: ровно 21 код отчётов", async () => {
+test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.corridor_out, "пульс или HRV вне нормы");
+});
+
+test("signalRows: corridor_out — слово и «1 (порог 2)»", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "illness", kind: "corridor_out", value: 1, limit: 2 };
+	const [found] = signalRows(stateOf([row]));
+	assert.ok(text(found).includes("пульс или HRV вне нормы"));
+	assert.ok(text(found).includes("1 (порог 2)"));
+});
+
+test("SIGNAL_WORDS: ровно 22 кода отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });

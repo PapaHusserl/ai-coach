@@ -1,9 +1,10 @@
 """Сигнал «возможно, заболеваешь»: пульс покоя и HRV против личного коридора.
 
 Коридор - среднее за CENTER_DAYS предыдущих дней ± SWC_K × SD за BASELINE_DAYS предыдущих дней
-(Plews; сегодняшний день в центр и базу не входит). День вне коридора - пульс покоя выше и HRV
-ниже; STREAK_DAYS таких дней подряд - сигнал illness_risk. Сон и вчерашняя тренировка - контекст,
-сигнал не меняют. Константы - догадка: калибруются в v2.9, как пороги load/sleep.py.
+(Plews; сегодняшний день в центр и базу не входит). День вне коридора - пульс покоя выше или HRV
+ниже; STREAK_DAYS таких дней подряд - сигнал illness_risk, первый день - слабый corridor_out. Сон
+и вчерашняя тренировка - контекст, сигнал не меняют. Константы проверены на данных
+2026-10-12…11-17 (калибровка v2.9).
 """
 
 import sqlite3
@@ -18,7 +19,7 @@ CENTER_DAYS = 7
 MIN_CENTER_DAYS = 4
 BASELINE_DAYS = 28
 MIN_BASELINE_DAYS = 14
-SWC_K = 0.5
+SWC_K = 0.75
 STREAK_DAYS = 2
 SHOWN_DAYS = 7
 
@@ -52,14 +53,14 @@ def day_flags(
     hrv_corridor: dict[str, float] | None,
 ) -> dict[str, bool | None]:
     """{rhr_high, hrv_low, out}: пульс покоя строго выше границы mean7 + swc, HRV строго ниже
-    mean7 - swc (границы округлены до одного знака, как в отчёте), out - оба. Нет значения или
-    коридора - всё None."""
+    mean7 - swc (границы округлены до одного знака, как в отчёте), out - любой из двух. Нет
+    значения или коридора - всё None."""
     rhr, hrv = row.get("rhr"), row.get("hrv")
     high_from, low_from = _edge(rhr_corridor, 1), _edge(hrv_corridor, -1)
     if rhr is None or hrv is None or high_from is None or low_from is None:
         return {"rhr_high": None, "hrv_low": None, "out": None}
     high, low = rhr > high_from, hrv < low_from
-    return {"rhr_high": high, "hrv_low": low, "out": high and low}
+    return {"rhr_high": high, "hrv_low": low, "out": high or low}
 
 
 def out_streak(flags_by_date: dict[str, dict[str, bool | None]], day: str) -> int:
@@ -72,11 +73,13 @@ def out_streak(flags_by_date: dict[str, dict[str, bool | None]], day: str) -> in
 
 
 def illness_signals(report: dict[str, Any]) -> list[dict[str, Any]]:
-    """illness_risk - дней вне коридора подряд не меньше STREAK_DAYS; формат {kind, value,
-    limit} как у sleep_signals."""
+    """illness_risk - дней вне коридора подряд не меньше STREAK_DAYS; первый день - слабый
+    corridor_out; формат {kind, value, limit} как у sleep_signals."""
     streak = report["streak"]
     if streak >= STREAK_DAYS:
         return [{"kind": "illness_risk", "value": streak, "limit": STREAK_DAYS}]
+    if streak == 1:
+        return [{"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS}]
     return []
 
 

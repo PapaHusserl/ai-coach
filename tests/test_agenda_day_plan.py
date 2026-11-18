@@ -1282,6 +1282,14 @@ def test_illness_today_gives_two_focus_blocks_with_reason(conn: sqlite3.Connecti
     assert "HRV 10" in reasons[0]
 
 
+def test_illness_reason_says_rhr_or_hrv_out_of_corridor(conn: sqlite3.Connection) -> None:
+    illness_nights(conn)
+    result = make(conn, MON, now=MORNING)
+    reasons = [s for s in result["skipped"] if ILLNESS_REASON in s]
+    assert len(reasons) == 1
+    assert "пульс покоя 90 или HRV 10 вне коридора" in reasons[0]
+
+
 def test_illness_tomorrow_gives_two_focus_blocks_with_reason(conn: sqlite3.Connection) -> None:
     illness_nights(conn)
     result = make(conn, TUE, now=MORNING)
@@ -1294,6 +1302,14 @@ def test_one_day_out_of_corridor_keeps_three_blocks(conn: sqlite3.Connection) ->
     result = make(conn, MON, now=MORNING)
     assert len(focus_blocks(result)) == FOCUS_MAX
     assert not [s for s in result["skipped"] if ILLNESS_REASON in s]
+
+
+def test_first_out_day_weak_signal_keeps_limits_and_gives_no_reason(
+    conn: sqlite3.Connection,
+) -> None:
+    illness_nights(conn, out_days=1)
+    got = sleep_limits(conn, TODAY, TODAY, MORNING, time(19, 0), FOCUS_MAX)
+    assert got == (time(19, 0), FOCUS_MAX, [])
 
 
 def test_short_night_and_illness_give_two_blocks_not_one(conn: sqlite3.Connection) -> None:

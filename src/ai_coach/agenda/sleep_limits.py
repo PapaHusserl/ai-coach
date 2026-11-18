@@ -15,7 +15,7 @@ def _sleep_reason(signal: dict[str, Any], report: dict[str, Any]) -> str:
     if signal["kind"] == "illness_risk":
         return (
             "фокус: блоков меньше - возможно, заболеваешь (пульс покоя "
-            f"{report['rhr']}, HRV {report['hrv']} вне коридора {signal['value']} дня подряд)"
+            f"{report['rhr']} или HRV {report['hrv']} вне коридора {signal['value']} дня подряд)"
         )
     if signal["kind"] == "who5_low":
         who5 = report["who5"]
@@ -51,7 +51,8 @@ def sleep_limits(
     illness = illness_report(conn, today.isoformat(), {}, report)
     who5 = who5_report(conn, today.isoformat())
     low_who5 = [s for s in who5["signals"] if s["kind"] == "who5_low"]
-    signals = sleep_signals + illness["signals"] + low_who5
+    risk = [s for s in illness["signals"] if s["kind"] == "illness_risk"]
+    signals = sleep_signals + risk + low_who5
     if not signals:
         return plain
     until = datetime.combine(day, focus_until)

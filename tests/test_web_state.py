@@ -235,6 +235,15 @@ def test_illness_signals_come_from_illness_report(
     assert sources(view, "illness_risk") == ["illness"]
 
 
+def test_corridor_out_comes_from_illness_report(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = {"signals": [{"kind": "corridor_out", "value": 1, "limit": 2}]}
+    monkeypatch.setattr("ai_coach.web.state.illness_report", lambda *args, **kwargs: fake)
+    view = state_view(conn, DAY, NOW)
+    assert sources(view, "corridor_out") == ["illness"]
+
+
 def test_overload_signals_come_from_overload_report(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

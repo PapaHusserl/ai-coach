@@ -216,12 +216,13 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         illness_tool.illness,
         "Сигнал «возможно, заболеваешь» на дату (YYYY-MM-DD): rhr / hrv - пульс покоя и HRV за "
         "ночь; rhr_mean7, hrv_mean7 - среднее за 7 предыдущих дней; rhr_high_from / hrv_low_from - "
-        "границы личного коридора (±0,5 SD за 28 дней; null - данных меньше 14 дней); rhr_high, "
-        "hrv_low, out_today - день вне коридора (пульс выше и HRV ниже); streak - таких дней "
+        "границы личного коридора (±0,75 SD за 28 дней; null - данных меньше 14 дней); rhr_high, "
+        "hrv_low, out_today - день вне коридора (пульс выше или HRV ниже); streak - таких дней "
         "подряд, до 7; baseline_days - дней из 28 с пульсом и HRV; "
         "days - 7 дней (date, rhr, hrv, out); confounders - что могло сдвинуть цифры без "
         "болезни (short_night, trained_yesterday); tss_yesterday; sleep_debt - долг сна (риск "
-        "выше); signals - illness_risk (kind, value = streak, limit; пусто - норма). Не диагноз.",
+        "выше); signals - illness_risk (kind, value = streak, limit; пусто - норма) и слабый "
+        "corridor_out - первый день вне коридора. Не диагноз.",
     ),
     "get_profile": (
         tools.profile,

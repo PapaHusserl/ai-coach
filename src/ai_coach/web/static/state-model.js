@@ -5,6 +5,7 @@ export const SIGNAL_WORDS = {
 	short_night: "короткая ночь",
 	sleep_debt: "долг сна",
 	illness_risk: "возможно, заболеваешь",
+	corridor_out: "пульс или HRV вне нормы",
 	total_streak: "нагрузка три дня подряд",
 	evening_streak: "работа по вечерам три дня",
 	weekend_work: "работа в выходные",

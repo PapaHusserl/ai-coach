@@ -328,15 +328,7 @@ def test_guess_word_is_gone_from_load_docs_and_help_except_known_lines() -> None
         for line in path.read_text(encoding="utf-8").splitlines()
         if "догадк" in line.lower()
     )
-    assert found == sorted(
-        [
-            "src/ai_coach/load/illness.py",
-            "src/ai_coach/load/stress.py",
-            "docs/architecture.md",
-            "README.md",
-            ".claude/agents/coach-help/sleep.md",
-        ]
-    )
+    assert found == ["src/ai_coach/load/stress.py"]
 
 
 def test_architecture_total_load_weights_end_with_grooming_weight() -> None:
@@ -433,6 +425,61 @@ def test_sleep_topic_describes_illness_tool() -> None:
         f"{illness.STREAK_DAYS} дня подряд",
     ):
         assert needle in text, needle
+
+
+def illness_section() -> str:
+    return topic("sleep.md").split("## Возможно, заболеваешь", 1)[1].split("\n## ", 1)[0]
+
+
+def test_sleep_topic_illness_corridor_width_matches_constant() -> None:
+    swc = f"{illness.SWC_K:g}".replace(".", ",")
+    assert f"± {swc} разброса" in illness_section()
+
+
+def test_sleep_topic_illness_day_is_out_when_rhr_high_or_hrv_low() -> None:
+    section = illness_section()
+    assert "выше или HRV ниже" in section
+    assert "выше и HRV ниже" not in section
+
+
+def test_sleep_topic_illness_names_first_day_signal() -> None:
+    section = illness_section()
+    assert "corridor_out" in section
+    assert "пульс или HRV вне нормы" in section
+
+
+def test_sleep_topic_illness_thresholds_checked_on_data() -> None:
+    section = illness_section()
+    assert "пороги проверены на данных 2026-10-12…11-17" in section
+    assert "догадка" not in section
+
+
+def test_wellbeing_role_names_first_day_signal() -> None:
+    text = (AGENTS / "coach-wellbeing.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if "corridor_out" in ln]
+    assert lines
+    assert any("план дня и тренировок не трогай" in ln and "симптом" in ln for ln in lines)
+
+
+def test_sleep_topic_illness_what_i_get_names_both_signals() -> None:
+    lines = [ln for ln in illness_section().splitlines() if ln.startswith("- Что получу:")]
+    assert len(lines) == 1
+    assert "`illness_risk`" in lines[0]
+    assert "`corridor_out`" in lines[0]
+
+
+def test_readme_illness_line_ties_reaction_to_risk_and_corridor_out_changes_nothing() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if ln.startswith("- Возможно, заболеваешь:")]
+    assert len(lines) == 1
+    assert "При `illness_risk`" in lines[0]
+    assert "не меняет" in lines[0].split("`corridor_out`", 1)[1]
+
+
+def test_sleep_topic_illness_trainer_line_says_corridor_out_changes_nothing() -> None:
+    lines = [ln for ln in illness_section().splitlines() if "При `corridor_out`" in ln]
+    assert len(lines) == 1
+    assert "не меняет" in lines[0]
 
 
 def test_help_index_lists_illness_tool() -> None:

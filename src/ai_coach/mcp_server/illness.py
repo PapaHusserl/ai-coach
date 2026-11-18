@@ -11,8 +11,8 @@ from ai_coach.mcp_server.tools import load, period, shift_day
 
 def illness(conn: sqlite3.Connection, date: str) -> dict[str, Any]:
     """Пульс покоя и HRV на date против личного коридора, дней вне коридора подряд и сигнал
-    illness_risk (формулы и пороги — в load/illness.py). TSS вчера берётся из нагрузки
-    тренировок; нет нагрузки — TSS не известен, причина в load_error."""
+    illness_risk и слабый corridor_out (формулы и пороги — в load/illness.py). TSS вчера берётся
+    из нагрузки тренировок; нет нагрузки — TSS не известен, причина в load_error."""
     period(date, date)
     try:
         rows = load(conn, shift_day(date, -1), date)["rows"]

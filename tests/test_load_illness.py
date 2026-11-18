@@ -9,6 +9,7 @@ from typing import Any
 from ai_coach.load.illness import (
     SHOWN_DAYS,
     STREAK_DAYS,
+    SWC_K,
     corridor,
     day_flags,
     illness_report,
@@ -68,7 +69,7 @@ def test_corridor_center_is_mean_of_previous_week_and_swc_from_base() -> None:
     found = corridor(rows, TODAY, "rhr")
     assert found is not None
     assert found["mean7"] == 50
-    assert found["swc"] == 0.5 * pstdev([50] * 27 + [60])
+    assert found["swc"] == SWC_K * pstdev([50] * 27 + [60])
 
 
 def test_corridor_none_when_base_has_13_days() -> None:
@@ -147,14 +148,19 @@ def test_out_when_both_flags_true() -> None:
     assert flags == FLAGS_OUT
 
 
-def test_not_out_when_only_rhr_high() -> None:
+def test_out_when_only_rhr_high() -> None:
     flags = day_flags({"rhr": 60, "hrv": 60}, {"mean7": 50, "swc": 2}, {"mean7": 60, "swc": 5})
-    assert flags == {"rhr_high": True, "hrv_low": False, "out": False}
+    assert flags == {"rhr_high": True, "hrv_low": False, "out": True}
 
 
-def test_not_out_when_only_hrv_low() -> None:
+def test_out_when_only_hrv_low() -> None:
     flags = day_flags({"rhr": 50, "hrv": 40}, {"mean7": 50, "swc": 2}, {"mean7": 60, "swc": 5})
-    assert flags == {"rhr_high": False, "hrv_low": True, "out": False}
+    assert flags == {"rhr_high": False, "hrv_low": True, "out": True}
+
+
+def test_not_out_when_both_in_corridor() -> None:
+    flags = day_flags({"rhr": 50, "hrv": 60}, {"mean7": 50, "swc": 2}, {"mean7": 60, "swc": 5})
+    assert flags == {"rhr_high": False, "hrv_low": False, "out": False}
 
 
 def test_flags_none_when_value_missing() -> None:
@@ -216,8 +222,15 @@ def test_signal_at_streak_days() -> None:
     ]
 
 
-def test_no_signal_for_one_day() -> None:
-    assert illness_signals({"streak": 1}) == []
+def test_first_day_gives_one_weak_signal() -> None:
+    assert illness_signals({"streak": 1}) == [
+        {"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS}
+    ]
+
+
+def test_no_weak_signal_with_streak_signal() -> None:
+    kinds = [s["kind"] for s in illness_signals({"streak": STREAK_DAYS})]
+    assert kinds == ["illness_risk"]
 
 
 def test_no_signal_for_zero_days() -> None:
@@ -241,8 +254,8 @@ def test_report_fields_follow_formulas(conn: sqlite3.Connection) -> None:
     base_28(conn)
     put(conn, 0, 58, 40)
     found = report(conn)
-    rhr_swc = 0.5 * pstdev([50] * 27 + [60])
-    hrv_swc = 0.5 * pstdev([60] * 27 + [70])
+    rhr_swc = SWC_K * pstdev([50] * 27 + [60])
+    hrv_swc = SWC_K * pstdev([60] * 27 + [70])
     assert found["date"] == TODAY.isoformat()
     assert found["rhr"] == 58
     assert found["hrv"] == 40
@@ -273,12 +286,20 @@ def test_report_two_out_days_give_streak_and_signal(conn: sqlite3.Connection) ->
     assert found["signals"] == [{"kind": "illness_risk", "value": 2, "limit": STREAK_DAYS}]
 
 
-def test_report_one_out_day_is_no_signal(conn: sqlite3.Connection) -> None:
+def test_report_one_out_day_is_weak_signal_only(conn: sqlite3.Connection) -> None:
     base_28(conn)
     out_day(conn, 0)
     found = report(conn)
     assert found["streak"] == 1
-    assert found["signals"] == []
+    assert found["signals"] == [{"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS}]
+
+
+def test_report_only_rhr_high_day_is_out(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    put(conn, 0, 90, 60)
+    found = report(conn)
+    assert (found["rhr_high"], found["hrv_low"], found["out_today"]) == (True, False, True)
+    assert found["streak"] == 1
 
 
 def test_report_streak_is_capped_by_shown_days(conn: sqlite3.Connection) -> None:
