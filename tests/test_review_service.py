@@ -208,6 +208,24 @@ def test_manual_hours_beat_screen_hours_in_work_hours(conn: sqlite3.Connection) 
     assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == pytest.approx(2.0)
 
 
+def test_screen_work_evening_hours_sum_in_evening_hours(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-12", "screen_work_evening_hours", 1.0)
+    screen(conn, "2026-10-13", "screen_work_evening_hours", 1.0)
+    assert weekly_review(conn, WED, weeks=1)[0]["evening_hours"] == pytest.approx(2.0)
+
+
+def test_screen_zero_work_evening_replaces_calendar_evening(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-13", "19:00", "22:00")  # календарь: 3 ч вечера
+    screen(conn, "2026-10-13", "screen_work_evening_hours", 0)
+    assert weekly_review(conn, WED, weeks=1)[0]["evening_hours"] == 0
+
+
+def test_calendar_evening_is_taken_when_screen_has_none(conn: sqlite3.Connection) -> None:
+    work(conn, "2026-10-12", "19:00", "21:00")  # календарь 2 ч, экрана нет
+    screen(conn, "2026-10-13", "screen_work_evening_hours", 1.5)
+    assert weekly_review(conn, WED, weeks=1)[0]["evening_hours"] == pytest.approx(3.5)
+
+
 def test_screen_and_calendar_days_are_summed_per_day(conn: sqlite3.Connection) -> None:
     work(conn, "2026-10-12", "09:00", "11:00")  # календарь 2 ч, экрана нет
     screen(conn, "2026-10-13", "screen_work_hours", 3.5)

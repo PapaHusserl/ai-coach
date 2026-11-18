@@ -20,7 +20,7 @@
 - Что это: второй признак поверх работы (JD-R). Вызов - код, аналитика, задачи вперёд; помеха - согласования, переписка, неясности.
 - Как разметить: в `~/.config/ai-coach/workload.toml` (вне репо) `[screen] challenge = [приложения]`, `hindrance = [приложения]` - только из `work` / `meeting` (или с `[screen.title.<приложение>]`), не в обоих сразу. Окна браузера не размечаются.
 - Как попросить тренера: «предложи разметку вызов/помеха». Тренер читает конфиг, предлагает блок TOML (созвоны - помеха), вы правите файл сами, затем `uv run coach screen --days 20` - разметка ложится задним числом.
-- Что получу: в `get_workload` `screen_challenge_hours`, `screen_hindrance_hours` (часть `screen_work_hours`; null - не размечено), в `coach screen` - «вызов N ч, помехи M ч». Без списков `coach sync` пишет «экран: вызов/помеха не размечены». Тренер пока копит, в нагрузку и сигналы не входит.
+- Что получу: в `get_workload` `screen_challenge_hours`, `screen_hindrance_hours` (часть `screen_work_hours`; null - не размечено), в `coach screen` - «вызов N ч, помехи M ч»; после «вечер N ч» там же «работа вечером M ч» (`screen_work_evening_hours`). Без списков `coach sync` пишет «экран: вызов/помеха не размечены». Тренер пока копит, в нагрузку и сигналы не входит.
 - Календарь: рабочая встреча по умолчанию - помеха; вызов - в `[calendar.demand] challenge = [regex на заголовок]` (регистр не важен). Затем `uv run coach sync --days 30`. Поля `challenge_hours`, `hindrance_hours` - части `work_hours`; у события в `events=true` есть `demand`.
 - Общая нагрузка `total` и сигналы перегруза (формула, пороги, что делает тренер): `cat .claude/agents/coach-help/overload.md`.
 

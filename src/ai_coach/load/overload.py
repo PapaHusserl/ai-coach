@@ -6,7 +6,9 @@
 total_load = W_TSS * tss + W_WORK * work + W_HOBBY * hobby + W_EVENING * work_evening
              + W_WEEKEND * work (в сб/вс) + W_TODO * todo_closed + W_GROOMING * grooming_done.
 Ручные часы дня (manual_work_hours, manual_hobby_hours) главнее часов экрана
-(screen_work_hours, screen_hobby_hours), экран - часов календаря.
+(screen_work_hours, screen_hobby_hours), экран - часов календаря. Так же work_evening:
+screen_work_evening_hours главнее work_evening_hours (evening_hours); вечер рабочий
+от EVENING_WORK_MIN.
 """
 
 import sqlite3
@@ -28,6 +30,7 @@ W_GROOMING = 0.2
 TOTAL_HIGH = 12.0
 TOTAL_STREAK_DAYS = 3
 EVENING_STREAK_DAYS = 3
+EVENING_WORK_MIN = 1.0
 WEEKEND_WORK_MIN = 2.0
 READINESS_DROP = 10
 MOOD_DROP = 1.0
@@ -57,9 +60,17 @@ def hours(day: dict[str, Any], key: str) -> float:
     return manual if manual is not None else (screen if screen is not None else (day.get(key) or 0))
 
 
+def evening_hours(day: dict[str, Any]) -> float:
+    """Рабочие часы после 19:00: экран (screen_work_evening_hours) главнее календаря
+    (work_evening_hours); нет данных - 0. Ноль экрана - значение, а не отсутствие."""
+    screen = day.get("screen_work_evening_hours")
+    return screen if screen is not None else (day.get("work_evening_hours") or 0)
+
+
 def total_load(day: dict[str, Any]) -> float:
     """Общая нагрузка дня одним числом. Ключи дня (нет или None - 0): tss, work_hours,
-    hobby_hours, work_evening_hours, weekend, todo_closed, grooming_done и ручные
+    hobby_hours, work_evening_hours (его заменяет screen_work_evening_hours, 0 тоже), weekend,
+    todo_closed, grooming_done и ручные
     manual_work_hours, manual_hobby_hours (заданные заменяют экранные и календарные, 0 тоже) и
     screen_work_hours, screen_hobby_hours (заданные заменяют календарные, 0 тоже)."""
     work = hours(day, "work_hours")
@@ -67,7 +78,7 @@ def total_load(day: dict[str, Any]) -> float:
         W_TSS * (day.get("tss") or 0)
         + W_WORK * work
         + W_HOBBY * hours(day, "hobby_hours")
-        + W_EVENING * (day.get("work_evening_hours") or 0)
+        + W_EVENING * evening_hours(day)
         + W_TODO * (day.get("todo_closed") or 0)
         + W_GROOMING * (day.get("grooming_done") or 0)
     )
@@ -129,7 +140,7 @@ def find_overload(
     total = _streak([d["total"] >= TOTAL_HIGH for d in days])
     if total >= TOTAL_STREAK_DAYS:
         found.append({"kind": "total_streak", "value": total, "limit": TOTAL_STREAK_DAYS})
-    evening = _streak([(d.get("work_evening_hours") or 0) > 0 for d in days])
+    evening = _streak([evening_hours(d) >= EVENING_WORK_MIN for d in days])
     if evening >= EVENING_STREAK_DAYS:
         found.append({"kind": "evening_streak", "value": evening, "limit": EVENING_STREAK_DAYS})
     weekend = round(sum(hours(d, "work_hours") for d in days if d.get("weekend")), 2)

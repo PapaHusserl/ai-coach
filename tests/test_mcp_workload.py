@@ -82,6 +82,7 @@ SCREEN_KINDS = (
     "screen_hobby_hours",
     "screen_browser_hours",
     "screen_evening_hours",
+    "screen_work_evening_hours",
 )
 
 
@@ -103,7 +104,7 @@ def test_workload_row_has_screen_hours(conn: sqlite3.Connection) -> None:
     for number, kind in enumerate(SCREEN_KINDS):
         screen(conn, DAY, kind, 1.25 + number)
     row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
-    assert [row[k] for k in SCREEN_KINDS] == [1.25, 2.25, 3.25, 4.25]
+    assert [row[k] for k in SCREEN_KINDS] == [1.25, 2.25, 3.25, 4.25, 5.25]
 
 
 def test_workload_screen_fields_are_none_without_data(conn: sqlite3.Connection) -> None:

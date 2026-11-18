@@ -29,6 +29,7 @@ SCREEN_COUNTERS = (
     "screen_hobby_hours",
     "screen_browser_hours",
     "screen_evening_hours",
+    "screen_work_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
 )
@@ -138,7 +139,8 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
     claude_prompts, claude_prompts_evening, claude_decisions, claude_repos, claude_switches
     (Claude Code за день 04:00-04:00; None - не считались),
     screen_work/hobby/browser/evening_hours (часы экрана 04:00→04:00, вечер 19:00→04:00;
-    None - нет данных экрана за день), screen_challenge/hindrance_hours (вызов и помехи внутри
+    None - нет данных экрана за день), screen_work_evening_hours (рабочая часть вечера экрана),
+    screen_challenge/hindrance_hours (вызов и помехи внутри
     screen_work_hours; None - не размечено)."""
     return _rows(conn, date.fromisoformat(start), date.fromisoformat(end))
 

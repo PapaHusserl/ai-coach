@@ -71,6 +71,7 @@ AHEAD_SKIP = CLAUDE_COUNTERS + (
     "screen_hobby_hours",
     "screen_browser_hours",
     "screen_evening_hours",
+    "screen_work_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
     "challenge_hours",

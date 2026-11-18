@@ -74,6 +74,7 @@ def test_screen_writes_counters_for_today(isolated: Path, monkeypatch: pytest.Mo
         ("2026-10-11", "screen_hobby_hours"): (1.0, "screen"),
         ("2026-10-11", "screen_browser_hours"): (0.25, "screen"),
         ("2026-10-11", "screen_evening_hours"): (1.0, "screen"),
+        ("2026-10-11", "screen_work_evening_hours"): (1.0, "screen"),
     }
 
 
@@ -85,6 +86,15 @@ def test_screen_prints_hours_by_category(isolated: Path, monkeypatch: pytest.Mon
     assert "работа 3.0" in result.output
     assert "хобби 1.0" in result.output
     assert "браузер 0.25" in result.output
+
+
+def test_screen_prints_work_evening_right_after_evening(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, "2026-10-11 21:00:00")
+    use_aw(monkeypatch, FakeAw({"2026-10-11": day_of(evening=0.5)}))
+    result = runner.invoke(main.app, ["screen"])
+    assert "вечер 0.5 ч, работа вечером 0.5 ч" in result.output
 
 
 def test_screen_without_demand_lists_prints_no_demand_parts(
@@ -155,7 +165,7 @@ def test_screen_repeated_run_replaces_values(
     runner.invoke(main.app, ["screen"])
     found = counters(isolated)
     assert found[("2026-10-11", "screen_work_hours")] == (4.5, "screen")
-    assert len(found) == 4
+    assert len(found) == 5
 
 
 def test_screen_days_writes_all_days_prints_only_today(

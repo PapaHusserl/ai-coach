@@ -190,7 +190,8 @@ def read_screen(
     last: date,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Счётчики экрана за дни first..last включительно: screen_work_hours, screen_hobby_hours,
-    screen_browser_hours и screen_evening_hours (всё за экраном 19:00→04:00) - часы с двумя
+    screen_browser_hours и screen_evening_hours (всё за экраном 19:00→04:00) и
+    screen_work_evening_hours (рабочая часть этого вечера) - часы с двумя
     знаками; при непустых challenge/hindrance в конфиге ещё screen_challenge_hours и
     screen_hindrance_hours (части работы). Строки для upsert_counter: date, kind, value,
     source='screen', raw_json None.
@@ -222,6 +223,7 @@ def read_screen(
             "screen_hobby_hours": cats["hobby"],
             "screen_browser_hours": cats["browser"],
             "screen_evening_hours": sum(evening.values()),
+            "screen_work_evening_hours": by_category(evening, config)["work"],
         }
         if marked:
             hours["screen_challenge_hours"] = cats["challenge"]

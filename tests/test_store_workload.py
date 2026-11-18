@@ -187,6 +187,7 @@ def test_upsert_counter_known_kinds_are_allowed(conn: sqlite3.Connection, kind: 
         "screen_hobby_hours",
         "screen_browser_hours",
         "screen_evening_hours",
+        "screen_work_evening_hours",
         "screen_challenge_hours",
         "screen_hindrance_hours",
     ],

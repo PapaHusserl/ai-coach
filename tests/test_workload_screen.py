@@ -293,6 +293,7 @@ def test_hours_by_category_and_evening() -> None:
         "screen_hobby_hours": 0.5,
         "screen_browser_hours": 0.25,
         "screen_evening_hours": 0.75,
+        "screen_work_evening_hours": 0.5,
     }
 
 
@@ -337,7 +338,53 @@ def test_unmarked_is_not_stored() -> None:
         "screen_hobby_hours",
         "screen_browser_hours",
         "screen_evening_hours",
+        "screen_work_evening_hours",
     }
+
+
+def test_work_evening_counts_only_work_part_of_evening() -> None:
+    aw = one_day(
+        {
+            ("alpha editor", ""): 3 * HOUR,
+            ("betagame", ""): 2 * HOUR,
+            ("gamma browser", ""): HOUR,
+        },
+        {
+            ("alpha editor", ""): HOUR,
+            ("betagame", ""): HOUR,
+            ("gamma browser", ""): 0.5 * HOUR,
+        },
+    )
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_work_evening_hours"] == 1.0
+    assert values["screen_evening_hours"] == 2.5
+
+
+def test_work_evening_is_zero_when_evening_period_is_empty() -> None:
+    aw = one_day({("alpha editor", ""): HOUR})
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_work_evening_hours"] == 0
+
+
+def test_work_evening_without_work_is_zero() -> None:
+    aw = one_day(
+        {("betagame", ""): HOUR, ("gamma browser", ""): HOUR},
+        {("betagame", ""): HOUR, ("gamma browser", ""): HOUR},
+    )
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_work_evening_hours"] == 0
+
+
+def test_work_evening_includes_title_marked_work() -> None:
+    aw = one_day({("zeta tool", "work"): HOUR}, {("zeta tool", "work"): HOUR})
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_work_evening_hours"] == 1.0
+
+
+def test_work_evening_is_rounded_to_two_places() -> None:
+    aw = one_day({("alpha editor", ""): 4000}, {("alpha editor", ""): 4000})
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_work_evening_hours"] == 1.11
 
 
 def test_browser_is_separate_and_not_in_work() -> None:
@@ -362,7 +409,7 @@ def test_demand_rows_are_written_with_two_places_and_zeros() -> None:
     assert values["screen_challenge_hours"] == 1.23
     assert values["screen_hindrance_hours"] == 0
     assert values["screen_work_hours"] == 2.23
-    assert len(rows) == 6
+    assert len(rows) == 7
 
 
 def test_demand_rows_for_every_day_with_events() -> None:
@@ -454,7 +501,7 @@ def test_browser_and_hobby_are_in_the_total_of_unmarked_share() -> None:
 def test_row_shape_for_upsert_counter() -> None:
     aw = one_day({("alpha editor", ""): HOUR})
     rows, _ = read_screen(aw, CONFIG, D1, D1)
-    assert len(rows) == 4
+    assert len(rows) == 5
     for row in rows:
         assert set(row) == {"date", "kind", "value", "source", "raw_json"}
         assert row["source"] == "screen"

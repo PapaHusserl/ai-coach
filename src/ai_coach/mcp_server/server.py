@@ -114,6 +114,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(снимок на дату последнего sync), todo_closed (закрыто за день), grooming_done, "
         "grooming_pending (null - не считались); screen_work/hobby/browser/evening_hours - "
         "часы экрана (день 04:00-04:00, вечер 19:00-04:00; null - нет данных экрана; "
+        "screen_work_evening_hours - рабочая часть вечера, главнее календарного вечера в "
+        "сигнале evening_streak и в total; "
         "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана); "
         "screen_challenge/hindrance_hours - вызов и помехи внутри экранной работы "
         "(null - не размечено); challenge/hindrance_hours - вызов и помехи внутри work_hours "
@@ -129,7 +131,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "числом (тренировки + работа + хобби + вечер/выходные + туду и груминг), days - 7 дней "
         "до date (date, total, ручные часы manual_work/hobby/rest_hours, null - не вводились, "
         "часы экрана screen_work/hobby_hours, null - нет данных), "
-        "signals - total_streak, evening_streak, weekend_work, recovery_drop, todo_growth "
+        "signals - total_streak, evening_streak (работа после 19:00: экран, без него календарь), "
+        "weekend_work, recovery_drop, todo_growth "
         "(kind, value, limit; у recovery_drop value и limit - объекты по readiness/mood/stress); "
         "пустой список - перегруза нет. Нет нагрузки тренировок - "
         "TSS считается нулём, причина в load_error. Ручные часы пишет coach feel.",

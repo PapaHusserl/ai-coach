@@ -234,6 +234,98 @@ def test_evening_streak_is_broken_by_a_free_evening() -> None:
     assert "evening_streak" not in kinds(days)
 
 
+def test_evening_hours_screen_beats_calendar() -> None:
+    from ai_coach.load.overload import evening_hours
+
+    assert evening_hours(day(screen_work_evening_hours=1.5, work_evening_hours=0.5)) == 1.5
+
+
+def test_evening_hours_screen_zero_beats_calendar() -> None:
+    from ai_coach.load.overload import evening_hours
+
+    assert evening_hours(day(screen_work_evening_hours=0.0, work_evening_hours=2.0)) == 0
+
+
+def test_evening_hours_without_screen_takes_calendar() -> None:
+    from ai_coach.load.overload import evening_hours
+
+    assert evening_hours(day(screen_work_evening_hours=None, work_evening_hours=2.0)) == 2.0
+    assert evening_hours(day(work_evening_hours=2.0)) == 2.0
+
+
+def test_evening_hours_without_anything_is_zero() -> None:
+    from ai_coach.load.overload import evening_hours
+
+    assert evening_hours({}) == 0
+    assert evening_hours(day(screen_work_evening_hours=None, work_evening_hours=None)) == 0
+
+
+def test_evening_work_min_is_a_positive_constant() -> None:
+    assert overload.EVENING_WORK_MIN > 0
+
+
+@pytest.mark.parametrize(
+    ("delta", "expected"),
+    [(-0.01, False), (0.0, True), (0.01, True)],
+    ids=["below", "at", "above"],
+)
+def test_evening_streak_work_min_border(delta: float, expected: bool) -> None:
+    value = overload.EVENING_WORK_MIN + delta
+    days = with_tail(quiet(), overload.EVENING_STREAK_DAYS, screen_work_evening_hours=value)
+    assert ("evening_streak" in kinds(days)) is expected
+
+
+def test_evening_streak_is_broken_by_a_day_just_below_the_min() -> None:
+    at_min = overload.EVENING_WORK_MIN
+    days = with_tail(quiet(), overload.EVENING_STREAK_DAYS, screen_work_evening_hours=at_min)
+    days[-2]["screen_work_evening_hours"] = at_min - 0.01
+    assert "evening_streak" not in kinds(days)
+
+
+def test_evening_streak_signal_shape() -> None:
+    days = with_tail(
+        quiet(), overload.EVENING_STREAK_DAYS, screen_work_evening_hours=overload.EVENING_WORK_MIN
+    )
+    found = [s for s in find_overload(days, []) if s["kind"] == "evening_streak"]
+    assert len(found) == 1
+    assert found[0]["value"] == overload.EVENING_STREAK_DAYS
+    assert found[0]["limit"] == overload.EVENING_STREAK_DAYS
+
+
+def test_quarter_hour_of_work_every_evening_is_no_streak() -> None:
+    days = with_tail(quiet(), 7, screen_work_evening_hours=0.25, work_evening_hours=0.25)
+    assert "evening_streak" not in kinds(days)
+
+
+def test_evening_streak_screen_zero_beats_calendar_evening() -> None:
+    days = with_tail(
+        quiet(),
+        overload.EVENING_STREAK_DAYS,
+        work_evening_hours=BIG_EVENING,
+        screen_work_evening_hours=0.0,
+    )
+    assert "evening_streak" not in kinds(days)
+
+
+def test_evening_streak_from_calendar_when_screen_is_none() -> None:
+    days = with_tail(
+        quiet(),
+        overload.EVENING_STREAK_DAYS,
+        work_evening_hours=BIG_EVENING,
+        screen_work_evening_hours=None,
+    )
+    assert "evening_streak" in kinds(days)
+
+
+def test_screen_work_evening_hours_weigh_w_evening_in_total() -> None:
+    assert total_load(day(screen_work_evening_hours=2.0)) == pytest.approx(2 * overload.W_EVENING)
+
+
+def test_screen_zero_work_evening_hours_beat_calendar_in_total() -> None:
+    row = day(screen_work_evening_hours=0.0, work_evening_hours=2.0)
+    assert total_load(row) == 0
+
+
 def test_work_on_weekend_is_overload() -> None:
     days = with_tail(quiet(), 1, weekend=True, work_hours=4.0)
     assert "weekend_work" in kinds(days)

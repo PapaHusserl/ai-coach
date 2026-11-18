@@ -616,6 +616,17 @@ def test_overload_topic_names_every_signal() -> None:
         assert needle in text, needle
 
 
+def test_overload_topic_evening_signal_has_work_min_and_source() -> None:
+    text = topic("overload.md")
+    assert overload.EVENING_WORK_MIN == 1.0  # «часа» в тексте - от этой константы
+    assert overload.EVENING_STREAK_DAYS == 3  # «три» в тексте - от этой константы
+    assert "не меньше часа работы после 19:00 три вечера подряд (экран, без него календарь)" in text
+
+
+def test_workload_topic_screen_line_names_work_evening() -> None:
+    assert "работа вечером" in topic("workload.md")
+
+
 def test_workload_topic_describes_calendar_demand() -> None:
     text = topic("workload.md")
     for needle in (
@@ -668,7 +679,8 @@ def test_overload_topic_signal_thresholds_match_overload() -> None:
         f"не меньше {num(overload.WEEKEND_WORK_MIN)} часов работы",
     ):
         assert needle in text, needle
-    assert "не меньше часа" not in text
+    weekend = next(line for line in text.splitlines() if "`weekend_work`" in line)
+    assert "не меньше часа" not in weekend
 
 
 def test_overload_topic_says_weights_are_checked_on_data() -> None:

@@ -335,8 +335,9 @@ def test_sync_writes_screen_counters_with_source_screen(
     assert ("2026-10-08", "screen_work_hours", 3.0, "screen") in found
     assert ("2026-10-08", "screen_hobby_hours", 1.0, "screen") in found
     assert ("2026-10-08", "screen_evening_hours", 1.0, "screen") in found
+    assert ("2026-10-08", "screen_work_evening_hours", 1.0, "screen") in found
     assert ("2026-10-07", "screen_work_hours", 3.0, "screen") in found
-    assert len(found) == 8
+    assert len(found) == 10
 
 
 def test_sync_without_demand_lists_notes_unmarked_demand(
@@ -419,7 +420,7 @@ def test_calendar_error_does_not_stop_screen(
         today=TODAY,
         screen=FakeAw(screen_day()),
     )
-    assert len(screen_counters(conn)) == 8
+    assert len(screen_counters(conn)) == 10
 
 
 def test_sync_two_unmarked_calendars_are_joined_with_comma(
@@ -488,7 +489,8 @@ def test_repeated_sync_replaces_screen_values(
     run_screen(conn, config, FakeAw(smaller))
     found = {(d, k): v for d, k, v, _ in screen_counters(conn)}
     assert found[("2026-10-08", "screen_work_hours")] == 1.0
-    assert len([1 for d, _ in found if d == "2026-10-08"]) == 4
+    assert found[("2026-10-08", "screen_work_evening_hours")] == 0
+    assert len([1 for d, _ in found if d == "2026-10-08"]) == 5
 
 
 def test_screen_sync_writes_one_workload_log_row(

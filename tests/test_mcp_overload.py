@@ -124,6 +124,36 @@ def test_overload_days_do_not_show_browser_and_evening_screen(conn: sqlite3.Conn
     assert "screen_evening_hours" not in day
 
 
+def test_overload_days_do_not_show_screen_work_evening(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_work_evening_hours", 2.0)
+    day = call(conn, "get_overload", date=DAY)["days"][-1]
+    assert "screen_work_evening_hours" not in day
+
+
+def test_evening_streak_comes_from_screen_work_evening_counter(conn: sqlite3.Connection) -> None:
+    from ai_coach.load.overload import EVENING_STREAK_DAYS, EVENING_WORK_MIN
+
+    for number in range(EVENING_STREAK_DAYS):
+        screen(conn, shift(DAY, -number), "screen_work_evening_hours", EVENING_WORK_MIN)
+    assert "evening_streak" in kinds(conn)
+
+
+def test_no_evening_streak_when_screen_work_evening_is_below_the_min(
+    conn: sqlite3.Connection,
+) -> None:
+    from ai_coach.load.overload import EVENING_STREAK_DAYS, EVENING_WORK_MIN
+
+    for number in range(EVENING_STREAK_DAYS):
+        screen(conn, shift(DAY, -number), "screen_work_evening_hours", EVENING_WORK_MIN - 0.01)
+    assert "evening_streak" not in kinds(conn)
+
+
+def test_screen_work_evening_counter_adds_to_overload_total(conn: sqlite3.Connection) -> None:
+    before = call(conn, "get_overload", date=DAY)["total"]
+    screen(conn, DAY, "screen_work_evening_hours", 2.0)
+    assert call(conn, "get_overload", date=DAY)["total"] > before
+
+
 def test_screen_hours_count_in_overload_total(conn: sqlite3.Connection) -> None:
     before = call(conn, "get_overload", date=DAY)["total"]
     screen(conn, DAY, "screen_work_hours", 8.0)
@@ -266,6 +296,12 @@ def test_snapshot_ahead_has_no_screen_fields(conn: sqlite3.Connection) -> None:
     screen(conn, shift(DAY, 2), "screen_work_hours", 14.0)
     ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
     assert all(not [k for k in r if k.startswith("screen_")] for r in ahead)
+
+
+def test_snapshot_ahead_has_no_screen_work_evening_field(conn: sqlite3.Connection) -> None:
+    screen(conn, shift(DAY, 2), "screen_work_evening_hours", 3.0)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert all("screen_work_evening_hours" not in r for r in ahead)
 
 
 def test_snapshot_with_seven_screen_days_fits_the_limit(conn: sqlite3.Connection) -> None:

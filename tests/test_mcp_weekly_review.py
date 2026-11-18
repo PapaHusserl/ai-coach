@@ -70,6 +70,19 @@ def test_row_has_expected_fields(conn: sqlite3.Connection, monkeypatch: pytest.M
 # --- week_review_due ---
 
 
+def test_evening_hours_of_week_come_from_screen_counter(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{WED} 12:00:00")
+    for day in (MON, TUE):
+        conn.execute(
+            "INSERT INTO day_counters (date, kind, value, source, synced_at) "
+            "VALUES (?, 'screen_work_evening_hours', 1.0, 'screen', '2026-10-14T10:00:00')",
+            (day,),
+        )
+    assert rows(conn, "get_weekly_review", weeks=1)[0]["evening_hours"] == pytest.approx(2.0)
+
+
 def test_due_on_sunday_without_record(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

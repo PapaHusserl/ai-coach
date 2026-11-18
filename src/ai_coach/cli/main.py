@@ -363,6 +363,7 @@ SCREEN_LABELS = (
     ("screen_hobby_hours", "хобби"),
     ("screen_browser_hours", "браузер"),
     ("screen_evening_hours", "вечер"),
+    ("screen_work_evening_hours", "работа вечером"),
     ("screen_challenge_hours", "вызов"),
     ("screen_hindrance_hours", "помехи"),
 )

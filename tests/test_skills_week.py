@@ -43,6 +43,16 @@ def test_coach_md_has_weekly_review_tool() -> None:
     assert "mcp__ai-coach__get_weekly_review" in head
 
 
+def test_week_file_evening_hours_name_the_source() -> None:
+    text = (AGENTS / "coach-week.md").read_text()
+    assert "работа после 19:00: экран, без него календарь" in text
+
+
+def test_wellbeing_evening_source_is_screen_then_calendar() -> None:
+    text = (AGENTS / "coach-wellbeing.md").read_text()
+    assert text.count("экран > календарь") >= 2
+
+
 def test_week_file_mentions_review_done_and_tool() -> None:
     text = (AGENTS / "coach-week.md").read_text()
     assert "get_weekly_review" in text

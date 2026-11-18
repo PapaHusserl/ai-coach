@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from ai_coach.load import daily_tss
-from ai_coach.load.overload import MANUAL_HOURS, day_entries, hours
+from ai_coach.load.overload import MANUAL_HOURS, day_entries, evening_hours, hours
 from ai_coach.load.thresholds import resolve_thresholds
 from ai_coach.store.garmin_data import last_rest_hr, list_daily_metrics
 from ai_coach.store.journal import list_wellbeing, wellbeing_day
@@ -126,7 +126,7 @@ def _week(
         "tss": round(sum(d["tss"] for d in rows), 1) if has_tss else None,
         "total": round(sum(d["total"] for d in rows), 2),
         "work_hours": round(sum(hours(d, "work_hours") for d in rows), 2),
-        "evening_hours": round(sum(d["work_evening_hours"] for d in rows), 2),
+        "evening_hours": round(sum(evening_hours(d) for d in rows), 2),
         "weekend_work_hours": round(sum(hours(d, "work_hours") for d in rows if d["weekend"]), 2),
         "todo_closed": sum(d["todo_closed"] or 0 for d in rows),
         "todo_open": opened[-1] if opened else None,
