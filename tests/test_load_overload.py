@@ -603,3 +603,74 @@ def test_every_signal_is_reported_once() -> None:
     found = kinds(days)
     assert len(found) == len(set(found))
     assert {"total_streak", "evening_streak"} <= set(found)
+
+
+def signal(days: list[dict[str, Any]], kind: str) -> dict[str, Any]:
+    found = [s for s in find_overload(days, []) if s["kind"] == kind]
+    assert len(found) == 1
+    return found[0]
+
+
+def test_todo_closed_weighs_w_todo_and_adds() -> None:
+    assert total_load(day(todo_closed=10)) == pytest.approx(10 * overload.W_TODO)
+    both = total_load(day(work_hours=1.0, todo_closed=10))
+    assert both == pytest.approx(overload.W_WORK + 10 * overload.W_TODO)
+
+
+def test_weekend_adds_w_weekend_of_work_to_the_rest() -> None:
+    row = day(work_hours=2.0, tss=40.0, weekend=True)
+    expected = total_load(day(work_hours=2.0, tss=40.0)) + overload.W_WEEKEND * 2.0
+    assert total_load(row) == pytest.approx(expected)
+
+
+def test_total_load_is_rounded_to_two_decimals() -> None:
+    assert total_load(day(work_hours=0.123)) == 0.12
+
+
+def test_total_streak_signal_shape() -> None:
+    days = with_tail(quiet(), 4, total=overload.TOTAL_HIGH + 1)
+    assert signal(days, "total_streak") == {
+        "kind": "total_streak",
+        "value": 4,
+        "limit": overload.TOTAL_STREAK_DAYS,
+    }
+
+
+def test_weekend_work_signal_shape_and_rounding() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=overload.WEEKEND_WORK_MIN + 0.004)
+    assert signal(days, "weekend_work") == {
+        "kind": "weekend_work",
+        "value": overload.WEEKEND_WORK_MIN,
+        "limit": overload.WEEKEND_WORK_MIN,
+    }
+
+
+def test_todo_growth_signal_is_last_minus_first() -> None:
+    days = quiet()
+    for item, opened in zip(days, [0, 1, 2, 3, 4, 5, 20], strict=True):
+        item["todo_open"] = opened
+    assert signal(days, "todo_growth") == {
+        "kind": "todo_growth",
+        "value": 20,
+        "limit": overload.TODO_GROWTH_MIN,
+    }
+
+
+def test_todo_growth_exactly_min_fires() -> None:
+    days = quiet()
+    days[-1]["todo_open"] = days[0]["todo_open"] + overload.TODO_GROWTH_MIN
+    assert signal(days, "todo_growth")["value"] == overload.TODO_GROWTH_MIN
+
+
+def test_todo_growth_needs_only_two_known_days() -> None:
+    days = quiet()
+    for item in days[1:-1]:
+        item["todo_open"] = None
+    days[-1]["todo_open"] = days[0]["todo_open"] + overload.TODO_GROWTH_MIN
+    assert "todo_growth" in kinds(days)
+
+
+def test_todo_growth_one_known_day_does_not_fire() -> None:
+    days = with_tail(quiet(), 7, todo_open=None)
+    days[0]["todo_open"] = 0
+    assert "todo_growth" not in kinds(days)
