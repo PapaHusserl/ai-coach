@@ -4,7 +4,7 @@ import statistics
 from typing import Any
 
 # Ниже своей нормы: медиана за BELOW_DAYS прошлых дней, нужно BELOW_MIN_DAYS дней, порог BELOW_DROP.
-# Догадка до калибровки v2.9.
+# Проверено v2.9 на окне 2026-10-12…11-17.
 BELOW_DAYS = 14
 BELOW_MIN_DAYS = 7
 BELOW_DROP = 1

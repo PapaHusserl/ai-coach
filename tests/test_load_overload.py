@@ -259,6 +259,36 @@ def test_manual_zero_on_weekend_beats_screen_work() -> None:
     assert "weekend_work" not in kinds(days)
 
 
+def test_grooming_weight_is_point_two() -> None:
+    assert overload.W_GROOMING == 0.2
+    assert total_load(day(grooming_done=10)) == pytest.approx(10 * overload.W_GROOMING)
+
+
+def test_total_high_is_twelve() -> None:
+    assert overload.TOTAL_HIGH == 12.0
+
+
+def test_weekend_work_min_is_two_hours() -> None:
+    assert overload.WEEKEND_WORK_MIN == 2.0
+
+
+def test_weekend_work_just_below_min_is_fine() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=overload.WEEKEND_WORK_MIN - 0.01)
+    assert "weekend_work" not in kinds(days)
+
+
+def test_weekend_work_exactly_min_is_overload_with_limit() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=overload.WEEKEND_WORK_MIN)
+    found = [s for s in find_overload(days, []) if s["kind"] == "weekend_work"]
+    assert len(found) == 1
+    assert found[0]["limit"] == overload.WEEKEND_WORK_MIN
+
+
+def test_weekend_work_one_and_a_half_hours_is_fine() -> None:
+    days = with_tail(quiet(), 1, weekend=True, work_hours=1.5)
+    assert "weekend_work" not in kinds(days)
+
+
 def test_work_on_weekday_is_not_weekend_work() -> None:
     days = with_tail(quiet(), 1, weekend=False, work_hours=10.0)
     assert "weekend_work" not in kinds(days)

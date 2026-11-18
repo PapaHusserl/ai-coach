@@ -301,10 +301,49 @@ def test_deviations_topic_new_section_headings_name_get_deviations() -> None:
         assert "`get_deviations`" in heads[0], title
 
 
-def test_deviations_topic_below_norm_guess_note_is_in_what_is_it_item() -> None:
-    lines = [ln for ln in below_section().splitlines() if "Порог - догадка" in ln]
+def test_deviations_topic_below_norm_checked_note_is_in_what_is_it_item() -> None:
+    lines = [ln for ln in below_section().splitlines() if "Порог проверен" in ln]
     assert len(lines) == 1
     assert lines[0].startswith("- Что это:")
+    assert "на данных 2026-10-12…11-17" in lines[0]
+
+
+def test_sleep_topic_debt_section_says_thresholds_checked_on_data() -> None:
+    text = topic("sleep.md")
+    section = text.split("## Долг сна", 1)[1].split("\n## ", 1)[0]
+    assert "проверены на данных 2026-10-12…11-17" in section
+    assert "догадка" not in section
+
+
+def test_guess_word_is_gone_from_load_docs_and_help_except_known_lines() -> None:
+    paths = [
+        *sorted((ROOT / "src" / "ai_coach" / "load").glob("*.py")),
+        ROOT / "docs" / "architecture.md",
+        ROOT / "README.md",
+        *sorted(AGENTS.rglob("*.md")),
+    ]
+    found = sorted(
+        f"{path.relative_to(ROOT)}"
+        for path in paths
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "догадк" in line.lower()
+    )
+    assert found == sorted(
+        [
+            "src/ai_coach/load/illness.py",
+            "src/ai_coach/load/stress.py",
+            "docs/architecture.md",
+            "README.md",
+            ".claude/agents/coach-help/sleep.md",
+        ]
+    )
+
+
+def test_architecture_total_load_weights_end_with_grooming_weight() -> None:
+    text = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if ln.lstrip().startswith("с весами 0.05 / 1.0")]
+    assert len(lines) == 1
+    assert f"/ {overload.W_GROOMING} (" in lines[0]
 
 
 def test_deviations_topic_thresholds_line_does_not_point_to_sleep() -> None:
@@ -579,10 +618,16 @@ def test_overload_topic_signal_thresholds_match_overload() -> None:
         f"стресс выше на {num(overload.STRESS_RISE)}",
         f"больше на {overload.TODO_GROWTH_MIN} и более",
         f"за последние {overload.OVERLOAD_DAYS} дней",
-        "не меньше часа",
+        f"не меньше {num(overload.WEEKEND_WORK_MIN)} часов работы",
     ):
         assert needle in text, needle
-    assert overload.WEEKEND_WORK_MIN == 1.0  # «не меньше часа»
+    assert "не меньше часа" not in text
+
+
+def test_overload_topic_says_weights_are_checked_on_data() -> None:
+    text = topic("overload.md")
+    assert "проверены на данных 2026-10-12…11-17" in text
+    assert "стартовые" not in text
 
 
 def test_workload_topic_keeps_one_link_to_overload() -> None:

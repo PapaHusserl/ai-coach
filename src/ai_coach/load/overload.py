@@ -1,7 +1,7 @@
 """Общая нагрузка дня и сигналы перегруза (подступающее выгорание).
 
-Веса и пороги - константы и пока догадка: калибруются по 2-3 неделям данных, меняются только
-они. Формула - в docs/architecture.md (раздел v2.2+v2.3).
+Веса и пороги - константы, проверены v2.9 на окне 2026-10-12…11-17; меняются только они.
+Формула - в docs/architecture.md (раздел v2.2+v2.3).
 
 total_load = W_TSS * tss + W_WORK * work + W_HOBBY * hobby + W_EVENING * work_evening
              + W_WEEKEND * work (в сб/вс) + W_TODO * todo_closed + W_GROOMING * grooming_done.
@@ -24,11 +24,11 @@ W_HOBBY = 0.5
 W_EVENING = 0.5
 W_WEEKEND = 0.5
 W_TODO = 0.2
-W_GROOMING = 0.5
-TOTAL_HIGH = 10.0
+W_GROOMING = 0.2
+TOTAL_HIGH = 12.0
 TOTAL_STREAK_DAYS = 3
 EVENING_STREAK_DAYS = 3
-WEEKEND_WORK_MIN = 1.0
+WEEKEND_WORK_MIN = 2.0
 READINESS_DROP = 10
 MOOD_DROP = 1.0
 STRESS_RISE = 1.0
