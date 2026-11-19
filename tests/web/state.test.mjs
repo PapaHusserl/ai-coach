@@ -67,7 +67,7 @@ test("trendSeries: вес — числа kg", async () => {
 const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "corridor_out", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
-	"stress", "wellbeing_below", "mood_below", "symptoms", "readiness", "hrv", "sleep", "atl_over_ctl",
+	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
 ];
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
@@ -83,7 +83,7 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 22 кода отчётов", async () => {
+test("SIGNAL_WORDS: ровно 23 кода отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -145,9 +145,21 @@ test("detail: словарь — «ключ значение» через зап
 	assert.equal(await detailOf(drop), "readiness 12, mood 1.5 (порог readiness 10, mood 1, stress 1)");
 });
 
-test("SIGNAL_WORDS: symptoms — «симптомы в тексте»", async () => {
+test("SIGNAL_WORDS: symptoms — «симптомы»", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
-	assert.equal(SIGNAL_WORDS.symptoms, "симптомы в тексте");
+	assert.equal(SIGNAL_WORDS.symptoms, "симптомы");
+});
+
+test("SIGNAL_WORDS: fever — «температура»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.fever, "температура");
+});
+
+test("signalRows: fever — «температура · 37.2 (порог 37)», порог без «.0»", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ source: "deviations", kind: "fever", value: 37.2, limit: 37.0 }]));
+	assert.equal(row.word, "температура");
+	assert.ok(text(row).includes("37.2 (порог 37)"), text(row));
 });
 
 test("detail: symptoms — слова через запятую, без порога", async () => {
@@ -157,10 +169,10 @@ test("detail: symptoms — слова через запятую, без поро
 	assert.ok(!detail.includes("порог"));
 });
 
-test("signalRows: symptoms — слово строки «симптомы в тексте»", async () => {
+test("signalRows: symptoms — слово строки «симптомы»", async () => {
 	const { signalRows } = await stateModel();
 	const [row] = signalRows(stateOf([{ source: "deviations", kind: "symptoms", value: ["горло"], limit: null }]));
-	assert.equal(row.word, "симптомы в тексте");
+	assert.equal(row.word, "симптомы");
 });
 
 test("SIGNAL_WORDS: ниже своей нормы — самочувствие и настроение", async () => {

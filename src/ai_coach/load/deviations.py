@@ -3,6 +3,13 @@
 import statistics
 from typing import Any
 
+# SYMPTOMS и NEGATIONS_* живут в symptom_text.py; здесь они же - для справки и тестов.
+from ai_coach.load.symptom_text import FEVER_FROM as FEVER_FROM
+from ai_coach.load.symptom_text import NEGATIONS_AFTER as NEGATIONS_AFTER
+from ai_coach.load.symptom_text import NEGATIONS_BEFORE as NEGATIONS_BEFORE
+from ai_coach.load.symptom_text import SYMPTOMS as SYMPTOMS
+from ai_coach.load.symptom_text import find_fever, find_symptoms
+
 # Ниже своей нормы: медиана за BELOW_DAYS прошлых дней, нужно BELOW_MIN_DAYS дней, порог BELOW_DROP.
 # Проверено v2.9 на окне 2026-10-12…11-17.
 BELOW_DAYS = 14
@@ -15,37 +22,6 @@ READINESS_MIN = 33
 BAD_HRV_STATUSES = ("LOW", "UNBALANCED", "BELOW")
 ATL_OVER_CTL_MAX = 15
 SLEEP_MIN_HOURS = 6
-# Явные симптомы простуды (ряд WURSS-24): основа (подстрока текста в нижнем регистре) -> слово.
-SYMPTOMS = (
-    ("горл", "горло"),
-    ("насморк", "насморк"),
-    ("сопл", "сопли"),
-    ("температур", "температура"),
-    ("кашл", "кашель"),
-    ("кашел", "кашель"),
-    ("залож", "заложенность"),
-    ("чиха", "чихание"),
-    ("чихн", "чихание"),
-    ("перш", "першение"),
-    ("осип", "осиплость"),
-    ("охрип", "осиплость"),
-    ("озноб", "озноб"),
-    ("зноб", "озноб"),
-    ("ломот", "ломота"),
-    ("ломит", "ломота"),
-    ("простуд", "простуда"),
-    ("простыл", "простуда"),
-)
-
-
-def find_symptoms(texts: list[str]) -> list[str]:
-    """Слова-симптомы из текстов самочувствия: без повторов, в порядке SYMPTOMS."""
-    low = " ".join(texts).lower()
-    found: list[str] = []
-    for stem, word in SYMPTOMS:
-        if stem in low and word not in found:
-            found.append(word)
-    return found
 
 
 def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -92,38 +68,61 @@ def find_below(wellbeing: dict[str, Any], norms: dict[str, float]) -> list[dict[
     return found
 
 
+def _score_rows(wellbeing: dict[str, Any] | None) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    if not wellbeing:
+        return found
+    if wellbeing["score"] <= WELLBEING_MAX:
+        found.append({"kind": "wellbeing", "value": wellbeing["score"], "limit": WELLBEING_MAX})
+    if wellbeing.get("mood") is not None and wellbeing["mood"] <= MOOD_MAX:
+        found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
+    if wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
+        found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
+    return found
+
+
+def _text_rows(texts: list[str]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    symptoms = find_symptoms(texts)
+    if symptoms:
+        found.append({"kind": "symptoms", "value": symptoms, "limit": None})
+    fever = find_fever(texts)
+    if fever is not None:
+        found.append({"kind": "fever", "value": fever, "limit": FEVER_FROM})
+    return found
+
+
+def _metrics_rows(metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    readiness = metrics["readiness_score"]
+    if readiness is not None and readiness < READINESS_MIN:
+        found.append({"kind": "readiness", "value": readiness, "limit": READINESS_MIN})
+    status = metrics["hrv_status"]
+    if status is not None and status.upper() in BAD_HRV_STATUSES:
+        found.append({"kind": "hrv", "value": status, "limit": list(BAD_HRV_STATUSES)})
+    sleep = metrics["sleep_seconds"]
+    if sleep is not None and sleep < SLEEP_MIN_HOURS * 3600:
+        found.append({"kind": "sleep", "value": round(sleep / 3600, 1), "limit": SLEEP_MIN_HOURS})
+    return found
+
+
 def find_deviations(
     wellbeing: dict[str, Any] | None,
     metrics: dict[str, Any] | None,
     load: dict[str, Any] | None,
     norms: dict[str, float] | None = None,
+    phrases: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Отклонения за день. wellbeing — основная (последняя) запись самочувствия дня,
-    metrics — строка daily_metrics, load — строка load_series; None — данных нет."""
-    found: list[dict[str, Any]] = []
-    if wellbeing and wellbeing["score"] <= WELLBEING_MAX:
-        found.append({"kind": "wellbeing", "value": wellbeing["score"], "limit": WELLBEING_MAX})
-    if wellbeing and wellbeing.get("mood") is not None and wellbeing["mood"] <= MOOD_MAX:
-        found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
-    if wellbeing and wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
-        found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
+    metrics — строка daily_metrics, load — строка load_series; None — данных нет.
+    phrases — фразы из ответов форм дня: идут в разбор симптомов вместе с текстами записи."""
+    found = _score_rows(wellbeing)
     if wellbeing and norms:
         found.extend(find_below(wellbeing, norms))
-    symptoms = find_symptoms(wellbeing.get("texts", [])) if wellbeing else []
-    if symptoms:
-        found.append({"kind": "symptoms", "value": symptoms, "limit": None})
+    own: list[str] = wellbeing.get("texts", []) if wellbeing else []
+    found.extend(_text_rows(own + (phrases or [])))
     if metrics:
-        readiness = metrics["readiness_score"]
-        if readiness is not None and readiness < READINESS_MIN:
-            found.append({"kind": "readiness", "value": readiness, "limit": READINESS_MIN})
-        status = metrics["hrv_status"]
-        if status is not None and status.upper() in BAD_HRV_STATUSES:
-            found.append({"kind": "hrv", "value": status, "limit": list(BAD_HRV_STATUSES)})
-        sleep = metrics["sleep_seconds"]
-        if sleep is not None and sleep < SLEEP_MIN_HOURS * 3600:
-            found.append(
-                {"kind": "sleep", "value": round(sleep / 3600, 1), "limit": SLEEP_MIN_HOURS}
-            )
+        found.extend(_metrics_rows(metrics))
     if load and load["atl"] - load["ctl"] > ATL_OVER_CTL_MAX:
         found.append(
             {

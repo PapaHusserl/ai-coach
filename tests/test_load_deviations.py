@@ -112,7 +112,6 @@ def test_symptoms_go_in_list_order_not_text_order() -> None:
         ("в горле ком", "горло"),
         ("весь в соплях", "сопли"),
         ("с соплями", "сопли"),
-        ("температуры нет", "температура"),
         ("кашляю", "кашель"),
         ("кашель", "кашель"),
         ("нос заложен", "заложенность"),
@@ -182,9 +181,273 @@ def test_wellbeing_without_texts_key_has_no_symptoms() -> None:
     assert kinds({"score": 3}) == []
 
 
-def test_negation_is_not_parsed_symptom_still_reported() -> None:
-    assert kinds({"score": 4, "texts": ["температуры нет"]}) == ["symptoms"]
-    assert kinds({"score": 4, "texts": ["горло прошло"]}) == ["symptoms"]
+# Н33, партия 1: отрицания, температура с числом, ответы форм.
+
+
+def fever(texts: Any) -> Any:
+    from ai_coach.load.deviations import find_fever
+
+    return find_fever(texts)
+
+
+def phrases(fields: Any, answers: Any) -> list[str]:
+    from ai_coach.load.episode import form_phrases
+
+    return form_phrases(fields, answers)
+
+
+TEMPERATURE = {"key": "temperature", "type": "number", "label": "Температура", "unit": "°C"}
+NOSE = {"key": "nose", "type": "yesno", "label": "Насморк"}
+THROAT = {
+    "key": "throat",
+    "type": "choice",
+    "label": "Горло",
+    "options": ["не болит", "першит"],
+}
+SCORE = {"key": "score", "type": "scale", "label": "Самочувствие"}
+
+
+@pytest.mark.parametrize("text", ["температуры нет", "без кашля", "горло прошло"])
+def test_negated_symptom_is_not_a_symptom(text: str) -> None:
+    assert symptoms([text]) == []
+
+
+def test_negated_word_next_to_real_one_leaves_the_real_one() -> None:
+    assert symptoms(["горло болит, температуры нет"]) == ["горло"]
+
+
+def test_better_is_not_a_negation() -> None:
+    assert symptoms(["горло лучше"]) == ["горло"]
+
+
+@pytest.mark.parametrize("text", ["температура 36,6", "температура 36.6", "температура 36,9"])
+def test_temperature_under_limit_is_not_a_symptom_and_not_a_fever(text: str) -> None:
+    assert symptoms([text]) == []
+    assert fever([text]) is None
+
+
+@pytest.mark.parametrize("text", ["температура 37,0", "температура 37.0"])
+def test_temperature_from_limit_is_a_symptom_and_a_fever(text: str) -> None:
+    assert symptoms([text]) == ["температура"]
+    assert fever([text]) == 37.0
+
+
+def test_fever_limit_is_37() -> None:
+    from ai_coach.load.deviations import FEVER_FROM
+
+    assert FEVER_FROM == 37.0
+
+
+def test_temperature_without_number_is_a_symptom_not_a_fever() -> None:
+    assert symptoms(["температура"]) == ["температура"]
+    assert fever(["температура"]) is None
+
+
+def test_fever_takes_the_largest_number_of_the_day() -> None:
+    assert fever(["температура 37,2", "вечером температура 37,8", "температура 37,4"]) == 37.8
+
+
+def test_fever_is_none_without_texts() -> None:
+    assert fever([]) is None
+
+
+def test_fever_row_has_value_and_limit() -> None:
+    found = find_deviations({"score": 4, "texts": ["температура 37,2"]}, None, None)
+    assert {"kind": "fever", "value": 37.2, "limit": 37.0} in found
+
+
+def test_no_fever_row_under_limit() -> None:
+    assert "fever" not in kinds({"score": 4, "texts": ["температура 36,6"]})
+
+
+def test_no_fever_row_without_number() -> None:
+    assert "fever" not in kinds({"score": 4, "texts": ["температура"]})
+
+
+def test_temperature_answer_with_celsius_gives_a_phrase_with_the_number() -> None:
+    found = phrases([TEMPERATURE], {"temperature": 37.2})
+    assert fever(found) == 37.2
+    assert symptoms(found) == ["температура"]
+
+
+def test_normal_temperature_answer_is_not_a_symptom() -> None:
+    found = phrases([TEMPERATURE], {"temperature": 36.6})
+    assert symptoms(found) == []
+    assert fever(found) is None
+
+
+def test_yes_answer_gives_the_field_label() -> None:
+    assert symptoms(phrases([NOSE], {"nose": True})) == ["насморк"]
+
+
+def test_no_answer_gives_no_phrase() -> None:
+    assert phrases([NOSE], {"nose": False}) == []
+
+
+def test_choice_not_hurting_is_a_negation() -> None:
+    assert symptoms(phrases([THROAT], {"throat": "не болит"})) == []
+
+
+def test_choice_scratchy_gives_throat_and_scratchiness() -> None:
+    assert symptoms(phrases([THROAT], {"throat": "першит"})) == ["горло", "першение"]
+
+
+def test_scale_answer_gives_no_phrase() -> None:
+    assert phrases([SCORE], {"score": 2}) == []
+
+
+def test_number_without_celsius_gives_no_phrase() -> None:
+    steps = {"key": "steps", "type": "number", "label": "Температура", "unit": "шагов"}
+    bare = {"key": "bare", "type": "number", "label": "Температура"}
+    assert phrases([steps, bare], {"steps": 38, "bare": 38}) == []
+
+
+def test_answers_of_several_fields_give_phrases_of_each() -> None:
+    found = phrases([TEMPERATURE, NOSE, SCORE], {"temperature": 37.5, "nose": True, "score": 2})
+    assert symptoms(found) == ["насморк", "температура"]
+
+
+def test_form_answers_without_text_make_symptoms() -> None:
+    found = phrases([NOSE], {"nose": True})
+    assert find_deviations(None, None, None, phrases=found) == [
+        {"kind": "symptoms", "value": ["насморк"], "limit": None}
+    ]
+
+
+def test_form_phrases_join_wellbeing_texts() -> None:
+    found = find_deviations(
+        {"score": 4, "texts": ["горло"]}, None, None, phrases=phrases([NOSE], {"nose": True})
+    )
+    assert found == [{"kind": "symptoms", "value": ["горло", "насморк"], "limit": None}]
+
+
+def test_form_temperature_makes_a_fever_row() -> None:
+    found = find_deviations(None, None, None, phrases=phrases([TEMPERATURE], {"temperature": 37.2}))
+    assert {"kind": "fever", "value": 37.2, "limit": 37.0} in found
+
+
+def test_fever_row_comes_right_after_symptoms_before_readiness() -> None:
+    wellbeing = {"score": 2, "texts": ["температура 37,5"]}
+    assert kinds(wellbeing, metrics(readiness_score=10)) == [
+        "wellbeing",
+        "symptoms",
+        "fever",
+        "readiness",
+    ]
+
+
+# Р6: каждое слово узкого списка отрицаний.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "нет кашля",
+        "без кашля",
+        "ни кашля",
+        "не было кашля",
+        "кашля нет",
+        "кашель прошёл",
+        "горло прошло",
+        "горло прошла",
+        "горло прошли",
+        "горло не болит",
+        "горло не беспокоит",
+    ],
+)
+def test_every_negation_word_removes_the_symptom(text: str) -> None:
+    assert symptoms([text]) == []
+
+
+@pytest.mark.parametrize("text", ["горло чуть", "горло немного", "горло лучше", "чуть горло"])
+def test_hedging_words_are_not_negations(text: str) -> None:
+    assert symptoms([text]) == ["горло"]
+
+
+def test_negation_does_not_cross_texts() -> None:
+    assert symptoms(["горло", "нет сил"]) == ["горло"]
+
+
+def test_negation_does_not_cross_a_comma() -> None:
+    assert symptoms(["насморк, нет температуры"]) == ["насморк"]
+    assert symptoms(["утром сопли, температуры нет"]) == ["сопли"]
+
+
+def test_two_negations_remove_two_symptoms() -> None:
+    assert symptoms(["ни кашля, ни насморка"]) == []
+
+
+def test_word_between_negation_and_symptom_keeps_the_symptom() -> None:
+    assert symptoms(["температуры уже нет"]) == ["температура"]
+
+
+def test_decimal_comma_is_not_a_boundary() -> None:
+    assert fever(["температура 37,8"]) == 37.8
+
+
+# Упоминания температуры по одному.
+
+
+def test_two_temperature_texts_the_word_stays_and_fever_is_the_largest() -> None:
+    texts = ["температура 36,6", "температура 37,8"]
+    assert symptoms(texts) == ["температура"]
+    assert fever(texts) == 37.8
+
+
+def test_normal_number_and_bare_mention_keep_the_word_without_fever() -> None:
+    texts = ["температура 36,6", "температура"]
+    assert symptoms(texts) == ["температура"]
+    assert fever(texts) is None
+
+
+def test_normal_temperature_does_not_hide_other_words() -> None:
+    assert symptoms(["горло, температура 36,6"]) == ["горло"]
+
+
+def test_fever_none_below_limit() -> None:
+    assert fever(["температура 36,9"]) is None
+
+
+def test_whole_number_temperature_is_read() -> None:
+    assert fever(["температура 37"]) == 37.0
+
+
+@pytest.mark.parametrize("text", ["темп. 37,8", "темп 38", "37,8"])
+def test_abbreviation_and_bare_number_are_not_temperature(text: str) -> None:
+    assert symptoms([text]) == []
+    assert fever([text]) is None
+
+
+def test_abbreviation_does_not_go_into_the_largest_number() -> None:
+    assert fever(["температура 37,8", "темп. 38,5"]) == 37.8
+
+
+# Ответы форм: единица, а не подпись.
+
+
+def test_celsius_unit_gives_temperature_not_the_label() -> None:
+    body = {"key": "body", "type": "number", "label": "Тело", "unit": "°C"}
+    found = phrases([body], {"body": 37.4})
+    assert fever(found) == 37.4
+    assert symptoms(found) == ["температура"]
+
+
+def test_cyrillic_celsius_unit_is_read_too() -> None:
+    body = {"key": "body", "type": "number", "label": "Тело", "unit": "°С"}
+    assert fever(phrases([body], {"body": 37.4})) == 37.4
+
+
+def test_optional_field_without_answer_gives_no_phrase() -> None:
+    optional = {**NOSE, "required": False}
+    assert phrases([optional, TEMPERATURE], {"temperature": 36.6}) == phrases(
+        [TEMPERATURE], {"temperature": 36.6}
+    )
+    assert phrases([optional], {}) == []
+
+
+def test_choice_hurting_gives_the_throat() -> None:
+    sore = {**THROAT, "options": ["болит", "не болит"]}
+    assert symptoms(phrases([sore], {"throat": "болит"})) == ["горло"]
 
 
 def test_tiredness_and_irritability_are_not_symptoms() -> None:

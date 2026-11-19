@@ -268,6 +268,52 @@ def test_deviations_topic_lists_every_symptom_word() -> None:
         assert word in text, word
 
 
+def test_deviations_topic_says_poor_is_not_a_deviation() -> None:
+    text = topic("deviations.md")
+    sentences = [s for s in re.split(r"[.;\n]", text) if "POOR" in s]
+    assert sentences
+    assert any("не счита" in s for s in sentences)
+
+
+def test_deviations_topic_names_fever_and_its_limit() -> None:
+    text = topic("deviations.md")
+    assert "fever" in text
+    assert f"{deviations.FEVER_FROM:g}".replace(".", ",") in text.replace(".", ",")
+
+
+def test_deviations_topic_says_abbreviation_is_not_read_and_names_both_ways() -> None:
+    text = topic("deviations.md")
+    lines = [ln for ln in text.splitlines() if "темп." in ln]
+    assert lines
+    line = lines[0]
+    assert "не читает" in line
+    assert "температура" in line
+    assert "форм" in line
+
+
+def negation_words_missing(line: str) -> list[str]:
+    def norm(value: str) -> str:
+        return value.lower().replace("ё", "е")
+
+    wanted = [" ".join(p) for p in (*deviations.NEGATIONS_BEFORE, *deviations.NEGATIONS_AFTER)]
+    return [phrase for phrase in wanted if norm(phrase) not in norm(line)]
+
+
+def test_deviations_topic_negation_line_has_every_negation_word() -> None:
+    lines = [ln for ln in topic("deviations.md").splitlines() if "Отрицания" in ln]
+    assert len(lines) == 1
+    assert negation_words_missing(lines[0]) == []
+
+
+def test_negation_check_notices_a_missing_word() -> None:
+    lines = [ln for ln in topic("deviations.md").splitlines() if "Отрицания" in ln]
+    assert negation_words_missing(lines[0].replace("не болит", "")) == ["не болит"]
+
+
+def test_deviations_topic_no_longer_says_negations_are_not_parsed() -> None:
+    assert "Отрицания код не разбирает" not in topic("deviations.md")
+
+
 def below_section() -> str:
     text = topic("deviations.md")
     heads = [m for m in re.finditer(r"^#+ .*Ниже своей нормы.*$", text, re.MULTILINE)]
@@ -360,7 +406,8 @@ def test_index_names_symptoms_with_deviations_not_with_sleep() -> None:
     assert sleep_lines
     assert dev_lines
     assert all("симптомы в тексте" not in ln for ln in sleep_lines)
-    assert any("симптомы в тексте" in ln for ln in dev_lines)
+    assert any("симптомы" in ln for ln in dev_lines)
+    assert all("симптомы в тексте" not in ln for ln in dev_lines)
 
 
 def test_pvt_topic_has_commands_and_flags() -> None:

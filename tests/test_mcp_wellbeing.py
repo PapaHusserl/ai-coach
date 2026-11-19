@@ -276,6 +276,127 @@ def test_snapshot_deviations_include_below_norm(conn: sqlite3.Connection) -> Non
     assert [r["kind"] for r in section["rows"]] == ["wellbeing_below"]
 
 
+# Н33, партия 1: ответы форм дня идут в разбор симптомов.
+
+
+def put_form_answers(
+    conn: sqlite3.Connection, answers: dict[str, object], archived: bool = False
+) -> None:
+    import json
+
+    from workload_fakes import coach_event
+
+    from ai_coach.store.agenda import add_event
+    from ai_coach.store.forms import add_form, add_form_entry, archive_form
+
+    fields = [
+        {"key": "temperature", "type": "number", "label": "Температура", "unit": "°C"},
+        {"key": "nose", "type": "yesno", "label": "Насморк"},
+    ]
+    add_form(
+        conn,
+        {
+            "name": "sick",
+            "title": "Болезнь",
+            "fields_json": json.dumps(fields, ensure_ascii=False),
+            "created_at": f"{DAY} 07:00:00",
+        },
+    )
+    event_id = add_event(conn, coach_event(survey="form:sick"))
+    add_form_entry(
+        conn,
+        {
+            "date": DAY,
+            "time": "09:00:00",
+            "event_id": event_id,
+            "form": "sick",
+            "values_json": json.dumps(answers),
+            "text": None,
+        },
+    )
+    if archived:
+        archive_form(conn, "sick", f"{DAY} 12:00:00")
+
+
+def put_answer(
+    conn: sqlite3.Connection,
+    answers: dict[str, object],
+    clock: str,
+    text: str | None = None,
+    wellbeing_id: int | None = None,
+) -> None:
+    import json
+
+    from workload_fakes import coach_event
+
+    from ai_coach.store.agenda import add_event
+    from ai_coach.store.forms import add_form_entry
+
+    event_id = add_event(conn, coach_event(survey="form:sick"))
+    add_form_entry(
+        conn,
+        {
+            "date": DAY,
+            "time": clock,
+            "event_id": event_id,
+            "form": "sick",
+            "values_json": json.dumps(answers),
+            "text": text,
+            "wellbeing_id": wellbeing_id,
+        },
+    )
+
+
+def test_answer_with_wellbeing_entry_without_text_gives_symptoms_once(
+    conn: sqlite3.Connection,
+) -> None:
+    put_form_answers(conn, {"temperature": 36.6, "nose": False})
+    feel(conn, DAY, 4, None, f"{DAY} 09:00:00")
+    wellbeing_id = conn.execute("SELECT max(id) FROM wellbeing_log").fetchone()[0]
+    put_answer(conn, {"temperature": 36.6, "nose": True}, "10:00:00", wellbeing_id=wellbeing_id)
+    found = rows(conn, "get_deviations", date=DAY)
+    assert [r["kind"] for r in found] == ["symptoms"]
+    assert found[0]["value"] == ["насморк"]
+
+
+def test_three_answers_of_the_day_give_the_largest_fever(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 37.2, "nose": False})
+    put_answer(conn, {"temperature": 37.9, "nose": False}, "13:00:00")
+    put_answer(conn, {"temperature": 37.4, "nose": False}, "20:00:00")
+    found = rows(conn, "get_deviations", date=DAY)
+    assert {"kind": "fever", "value": 37.9, "limit": 37.0} in found
+
+
+def test_own_text_of_answer_without_wellbeing_id_is_read(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 36.6, "nose": False})
+    put_answer(conn, {"temperature": 36.6, "nose": False}, "11:00:00", text="першит горло")
+    found = rows(conn, "get_deviations", date=DAY)
+    assert found[0]["kind"] == "symptoms"
+    assert found[0]["value"] == ["горло", "першение"]
+
+
+def test_form_answers_without_text_give_symptoms(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 36.6, "nose": True})
+    assert kinds(conn) == ["symptoms"]
+    assert rows(conn, "get_deviations", date=DAY)[0]["value"] == ["насморк"]
+
+
+def test_form_temperature_gives_fever_row(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 37.2, "nose": False})
+    found = rows(conn, "get_deviations", date=DAY)
+    assert {"kind": "fever", "value": 37.2, "limit": 37.0} in found
+
+
+def test_answers_of_archived_form_are_read(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 36.6, "nose": True}, archived=True)
+    assert kinds(conn) == ["symptoms"]
+
+
+def test_form_answers_of_another_day_are_ignored(conn: sqlite3.Connection) -> None:
+    put_form_answers(conn, {"temperature": 36.6, "nose": True})
+    assert kinds(conn, "2026-10-08") == []
+
+
 def test_snapshot_without_data_has_empty_sections(conn: sqlite3.Connection) -> None:
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
     assert snapshot["wellbeing"] == {"rows": [], "truncated": False}
