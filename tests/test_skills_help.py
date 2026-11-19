@@ -42,6 +42,14 @@ def test_topic_files_exist() -> None:
     assert topic_files()
 
 
+def test_index_keeps_reserve_below_limit() -> None:
+    assert HELP_INDEX_LIMIT - len(HELP.read_bytes()) >= 200
+
+
+def test_sleep_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "sleep.md").read_bytes()) >= 200
+
+
 def test_topic_files_within_limit_and_not_empty() -> None:
     for path in topic_files():
         size = len(path.read_bytes())

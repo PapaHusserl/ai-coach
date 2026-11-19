@@ -332,3 +332,145 @@ def test_day_plan_role_mentions_sleep_signal() -> None:
     text = (ROOT / "agents" / "coach-day.md").read_text()
     assert "short_night" in text
     assert "caution_from" in text
+
+
+ILLNESS_SIDE = ROOT / "agents" / "coach-wellbeing" / "illness.md"
+LADDER_LIMIT = "40 минут"  # константы в коде нет: стоит в боковом файле и в sleep.md
+MEASURE_TEXTS = (
+    WELLBEING,
+    ILLNESS_SIDE,
+    ROOT / "skills" / "coach-plan" / "recalc.md",
+    ROOT / "agents" / "coach-help" / "sleep.md",
+    ROOT / "agents" / "coach-help" / "deviations.md",
+    ROOT / "agents" / "coach-help.md",
+)
+
+
+def illness_side() -> str:
+    return ILLNESS_SIDE.read_text(encoding="utf-8")
+
+
+def lines_with(text: str, word: str) -> list[str]:
+    return [ln for ln in text.splitlines() if word in ln]
+
+
+def test_wellbeing_role_names_streak_phases_and_side_file() -> None:
+    text = WELLBEING.read_text(encoding="utf-8")
+    for needle in (
+        "hrv_streak",
+        "illness_rest",
+        "illness_return",
+        "coach-wellbeing/illness.md",
+    ):
+        assert needle in text, needle
+
+
+def test_illness_side_file_exists_and_is_not_empty() -> None:
+    assert ILLNESS_SIDE.is_file()
+    assert ILLNESS_SIDE.read_bytes()
+
+
+def test_allow_can_read_illness_side_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach-wellbeing/illness.md)" in allow
+
+
+def test_recalc_names_new_deviation_and_streak_codes() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text(encoding="utf-8")
+    for code in ("fever", "hrv_streak", "illness_rest", "illness_return"):
+        assert code in text, code
+    assert any("3 дня" in ln for ln in lines_with(text, "hrv_streak"))
+    assert "coach-wellbeing/illness.md" in text
+
+
+def test_illness_side_file_names_signals_and_numbers_from_constants() -> None:
+    from ai_coach.load.episode import (
+        HRV_STREAK_DAYS,
+        REST_DAYS,
+        REST_MAX_DAYS,
+        RETURN_DAYS,
+        SPO2_MIN,
+    )
+
+    text = illness_side()
+    for code in ("hrv_streak", "illness_rest", "illness_return"):
+        assert f"`{code}`" in text, code
+    fever = f"{deviations.FEVER_FROM:g}".replace(".", ",")
+    assert fever in text.replace(".", ",")
+    checks = (
+        ("hrv_streak", f"{HRV_STREAK_DAYS} дня"),
+        ("illness_rest", f"{REST_DAYS} чистых дня"),
+        ("потолок", f"{REST_MAX_DAYS} дня"),
+        ("лестниц", f"{RETURN_DAYS} дней"),
+        ("SpO2", f"{SPO2_MIN}"),
+    )
+    for word, number in checks:
+        assert any(number in ln for ln in lines_with(text, word)), (word, number)
+    assert LADDER_LIMIT in text
+
+
+def test_illness_side_file_severe_signs_line_names_all_three_measures() -> None:
+    lines = lines_with(illness_side(), "озноб")
+    assert lines
+    for needle in ("ломот", "fever", "нагрузк"):
+        assert any(needle in ln for ln in lines), needle
+
+
+def test_illness_side_file_names_every_reason_code_and_by_cap() -> None:
+    text = illness_side()
+    for code in ("no_record", "no_night", "corridor", "skin_temp", "respiration", "spo2"):
+        assert f"`{code}`" in text, code
+    assert "`by_cap`" in text
+
+
+def test_illness_side_file_covers_unread_abbreviation_with_both_ways() -> None:
+    text = illness_side()
+    lines = lines_with(text, "темп")
+    assert lines
+    joined = " ".join(lines)
+    assert "fever" in joined
+    assert "температура" in joined
+    assert "форм" in joined
+    assert "не переписывай" in text
+
+
+def test_deviations_help_trainer_line_says_unread_temperature_is_named() -> None:
+    text = (ROOT / "agents" / "coach-help" / "deviations.md").read_text(encoding="utf-8")
+    trainer = [ln for ln in lines_with(text, "Что делает тренер") if "прочёл" in ln]
+    assert len(trainer) == 1
+    assert "не прочёл" in trainer[0]
+    assert "темп." in trainer[0]
+    assert "форм" in trainer[0]
+    for stem in ("озноб", "ломот", "нагрузк"):
+        assert stem in trainer[0], stem
+
+
+def test_sleep_help_trainer_line_names_rest_and_return_phases() -> None:
+    path = ROOT / "agents" / "coach-help" / "sleep.md"
+    text = path.read_text(encoding="utf-8")
+    section = text.split("## Возможно, заболеваешь", 1)[1].split("\n## ", 1)[0]
+    lines = [ln for ln in section.splitlines() if ln.startswith("- Что делает тренер")]
+    assert len(lines) == 1
+    for needle in ("illness_rest", "illness_return", "hrv_streak", LADDER_LIMIT):
+        assert needle in lines[0], needle
+
+
+def test_coach_help_index_names_streak_rest_and_return() -> None:
+    text = (ROOT / "agents" / "coach-help.md").read_text(encoding="utf-8")
+    assert "серия статуса HRV" in text
+    assert "покой и возврат после болезни" in text
+
+
+def test_readme_illness_line_names_streak_rest_and_return() -> None:
+    text = (ROOT.parent / "README.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if ln.startswith("- Возможно, заболеваешь:")]
+    assert len(lines) == 1
+    for code in ("hrv_streak", "illness_rest", "illness_return"):
+        assert code in lines[0], code
+
+
+def test_measure_texts_do_not_mention_covid() -> None:
+    for path in MEASURE_TEXTS:
+        text = path.read_text(encoding="utf-8").lower()
+        assert "ковид" not in text, path.name
+        assert "covid" not in text, path.name
