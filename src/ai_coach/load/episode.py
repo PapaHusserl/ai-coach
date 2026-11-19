@@ -1,12 +1,18 @@
 """Болезнь: фразы из ответов форм для разбора симптомов; серия болезни по дням и фаза."""
 
+import operator
 from collections.abc import Callable, Mapping
 from datetime import date, timedelta
 from typing import Any
 
+from ai_coach.load.deviations import BAD_HRV_STATUSES
 from ai_coach.load.symptom_text import find_fever, find_symptoms
 
 CELSIUS_UNITS = ("°C", "°С")  # латинская и кириллическая C
+HRV_STREAK_DAYS = 2  # дней плохого статуса HRV подряд до сигнала hrv_streak
+SPO2_MIN = 92  # SpO2 ночи ниже - вне нормы
+# Причины, при которых сегодняшний день «ждёт»: данных ещё нет, счёт равен вчерашнему.
+WAITING_REASONS = ("no_record", "no_night")
 # Тяжёлые слова серии (кроме температуры): оба есть в SYMPTOMS.
 SEVERE_WORDS = ("ломота", "озноб")
 REST_DAYS = 2  # чистых дней покоя подряд до возврата
@@ -102,13 +108,46 @@ def _series(
     return series
 
 
-def _reasons(record: bool, out: bool | None) -> list[str]:
+def status_streak(statuses: Mapping[str, str | None], today: str) -> int:
+    """Дней подряд со статусом HRV из BAD_HRV_STATUSES, считая с today назад; день без ключа,
+    None или с другим статусом прерывает."""
+    streak, current = 0, date.fromisoformat(today)
+    while (status := statuses.get(current.isoformat())) and status.upper() in BAD_HRV_STATUSES:
+        streak += 1
+        current -= timedelta(days=1)
+    return streak
+
+
+def _beyond(
+    value: float | None, edge: float | None, further: Callable[[float, float], bool]
+) -> bool | None:
+    """further(value, edge) - value за границей (gt - выше, lt - ниже); нет value/edge - None."""
+    if value is None or edge is None:
+        return None
+    return further(value, edge)
+
+
+def vitals_flags(
+    row: Mapping[str, Any], skin_high_from: float | None, resp_high_from: float | None
+) -> dict[str, bool | None]:
+    """{skin_temp, respiration, spo2}: True - метрика ночи вне нормы (кожа и дыхание строго выше
+    границы, SpO2 строго ниже SPO2_MIN), False - в норме, None - не проверялась (нет значения
+    или границы)."""
+    return {
+        "skin_temp": _beyond(row.get("skin_temp"), skin_high_from, operator.gt),
+        "respiration": _beyond(row.get("respiration"), resp_high_from, operator.gt),
+        "spo2": _beyond(row.get("spo2"), SPO2_MIN, operator.lt),
+    }
+
+
+def _reasons(record: bool, found: Mapping[str, bool | None]) -> list[str]:
     reasons = [] if record else ["no_record"]
+    out = found.get("out")
     if out is None:
         reasons.append("no_night")
     elif out:
         reasons.append("corridor")
-    return reasons
+    return reasons + [key for key in ("skin_temp", "respiration", "spo2") if found.get(key)]
 
 
 def episode_state(
@@ -119,7 +158,7 @@ def episode_state(
 
     def reasons_of(day: date) -> list[str]:
         iso = day.isoformat()
-        return _reasons(days.get(iso, {}).get("record", False), flags.get(iso, {}).get("out"))
+        return _reasons(days.get(iso, {}).get("record", False), flags.get(iso, {}))
 
     def is_clean(day: date) -> bool:
         return not reasons_of(day)
@@ -172,5 +211,5 @@ def _fill_rest(
     state["not_clean"] = reasons
     if not reasons:
         state["clean_days"] = streak + 1
-    elif "corridor" not in reasons:
+    elif set(reasons) <= set(WAITING_REASONS):
         state["clean_days"] = streak

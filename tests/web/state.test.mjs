@@ -68,7 +68,7 @@ const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "corridor_out", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
-	"illness_rest", "illness_return",
+	"illness_rest", "illness_return", "hrv_streak",
 ];
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
@@ -84,7 +84,7 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 25 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 26 кодов отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -218,9 +218,46 @@ test("REASON_WORDS: corridor — то же слово, что у corridor_out", 
 	assert.equal(REASON_WORDS.corridor, SIGNAL_WORDS.corridor_out);
 });
 
-test("REASON_WORDS: ровно три кода причин", async () => {
+test("REASON_WORDS: ровно шесть кодов причин", async () => {
 	const { REASON_WORDS } = await stateModel();
-	assert.deepEqual(Object.keys(REASON_WORDS).sort(), ["corridor", "no_night", "no_record"]);
+	assert.deepEqual(
+		Object.keys(REASON_WORDS).sort(),
+		["corridor", "no_night", "no_record", "respiration", "skin_temp", "spo2"],
+	);
+});
+
+// Н33, партия 3: серия статуса HRV и метрики ночи.
+test("SIGNAL_WORDS: hrv_streak — «статус HRV плохой подряд»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.hrv_streak, "статус HRV плохой подряд");
+});
+
+test("signalRows: hrv_streak — «3 (порог 2)»", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "illness", kind: "hrv_streak", value: 3, limit: 2 };
+	const [found] = signalRows(stateOf([row]));
+	assert.equal(found.word, "статус HRV плохой подряд");
+	assert.equal(found.detail, "3 (порог 2)");
+});
+
+test("signalRows: skin_temp — «температура кожи выше нормы»", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["skin_temp"] });
+	assert.equal(row.detail, "день 1 из 2 — температура кожи выше нормы");
+});
+
+test("signalRows: respiration — «дыхание чаще нормы»", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["respiration"] });
+	assert.equal(row.detail, "день 1 из 2 — дыхание чаще нормы");
+});
+
+test("signalRows: spo2 — «SpO2 ниже 92»", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["spo2"] });
+	assert.equal(row.detail, "день 1 из 2 — SpO2 ниже 92");
+});
+
+test("signalRows: нет записи и метрика ночи — через запятую", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["no_record", "spo2"] });
+	assert.equal(row.detail, "день 1 из 2 — нет записи, SpO2 ниже 92");
 });
 
 test("signalRows: известная и неизвестная причина — через запятую, неизвестный код как есть", async () => {

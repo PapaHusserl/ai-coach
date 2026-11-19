@@ -272,7 +272,64 @@ def test_recovery_days_inclusive_range_sorted_three_keys(conn: sqlite3.Connectio
         recovery_row(conn, day, {"sleep": {"restingHeartRate": 50}})
     found = list_recovery_days(conn, "2026-10-01", "2026-10-03")
     assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
-    assert set(found[0]) == {"date", "hrv", "rhr"}
+    assert set(found[0]) == {"date", "hrv", "rhr", "status", "skin_temp", "respiration", "spo2"}
+
+
+def night_vitals(conn: sqlite3.Connection, day: str = "2026-10-01") -> dict:
+    """День API с метриками ночи (пути raw_json Н33, партия 3)."""
+    raw = {
+        "sleep": {
+            "avgSkinTempDeviationC": 0.4,
+            "dailySleepDTO": {"averageRespirationValue": 15.2, "averageSpO2Value": 94},
+        }
+    }
+    upsert_daily_metrics(
+        conn, {"date": day, "hrv_last_night": 60, "hrv_status": "UNBALANCED", "raw_json": raw}
+    )
+    return list_recovery_days(conn, day, day)[0]
+
+
+def test_recovery_days_status_from_hrv_status(conn: sqlite3.Connection) -> None:
+    assert night_vitals(conn)["status"] == "UNBALANCED"
+
+
+def test_recovery_days_skin_temp_from_sleep(conn: sqlite3.Connection) -> None:
+    assert night_vitals(conn)["skin_temp"] == 0.4
+
+
+def test_recovery_days_respiration_from_sleep_dto(conn: sqlite3.Connection) -> None:
+    assert night_vitals(conn)["respiration"] == 15.2
+
+
+def test_recovery_days_spo2_from_sleep_dto(conn: sqlite3.Connection) -> None:
+    assert night_vitals(conn)["spo2"] == 94
+
+
+def test_recovery_days_vitals_none_for_import_day(conn: sqlite3.Connection) -> None:
+    raw = {"hrv": {"metrics": [{"type": "HRV", "value": 60}, {"type": "HR", "value": 52}]}}
+    recovery_row(conn, "2026-09-20", raw)
+    found = list_recovery_days(conn, "2026-09-20", "2026-09-20")[0]
+    assert (found["skin_temp"], found["respiration"], found["spo2"]) == (None, None, None)
+
+
+def test_recovery_days_vitals_none_for_day_without_sleep(conn: sqlite3.Connection) -> None:
+    recovery_row(conn, "2026-10-01", {"stress": {}})
+    found = list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]
+    assert (found["status"], found["skin_temp"], found["respiration"], found["spo2"]) == (
+        None,
+        None,
+        None,
+        None,
+    )
+
+
+def test_recovery_days_vitals_missing_one_is_none(conn: sqlite3.Connection) -> None:
+    raw = {
+        "sleep": {"avgSkinTempDeviationC": 0.1, "dailySleepDTO": {"averageRespirationValue": 14}}
+    }
+    recovery_row(conn, "2026-10-01", raw)
+    found = list_recovery_days(conn, "2026-10-01", "2026-10-01")[0]
+    assert (found["skin_temp"], found["respiration"], found["spo2"]) == (0.1, 14, None)
 
 
 def test_recovery_days_hrv_from_last_night(conn: sqlite3.Connection) -> None:

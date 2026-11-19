@@ -6,6 +6,7 @@ export const SIGNAL_WORDS = {
 	sleep_debt: "долг сна",
 	illness_risk: "возможно, заболеваешь",
 	corridor_out: "пульс или HRV вне нормы",
+	hrv_streak: "статус HRV плохой подряд",
 	illness_rest: "покой после болезни",
 	illness_return: "возврат после болезни",
 	total_streak: "нагрузка три дня подряд",
@@ -53,6 +54,9 @@ export const REASON_WORDS = {
 	no_record: "нет записи",
 	no_night: "нет ночи с часов",
 	corridor: SIGNAL_WORDS.corridor_out,
+	skin_temp: "температура кожи выше нормы",
+	respiration: "дыхание чаще нормы",
+	spo2: "SpO2 ниже 92",
 };
 
 // Два кода фаз после болезни: «день N из M», у покоя — хвост причин.

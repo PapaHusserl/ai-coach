@@ -6,6 +6,7 @@ episode_state(days, flags, today) -> фаза (ill / rest / return / None), сч
 texts - {дата: фразы дня (записи и ответы форм)}, recorded - даты со строкой журнала самочувствия,
 days - результат sick_days, flags - {дата: результат day_flags}, today - дата ISO."""
 
+from collections.abc import Mapping
 from datetime import date, timedelta
 from typing import Any
 
@@ -423,3 +424,191 @@ def test_day_without_flags_is_no_night() -> None:
 def test_symptom_after_phase_ended_is_new_mild_series() -> None:
     state = run(["sick", *["clean"] * 10, "mild"])
     assert (state["phase"], state["sick_first"], state["severe"]) == (None, day(11), False)
+
+
+# --- Н33, партия 3: серия статуса HRV, метрики ночи ---
+
+
+def statuses_of(*values: str | None) -> dict[str, str | None]:
+    """Статусы по дням: последний - сегодня day(len - 1)."""
+    return {day(i): value for i, value in enumerate(values)}
+
+
+def streak(*values: str | None) -> int:
+    from ai_coach.load.episode import status_streak
+
+    return status_streak(statuses_of(*values), day(len(values) - 1))
+
+
+def test_status_streak_empty_is_zero() -> None:
+    from ai_coach.load.episode import status_streak
+
+    assert status_streak({}, day(0)) == 0
+
+
+@pytest.mark.parametrize("status", ["LOW", "UNBALANCED", "BELOW"])
+def test_status_streak_each_bad_status_counts(status: str) -> None:
+    assert streak(status) == 1
+
+
+def test_status_streak_counts_days_back_from_today() -> None:
+    assert streak("LOW", "UNBALANCED", "BELOW") == 3
+
+
+def test_status_streak_lowercase_counts() -> None:
+    assert streak("unbalanced", "Low") == 2
+
+
+@pytest.mark.parametrize("today", [None, "BALANCED", "POOR", "IN_RANGE"])
+def test_status_streak_today_not_bad_is_zero_after_bad_days(today: str | None) -> None:
+    assert streak("LOW", "LOW", today) == 0
+
+
+@pytest.mark.parametrize("middle", [None, "BALANCED", "POOR", "IN_RANGE"])
+def test_status_streak_broken_by_not_bad_day(middle: str | None) -> None:
+    assert streak("LOW", middle, "LOW", "LOW") == 2
+
+
+def test_status_streak_broken_by_missing_date() -> None:
+    from ai_coach.load.episode import status_streak
+
+    found = {day(0): "LOW", day(2): "LOW", day(3): "LOW"}
+    assert status_streak(found, day(3)) == 2
+
+
+def vitals(row: dict[str, Any], skin: float | None = 1.0, resp: float | None = 15.0) -> dict:
+    from ai_coach.load.episode import vitals_flags
+
+    return vitals_flags(row, skin, resp)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "flag"),
+    [
+        ("skin_temp", 1.0, False),
+        ("skin_temp", 1.1, True),
+        ("skin_temp", 0.0, False),
+        ("respiration", 15.0, False),
+        ("respiration", 15.1, True),
+        ("respiration", 10.0, False),
+    ],
+)
+def test_vitals_flags_corridor_metric_edge(key: str, value: float, flag: bool) -> None:
+    """Границы: кожа 1.0, дыхание 15.0 (значения по умолчанию помощника)."""
+    assert vitals({key: value})[key] is flag
+
+
+def test_vitals_flags_skin_without_edge_is_none() -> None:
+    assert vitals({"skin_temp": 5.0}, skin=None)["skin_temp"] is None
+
+
+def test_vitals_flags_respiration_without_edge_is_none() -> None:
+    assert vitals({"respiration": 30.0}, resp=None)["respiration"] is None
+
+
+def test_vitals_flags_skin_without_value_is_none() -> None:
+    assert vitals({"skin_temp": None})["skin_temp"] is None
+
+
+def test_vitals_flags_respiration_without_value_is_none() -> None:
+    assert vitals({"respiration": None})["respiration"] is None
+
+
+def test_vitals_flags_spo2_92_is_not_flag() -> None:
+    assert vitals({"spo2": 92})["spo2"] is False
+
+
+def test_vitals_flags_spo2_below_92_is_flag() -> None:
+    assert vitals({"spo2": 91.9})["spo2"] is True
+
+
+def test_vitals_flags_spo2_high_is_not_flag() -> None:
+    assert vitals({"spo2": 98})["spo2"] is False
+
+
+def test_vitals_flags_spo2_needs_no_edge() -> None:
+    assert vitals({"spo2": 80}, skin=None, resp=None)["spo2"] is True
+
+
+def test_vitals_flags_spo2_without_value_is_none() -> None:
+    assert vitals({"spo2": None})["spo2"] is None
+
+
+def test_vitals_flags_row_without_keys_is_three_none() -> None:
+    assert vitals({}) == {"skin_temp": None, "respiration": None, "spo2": None}
+
+
+def test_vitals_flags_metrics_are_independent() -> None:
+    found = vitals({"skin_temp": None, "respiration": 16.0, "spo2": 90})
+    assert found == {"skin_temp": None, "respiration": True, "spo2": True}
+
+
+def rest_state(
+    today_flags: Mapping[str, bool | None], *, record: bool = True, clean_yesterday: bool = False
+) -> dict[str, Any]:
+    """Тяжёлый день day(0); вчерашний день покоя чистый или нет; сегодня day(2) с флагами."""
+    from ai_coach.load.episode import episode_state, sick_days
+
+    recorded = {day(0), day(1)} | ({day(2)} if record else set())
+    days = sick_days({day(0): ["температура 38"]}, recorded)
+    flags = {
+        day(0): {"out": False},
+        day(1): {"out": not clean_yesterday},
+        day(2): today_flags,
+    }
+    return episode_state(days, flags, day(2))
+
+
+def test_metric_flag_true_gives_its_reason() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["температура 38"]}, {day(0), day(1)})
+    state = episode_state(days, {day(1): {"out": False, "spo2": True}}, day(1))
+    assert state["not_clean"] == ["spo2"]
+
+
+@pytest.mark.parametrize("value", [None, False])
+def test_metric_flag_none_or_false_is_clean(value: bool | None) -> None:
+    state = rest_state({"out": False, "spo2": value, "skin_temp": value, "respiration": value})
+    assert state["not_clean"] == []
+
+
+def test_metric_reason_without_night_comes_after_no_night() -> None:
+    state = rest_state({"out": None, "spo2": True})
+    assert state["not_clean"] == ["no_night", "spo2"]
+
+
+def test_all_reasons_keep_order() -> None:
+    flags = {"out": True, "skin_temp": True, "respiration": True, "spo2": True}
+    state = rest_state(flags, record=False)
+    assert state["not_clean"] == ["no_record", "corridor", "skin_temp", "respiration", "spo2"]
+
+
+@pytest.mark.parametrize("metric", ["skin_temp", "respiration", "spo2"])
+def test_today_with_metric_out_after_clean_day_does_not_wait(metric: str) -> None:
+    state = rest_state({"out": False, metric: True}, clean_yesterday=True)
+    assert (state["clean_days"], state["rest_step"]) == (0, 2)
+
+
+def test_today_without_record_and_metrics_in_norm_waits() -> None:
+    flags = {"out": False, "skin_temp": False, "respiration": False, "spo2": False}
+    state = rest_state(flags, record=False, clean_yesterday=True)
+    assert (state["clean_days"], state["not_clean"]) == (1, ["no_record"])
+
+
+def test_today_without_record_and_without_night_waits() -> None:
+    state = rest_state({"out": None}, record=False, clean_yesterday=True)
+    assert (state["clean_days"], state["not_clean"]) == (1, ["no_record", "no_night"])
+
+
+def test_past_rest_day_with_metric_out_breaks_the_count() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["температура 38"]}, {day(0), day(1), day(2), day(3)})
+    flags = {
+        day(1): {"out": False},
+        day(2): {"out": False, "respiration": True},
+        day(3): {"out": False},
+    }
+    state = episode_state(days, flags, day(3))
+    assert (state["phase"], state["rest_step"]) == ("rest", 1)

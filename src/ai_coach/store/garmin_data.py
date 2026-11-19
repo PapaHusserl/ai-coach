@@ -64,10 +64,14 @@ def list_stress_points(conn: sqlite3.Connection, start: str, end: str) -> list[d
 
 
 def list_recovery_days(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
-    """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь) и
-    rhr (пульс покоя: restingHeartRate сна у API или метрика HR у импорта; None - нет)."""
+    """Дни start..end включительно, по возрастанию даты, без raw_json: date, hrv (HRV за ночь),
+    rhr (пульс покоя: restingHeartRate сна у API или метрика HR у импорта; None - нет), status
+    (hrv_status как есть), skin_temp, respiration и spo2 ночи (только у дней API; None - нет)."""
     sql = (
-        f"SELECT date, hrv_last_night AS hrv, {_REST_HR_SQL} AS rhr "
+        f"SELECT date, hrv_last_night AS hrv, {_REST_HR_SQL} AS rhr, hrv_status AS status, "
+        "json_extract(raw_json, '$.sleep.avgSkinTempDeviationC') AS skin_temp, "
+        "json_extract(raw_json, '$.sleep.dailySleepDTO.averageRespirationValue') AS respiration, "
+        "json_extract(raw_json, '$.sleep.dailySleepDTO.averageSpO2Value') AS spo2 "
         "FROM daily_metrics WHERE date BETWEEN ? AND ? ORDER BY date"
     )
     return fetch_all(conn, sql, (start, end))

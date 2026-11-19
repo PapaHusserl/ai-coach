@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from statistics import pstdev
 from typing import Any
 
+import pytest
 from workload_fakes import coach_event
 
 from ai_coach.load.episode import REST_DAYS, RETURN_DAYS
@@ -767,3 +768,347 @@ def test_form_answer_after_answer_of_missing_form_is_still_read(conn: sqlite3.Co
         },
     )
     assert episode(conn)["phase"] == "rest"
+
+
+# --- серия статуса HRV и метрики ночи (Н33, партия 3) ---
+
+VITALS_BASE: dict[str, Any] = {"skin": 0.2, "resp": 15.0, "spo2": 96}
+
+
+def night(
+    conn: sqlite3.Connection,
+    days: int,
+    *,
+    status: str | None = None,
+    skin: float | None = None,
+    resp: float | None = None,
+    spo2: float | None = None,
+    rhr: float = 50,
+    hrv: float = 60,
+) -> None:
+    """Ночь back(days): пульс и HRV (по умолчанию в коридоре), статус и метрики ночи."""
+    dto: dict[str, Any] = {}
+    if resp is not None:
+        dto["averageRespirationValue"] = resp
+    if spo2 is not None:
+        dto["averageSpO2Value"] = spo2
+    sleep: dict[str, Any] = {"restingHeartRate": rhr, "dailySleepDTO": dto}
+    if skin is not None:
+        sleep["avgSkinTempDeviationC"] = skin
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": back(days).isoformat(),
+            "hrv_last_night": hrv,
+            "hrv_status": status,
+            "raw_json": {"sleep": sleep},
+        },
+    )
+
+
+def nights(
+    conn: sqlite3.Connection,
+    statuses: dict[int, str | None] | None = None,
+    today: dict[str, Any] | None = None,
+) -> None:
+    """28 ночей базы с постоянными метриками (коридор без разброса) и сегодняшняя ночь."""
+    for days in range(28, 0, -1):
+        night(conn, days, status=(statuses or {}).get(days), **VITALS_BASE)
+    night(conn, 0, status=(statuses or {}).get(0), **(VITALS_BASE if today is None else today))
+
+
+def streak_signal(
+    conn: sqlite3.Connection, statuses: dict[int, str | None]
+) -> dict[str, Any] | None:
+    nights(conn, statuses)
+    return signal_of(conn, "hrv_streak")
+
+
+def test_hrv_streak_one_bad_day_gives_no_signal(conn: sqlite3.Connection) -> None:
+    assert streak_signal(conn, {0: "UNBALANCED"}) is None
+
+
+def test_hrv_streak_two_bad_days_give_signal(conn: sqlite3.Connection) -> None:
+    assert streak_signal(conn, {0: "UNBALANCED", 1: "UNBALANCED"}) == {
+        "kind": "hrv_streak",
+        "value": 2,
+        "limit": 2,
+    }
+
+
+def test_hrv_streak_counts_days_in_row(conn: sqlite3.Connection) -> None:
+    found = streak_signal(conn, {0: "LOW", 1: "BELOW", 2: "UNBALANCED"})
+    assert found is not None
+    assert found["value"] == 3
+
+
+def test_hrv_streak_status_case_does_not_matter(conn: sqlite3.Connection) -> None:
+    assert streak_signal(conn, {0: "unbalanced", 1: "Low"}) is not None
+
+
+@pytest.mark.parametrize("middle", [None, "BALANCED", "POOR", "IN_RANGE"])
+def test_hrv_streak_broken_by_day_without_bad_status(
+    conn: sqlite3.Connection, middle: str | None
+) -> None:
+    assert streak_signal(conn, {0: "UNBALANCED", 1: middle, 2: "UNBALANCED"}) is None
+
+
+def test_hrv_streak_ends_at_today(conn: sqlite3.Connection) -> None:
+    assert streak_signal(conn, {0: "BALANCED", 1: "UNBALANCED", 2: "UNBALANCED"}) is None
+
+
+def rest_day_two(conn: sqlite3.Connection, **today: Any) -> dict[str, Any]:
+    """Тяжёлый день два дня назад, запись на сегодня, ночь сегодня: метрики базы с поправкой
+    today (None - метрики нет); сегодня день покоя 2; возвращает episode."""
+    nights(conn, today={**VITALS_BASE, **today})
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    return episode(conn)
+
+
+def test_clean_day_with_normal_vitals_has_no_reasons(conn: sqlite3.Connection) -> None:
+    assert rest_day_two(conn)["not_clean"] == []
+
+
+@pytest.mark.parametrize(
+    ("code", "today"),
+    [
+        ("skin_temp", {"skin": 0.3}),
+        ("respiration", {"resp": 15.1}),
+        ("spo2", {"spo2": 91}),
+    ],
+)
+def test_one_vital_out_makes_day_not_clean_with_its_code(
+    conn: sqlite3.Connection, code: str, today: dict[str, Any]
+) -> None:
+    found = rest_day_two(conn, **today)
+    assert found["not_clean"] == [code]
+    assert found["clean_days"] == 0
+
+
+@pytest.mark.parametrize(
+    "today",
+    [
+        {"skin": 0.2},
+        {"skin": -0.5},
+        {"resp": 15.0},
+        {"resp": 12.0},
+        {"spo2": 92},
+        {"spo2": 99},
+    ],
+    ids=["skin_edge", "skin_below", "resp_edge", "resp_below", "spo2_92", "spo2_high"],
+)
+def test_vital_on_edge_or_on_good_side_is_clean(
+    conn: sqlite3.Connection, today: dict[str, Any]
+) -> None:
+    assert rest_day_two(conn, **today)["not_clean"] == []
+
+
+def test_spo2_is_checked_without_corridor(conn: sqlite3.Connection) -> None:
+    for days in range(28, 0, -1):
+        night(conn, days, skin=0.2, resp=15.0)
+    night(conn, 0, skin=0.2, resp=15.0, spo2=91)
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    assert episode(conn)["not_clean"] == ["spo2"]
+
+
+@pytest.mark.parametrize("missing", ["skin", "resp", "spo2"])
+def test_night_without_one_vital_is_clean(conn: sqlite3.Connection, missing: str) -> None:
+    assert rest_day_two(conn, **{missing: None})["not_clean"] == []
+
+
+def test_night_without_three_vitals_but_with_pulse_and_hrv_is_clean(
+    conn: sqlite3.Connection,
+) -> None:
+    found = rest_day_two(conn, skin=None, resp=None, spo2=None)
+    assert found["not_clean"] == []
+    assert found["clean_days"] == 1
+
+
+def test_vital_without_corridor_is_not_checked(conn: sqlite3.Connection) -> None:
+    for days in range(28, 0, -1):
+        night(conn, days, resp=15.0, spo2=96)
+    night(conn, 0, skin=9.9, resp=15.0, spo2=96)
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    assert episode(conn)["not_clean"] == []
+
+
+def test_vital_out_with_pulse_out_names_both_codes(conn: sqlite3.Connection) -> None:
+    nights(conn, today={**VITALS_BASE, "spo2": 90, "rhr": 90, "hrv": 10})
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    found = episode(conn)["not_clean"]
+    assert "corridor" in found
+    assert "spo2" in found
+
+
+def test_vital_out_on_past_rest_day_breaks_the_count(conn: sqlite3.Connection) -> None:
+    nights(conn)
+    night(conn, 1, **{**VITALS_BASE, "spo2": 90})
+    note(conn, 3, "озноб")
+    for days in (2, 1, 0):
+        note(conn, days)
+    found = episode(conn)
+    assert (found["phase"], found["rest_step"], found["clean_days"]) == ("rest", 1, 1)
+
+
+def spread_respiration(conn: sqlite3.Connection, today: float) -> dict[str, Any]:
+    """База дыхания 14.0 / 16.0 вперемешку (граница коридора 15.9), сегодня - today."""
+    for days in range(28, 0, -1):
+        night(conn, days, resp=14.0 if days % 2 == 0 else 16.0)
+    night(conn, 0, resp=today)
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    return episode(conn)
+
+
+def test_corridor_with_spread_respiration_inside_is_clean(conn: sqlite3.Connection) -> None:
+    assert spread_respiration(conn, 15.5)["not_clean"] == []
+
+
+def test_corridor_with_spread_respiration_above_is_reason(conn: sqlite3.Connection) -> None:
+    assert spread_respiration(conn, 17.0)["not_clean"] == ["respiration"]
+
+
+VITALS_KEYS = {
+    "skin_temp",
+    "skin_temp_high_from",
+    "skin_temp_high",
+    "respiration",
+    "respiration_high_from",
+    "respiration_high",
+    "spo2",
+    "spo2_low",
+}
+
+
+def test_report_hrv_streak_is_zero_on_empty_base(conn: sqlite3.Connection) -> None:
+    assert report(conn)["hrv_streak"] == 0
+
+
+def test_report_hrv_streak_is_number_of_bad_days(conn: sqlite3.Connection) -> None:
+    nights(conn, {0: "LOW", 1: "BELOW", 2: "UNBALANCED"})
+    assert report(conn)["hrv_streak"] == 3
+
+
+def test_report_vitals_is_all_none_on_empty_base(conn: sqlite3.Connection) -> None:
+    found = report(conn)["vitals"]
+    assert set(found) == VITALS_KEYS
+    assert set(found.values()) == {None}
+
+
+def test_report_vitals_values_edges_and_flags(conn: sqlite3.Connection) -> None:
+    nights(conn)
+    assert report(conn)["vitals"] == {
+        "skin_temp": 0.2,
+        "skin_temp_high_from": 0.2,
+        "skin_temp_high": False,
+        "respiration": 15.0,
+        "respiration_high_from": 15.0,
+        "respiration_high": False,
+        "spo2": 96,
+        "spo2_low": False,
+    }
+
+
+def test_report_vitals_flags_out_of_norm(conn: sqlite3.Connection) -> None:
+    nights(conn, today={"skin": 0.3, "resp": 15.1, "spo2": 91})
+    found = report(conn)["vitals"]
+    assert (found["skin_temp_high"], found["respiration_high"], found["spo2_low"]) == (
+        True,
+        True,
+        True,
+    )
+
+
+def test_report_vitals_without_corridor_has_value_and_no_edge(conn: sqlite3.Connection) -> None:
+    night(conn, 0, skin=0.4, resp=15.0, spo2=95)
+    found = report(conn)["vitals"]
+    assert (found["skin_temp"], found["skin_temp_high_from"], found["skin_temp_high"]) == (
+        0.4,
+        None,
+        None,
+    )
+    assert (found["spo2"], found["spo2_low"]) == (95, False)
+
+
+def test_signals_without_hrv_streak_key_and_zero_streak_are_empty() -> None:
+    assert illness_signals({"streak": 0}) == []
+
+
+def test_signals_hrv_streak_below_limit_is_absent() -> None:
+    assert illness_signals({"streak": 0, "hrv_streak": 1}) == []
+
+
+def test_signals_hrv_streak_does_not_depend_on_streak() -> None:
+    assert illness_signals({"streak": 0, "hrv_streak": 3}) == [
+        {"kind": "hrv_streak", "value": 3, "limit": 2}
+    ]
+
+
+def test_hrv_streak_signal_is_present_on_ill_day(conn: sqlite3.Connection) -> None:
+    nights(conn, {0: "UNBALANCED", 1: "UNBALANCED"})
+    note(conn, 0, "озноб")
+    assert episode(conn)["phase"] == "ill"
+    assert signal_of(conn, "hrv_streak") is not None
+
+
+def test_signals_order_risk_streak_phase(conn: sqlite3.Connection) -> None:
+    nights(conn)
+    for days in (1, 0):
+        night(conn, days, status="UNBALANCED", rhr=90, hrv=10, **VITALS_BASE)
+    note(conn, 3, "озноб")
+    kinds = [s["kind"] for s in report(conn)["signals"]]
+    assert kinds == ["illness_risk", "hrv_streak", "illness_rest"]
+
+
+def test_signals_order_corridor_out_before_hrv_streak(conn: sqlite3.Connection) -> None:
+    nights(conn, {0: "UNBALANCED", 1: "UNBALANCED"})
+    night(conn, 0, status="UNBALANCED", rhr=90, hrv=10, **VITALS_BASE)
+    kinds = [s["kind"] for s in report(conn)["signals"]]
+    assert kinds == ["corridor_out", "hrv_streak"]
+
+
+def test_not_clean_reasons_keep_server_order(conn: sqlite3.Connection) -> None:
+    nights(conn, today={"skin": 0.3, "resp": 15.1, "spo2": 91, "rhr": 90, "hrv": 10})
+    note(conn, 2, "озноб")
+    assert episode(conn)["not_clean"] == [
+        "no_record",
+        "corridor",
+        "skin_temp",
+        "respiration",
+        "spo2",
+    ]
+
+
+def spread_metric(conn: sqlite3.Connection, key: str, today: float) -> None:
+    """База метрики key (skin / resp) 14.0 / 16.0 вперемешку (граница 15.9), сегодня today."""
+    for days in range(28, 0, -1):
+        base: dict[str, Any] = {key: 14.0 if days % 2 == 0 else 16.0}
+        night(conn, days, **base)
+    last: dict[str, Any] = {key: today}
+    night(conn, 0, **last)
+
+
+@pytest.mark.parametrize(
+    ("key", "code"), [("skin", "skin_temp"), ("resp", "respiration")], ids=["skin", "resp"]
+)
+def test_value_between_edge_and_double_swc_is_reason(
+    conn: sqlite3.Connection, key: str, code: str
+) -> None:
+    spread_metric(conn, key, 16.2)
+    note(conn, 2, "озноб")
+    note(conn, 0)
+    assert episode(conn)["not_clean"] == [code]
+
+
+def test_report_vitals_edges_come_from_mean_plus_one_swc(conn: sqlite3.Connection) -> None:
+    for days in range(28, 0, -1):
+        value = 14.0 if days % 2 == 0 else 16.0
+        night(conn, days, skin=value, resp=value)
+    night(conn, 0, skin=16.2, resp=16.2)
+    found = report(conn)["vitals"]
+    assert (found["skin_temp_high_from"], found["respiration_high_from"]) == (15.9, 15.9)
+    assert (found["skin_temp_high"], found["respiration_high"]) == (True, True)

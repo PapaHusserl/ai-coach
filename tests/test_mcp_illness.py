@@ -198,6 +198,16 @@ def test_get_illness_description_names_episode_and_phase_signals(
         assert needle in text, needle
 
 
+def test_get_illness_description_names_hrv_streak_vitals_and_metric_codes(
+    conn: sqlite3.Connection,
+) -> None:
+    server = build_server(db_file(conn))
+    tools = asyncio.run(server.list_tools())
+    text = next(t.description or "" for t in tools if t.name == "get_illness")
+    for needle in ("hrv_streak", "vitals", "skin_temp", "respiration", "spo2"):
+        assert needle in text, needle
+
+
 def test_snapshot_illness_has_episode_and_fits_limit(conn: sqlite3.Connection) -> None:
     from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 

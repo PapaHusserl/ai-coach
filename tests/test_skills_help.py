@@ -532,6 +532,33 @@ def test_sleep_topic_illness_return_days_match_constant() -> None:
     assert any(f"{RETURN_DAYS} дней" in ln for ln in lines)
 
 
+def test_sleep_topic_illness_names_hrv_streak_with_days_from_constant() -> None:
+    from ai_coach.load.episode import HRV_STREAK_DAYS
+
+    lines = [ln for ln in illness_section().splitlines() if "`hrv_streak`" in ln]
+    assert any(f"{HRV_STREAK_DAYS} дня подряд" in ln for ln in lines)
+
+
+def test_sleep_topic_illness_names_vitals() -> None:
+    assert "`vitals`" in illness_section()
+
+
+def test_sleep_topic_illness_names_metric_reason_codes() -> None:
+    section = illness_section()
+    for code in ("skin_temp", "respiration", "spo2"):
+        assert f"`{code}`" in section, code
+
+
+def test_sleep_topic_illness_spo2_limit_matches_constant() -> None:
+    from ai_coach.load.episode import SPO2_MIN
+
+    assert f"не ниже {SPO2_MIN}" in illness_section()
+
+
+def test_sleep_topic_illness_says_metric_without_value_is_not_checked() -> None:
+    assert "не проверяется" in illness_section()
+
+
 def test_pult_topic_state_tab_shows_rest_row_with_reason() -> None:
     text = topic("pult.md")
     assert "покой после болезни · день 1 из 2 — нет записи" in text

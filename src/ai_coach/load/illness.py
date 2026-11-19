@@ -15,11 +15,14 @@ from typing import Any
 
 from ai_coach.load.episode import (
     EPISODE_DAYS,
+    HRV_STREAK_DAYS,
     REST_DAYS,
     RETURN_DAYS,
     episode_state,
     form_phrases,
     sick_days,
+    status_streak,
+    vitals_flags,
 )
 from ai_coach.load.sleep import sleep_report
 from ai_coach.store.forms import get_form, list_form_log
@@ -104,14 +107,18 @@ def _phase_signals(episode: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 def illness_signals(report: dict[str, Any]) -> list[dict[str, Any]]:
     """illness_risk - дней вне коридора подряд не меньше STREAK_DAYS; первый день - слабый
-    corridor_out; затем сигнал фазы после болезни (illness_rest / illness_return); формат
-    {kind, value, limit} как у sleep_signals."""
+    corridor_out; затем hrv_streak (статус HRV плохой не меньше HRV_STREAK_DAYS дней подряд) и
+    сигнал фазы после болезни (illness_rest / illness_return); формат {kind, value, limit} как у
+    sleep_signals."""
     streak = report["streak"]
     signals: list[dict[str, Any]] = []
     if streak >= STREAK_DAYS:
         signals.append({"kind": "illness_risk", "value": streak, "limit": STREAK_DAYS})
     elif streak == 1:
         signals.append({"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS})
+    bad_hrv = report.get("hrv_streak", 0)
+    if bad_hrv >= HRV_STREAK_DAYS:
+        signals.append({"kind": "hrv_streak", "value": bad_hrv, "limit": HRV_STREAK_DAYS})
     return signals + _phase_signals(report.get("episode"))
 
 
@@ -157,7 +164,8 @@ def _edges(found: dict[str, float] | None, sign: int) -> tuple[float | None, flo
 def _recent(
     rows: list[dict[str, Any]], today: date, days: int
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, bool | None]]]:
-    """Последние days дней по возрастанию: (date, rhr, hrv, out) и флаги по датам."""
+    """Последние days дней по возрастанию: (date, rhr, hrv, out) и флаги по датам (day_flags и
+    vitals_flags: кожа, дыхание, SpO2)."""
     by_date = {r["date"]: r for r in rows}
     shown: list[dict[str, Any]] = []
     flags: dict[str, dict[str, bool | None]] = {}
@@ -166,9 +174,31 @@ def _recent(
         stamp = current.isoformat()
         row = by_date.get(stamp, {"date": stamp, "rhr": None, "hrv": None})
         found = day_flags(row, corridor(rows, current, "rhr"), corridor(rows, current, "hrv"))
-        flags[stamp] = found
+        skin_from = _edge(corridor(rows, current, "skin_temp"), 1)
+        resp_from = _edge(corridor(rows, current, "respiration"), 1)
+        flags[stamp] = {**found, **vitals_flags(row, skin_from, resp_from)}
         shown.append({"date": stamp, "rhr": row["rhr"], "hrv": row["hrv"], "out": found["out"]})
     return shown, flags
+
+
+def _vitals(
+    rows: list[dict[str, Any]], today: date, flags: dict[str, bool | None]
+) -> dict[str, Any]:
+    """Метрики ночи за today: значение, граница нормы (None - коридора нет) и флаг (None - не
+    проверялась); у SpO2 границы нет, порог SPO2_MIN."""
+    row = {r["date"]: r for r in rows}.get(today.isoformat(), {})
+    skin_from = _edge(corridor(rows, today, "skin_temp"), 1)
+    resp_from = _edge(corridor(rows, today, "respiration"), 1)
+    return {
+        "skin_temp": row.get("skin_temp"),
+        "skin_temp_high_from": skin_from,
+        "skin_temp_high": flags["skin_temp"],
+        "respiration": row.get("respiration"),
+        "respiration_high_from": resp_from,
+        "respiration_high": flags["respiration"],
+        "spo2": row.get("spo2"),
+        "spo2_low": flags["spo2"],
+    }
 
 
 def _context(
@@ -202,9 +232,10 @@ def illness_report(
     """Пульс покоя и HRV на day против коридора: rhr, hrv, *_mean7, rhr_high_from / hrv_low_from
     (границы коридора, None - данных мало), rhr_high, hrv_low, out_today, streak (дней вне
     коридора подряд, не больше SHOWN_DAYS), baseline_days (дней базы с пульсом и HRV), days
-    (SHOWN_DAYS дней: date, rhr, hrv, out), episode (фаза болезни, см. episode_state),
-    confounders, tss_yesterday, sleep_debt, signals. tss - TSS по дням, sleep - готовый
-    sleep_report (нет - считается здесь)."""
+    (SHOWN_DAYS дней: date, rhr, hrv, out), hrv_streak (дней плохого статуса HRV подряд), vitals
+    (кожа, дыхание, SpO2 ночи: значение, граница, флаг), episode (фаза болезни, см.
+    episode_state), confounders, tss_yesterday, sleep_debt, signals. tss - TSS по дням, sleep -
+    готовый sleep_report (нет - считается здесь)."""
     today = date.fromisoformat(day)
     first = (today - timedelta(days=BASELINE_DAYS + EPISODE_DAYS - 1)).isoformat()
     rows = list_recovery_days(conn, first, day)
@@ -234,6 +265,8 @@ def illness_report(
             ]
         ),
         "days": shown,
+        "hrv_streak": status_streak({r["date"]: r["status"] for r in rows}, day),
+        "vitals": _vitals(rows, today, flags[day]),
         "episode": _episode(conn, day, flags),
         **_context(conn, day, tss, sleep),
     }
