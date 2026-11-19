@@ -7,13 +7,24 @@
 2026-10-12…11-17 (калибровка v2.9).
 """
 
+import json
 import sqlite3
 from datetime import date, timedelta
 from statistics import mean, pstdev
 from typing import Any
 
+from ai_coach.load.episode import (
+    EPISODE_DAYS,
+    REST_DAYS,
+    RETURN_DAYS,
+    episode_state,
+    form_phrases,
+    sick_days,
+)
 from ai_coach.load.sleep import sleep_report
+from ai_coach.store.forms import get_form, list_form_log
 from ai_coach.store.garmin_data import list_recovery_days
+from ai_coach.store.journal import list_wellbeing
 
 CENTER_DAYS = 7
 MIN_CENTER_DAYS = 4
@@ -72,15 +83,68 @@ def out_streak(flags_by_date: dict[str, dict[str, bool | None]], day: str) -> in
     return streak
 
 
+def _phase_signals(episode: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """illness_rest (value - день покоя, why - причины незачёта сегодня) и illness_return
+    (value - день возврата); в остальных фазах - ничего."""
+    if episode is None:
+        return []
+    if episode["phase"] == "rest":
+        return [
+            {
+                "kind": "illness_rest",
+                "value": episode["rest_step"],
+                "limit": REST_DAYS,
+                "why": list(episode["not_clean"]),
+            }
+        ]
+    if episode["phase"] == "return":
+        return [{"kind": "illness_return", "value": episode["return_day"], "limit": RETURN_DAYS}]
+    return []
+
+
 def illness_signals(report: dict[str, Any]) -> list[dict[str, Any]]:
     """illness_risk - дней вне коридора подряд не меньше STREAK_DAYS; первый день - слабый
-    corridor_out; формат {kind, value, limit} как у sleep_signals."""
+    corridor_out; затем сигнал фазы после болезни (illness_rest / illness_return); формат
+    {kind, value, limit} как у sleep_signals."""
     streak = report["streak"]
+    signals: list[dict[str, Any]] = []
     if streak >= STREAK_DAYS:
-        return [{"kind": "illness_risk", "value": streak, "limit": STREAK_DAYS}]
-    if streak == 1:
-        return [{"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS}]
-    return []
+        signals.append({"kind": "illness_risk", "value": streak, "limit": STREAK_DAYS})
+    elif streak == 1:
+        signals.append({"kind": "corridor_out", "value": 1, "limit": STREAK_DAYS})
+    return signals + _phase_signals(report.get("episode"))
+
+
+def form_texts(conn: sqlite3.Connection, start: str, end: str) -> dict[str, list[str]]:
+    """Дата -> фразы ответов форм за start..end: определение формы берётся один раз на имя
+    (снятая читается), ответ без формы пропускается, свой текст ответа без записи
+    самочувствия идёт в список."""
+    texts: dict[str, list[str]] = {}
+    forms: dict[str, dict[str, Any] | None] = {}
+    for entry in list_form_log(conn, start, end):
+        if entry["form"] not in forms:
+            forms[entry["form"]] = get_form(conn, entry["form"])
+        form = forms[entry["form"]]
+        if form is None:
+            continue
+        found = texts.setdefault(entry["date"], [])
+        found += form_phrases(json.loads(form["fields_json"]), json.loads(entry["values_json"]))
+        if entry["wellbeing_id"] is None and entry["text"]:
+            found.append(entry["text"])
+    return texts
+
+
+def _episode(
+    conn: sqlite3.Connection, day: str, flags: dict[str, dict[str, bool | None]]
+) -> dict[str, Any]:
+    """Фаза болезни на day: тексты записей и форм за EPISODE_DAYS дней, флаги коридора."""
+    start = (date.fromisoformat(day) - timedelta(days=EPISODE_DAYS - 1)).isoformat()
+    marks = list_wellbeing(conn, start, day)
+    texts = form_texts(conn, start, day)
+    for mark in marks:
+        if mark["text"]:
+            texts.setdefault(mark["date"], []).append(mark["text"])
+    return episode_state(sick_days(texts, {m["date"] for m in marks}), flags, day)
 
 
 def _edges(found: dict[str, float] | None, sign: int) -> tuple[float | None, float | None]:
@@ -91,13 +155,13 @@ def _edges(found: dict[str, float] | None, sign: int) -> tuple[float | None, flo
 
 
 def _recent(
-    rows: list[dict[str, Any]], today: date
+    rows: list[dict[str, Any]], today: date, days: int
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, bool | None]]]:
-    """Последние SHOWN_DAYS дней по возрастанию: (date, rhr, hrv, out) и флаги по датам."""
+    """Последние days дней по возрастанию: (date, rhr, hrv, out) и флаги по датам."""
     by_date = {r["date"]: r for r in rows}
     shown: list[dict[str, Any]] = []
     flags: dict[str, dict[str, bool | None]] = {}
-    for back in range(SHOWN_DAYS - 1, -1, -1):
+    for back in range(days - 1, -1, -1):
         current = today - timedelta(days=back)
         stamp = current.isoformat()
         row = by_date.get(stamp, {"date": stamp, "rhr": None, "hrv": None})
@@ -138,13 +202,16 @@ def illness_report(
     """Пульс покоя и HRV на day против коридора: rhr, hrv, *_mean7, rhr_high_from / hrv_low_from
     (границы коридора, None - данных мало), rhr_high, hrv_low, out_today, streak (дней вне
     коридора подряд, не больше SHOWN_DAYS), baseline_days (дней базы с пульсом и HRV), days
-    (SHOWN_DAYS дней: date, rhr, hrv, out), confounders, tss_yesterday, sleep_debt, signals. tss -
-    TSS по дням, sleep - готовый sleep_report (нет - считается здесь)."""
+    (SHOWN_DAYS дней: date, rhr, hrv, out), episode (фаза болезни, см. episode_state),
+    confounders, tss_yesterday, sleep_debt, signals. tss - TSS по дням, sleep - готовый
+    sleep_report (нет - считается здесь)."""
     today = date.fromisoformat(day)
-    first = (today - timedelta(days=BASELINE_DAYS + SHOWN_DAYS - 1)).isoformat()
+    first = (today - timedelta(days=BASELINE_DAYS + EPISODE_DAYS - 1)).isoformat()
     rows = list_recovery_days(conn, first, day)
     base_first = (today - timedelta(days=BASELINE_DAYS)).isoformat()
-    shown, flags = _recent(rows, today)
+    window, flags = _recent(rows, today, EPISODE_DAYS)
+    shown = window[-SHOWN_DAYS:]
+    shown_flags = {r["date"]: flags[r["date"]] for r in shown}
     rhr_mean7, rhr_high_from = _edges(corridor(rows, today, "rhr"), 1)
     hrv_mean7, hrv_low_from = _edges(corridor(rows, today, "hrv"), -1)
     report: dict[str, Any] = {
@@ -158,7 +225,7 @@ def illness_report(
         "hrv_low_from": hrv_low_from,
         "hrv_low": flags[day]["hrv_low"],
         "out_today": flags[day]["out"],
-        "streak": out_streak(flags, day),
+        "streak": out_streak(shown_flags, day),
         "baseline_days": len(
             [
                 r
@@ -167,6 +234,7 @@ def illness_report(
             ]
         ),
         "days": shown,
+        "episode": _episode(conn, day, flags),
         **_context(conn, day, tss, sleep),
     }
     return {**report, "signals": illness_signals(report)}

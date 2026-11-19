@@ -23,7 +23,7 @@ from ai_coach.load import (
     sleep_report,
 )
 from ai_coach.load.deviations import BELOW_DAYS, wellbeing_norms
-from ai_coach.load.episode import form_phrases
+from ai_coach.load.illness import form_texts
 from ai_coach.load.sleep import awake_hours
 from ai_coach.load.stress import stress_at
 from ai_coach.meds import public_meds
@@ -38,7 +38,6 @@ from ai_coach.profile import (
 )
 from ai_coach.sport_nutrition import day_nutrition, without_service
 from ai_coach.store.db import fetch_one
-from ai_coach.store.forms import get_form, list_form_log
 from ai_coach.store.garmin_data import (
     last_rest_hr,
     list_activities,
@@ -243,17 +242,7 @@ def day_deviations(
     marks = [m for m in recent if m["date"] == day]
     norms = wellbeing_norms([m for m in recent if m["date"] < day])
     metrics = list_daily_metrics(conn, day, day)
-    phrases: list[str] = []
-    forms: dict[str, dict[str, Any] | None] = {}
-    for entry in list_form_log(conn, day, day):
-        if entry["form"] not in forms:
-            forms[entry["form"]] = get_form(conn, entry["form"])
-        form = forms[entry["form"]]
-        if form is None:
-            continue
-        phrases += form_phrases(json.loads(form["fields_json"]), json.loads(entry["values_json"]))
-        if entry["wellbeing_id"] is None and entry["text"]:
-            phrases.append(entry["text"])
+    phrases = form_texts(conn, day, day).get(day, [])
     return find_deviations(
         main_wellbeing(marks), metrics[0] if metrics else None, load_row, norms, phrases
     )

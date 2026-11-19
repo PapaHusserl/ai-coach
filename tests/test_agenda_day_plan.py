@@ -1312,6 +1312,19 @@ def test_first_out_day_weak_signal_keeps_limits_and_gives_no_reason(
     assert got == (time(19, 0), FOCUS_MAX, [])
 
 
+def test_rest_after_illness_keeps_sleep_limits_unchanged(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import add_wellbeing
+
+    illness_nights(conn, out_days=0)
+    yesterday = (TODAY - timedelta(days=1)).isoformat()
+    add_wellbeing(
+        conn,
+        {"date": yesterday, "logged_at": f"{yesterday} 09:00:00", "score": 2, "text": "озноб"},
+    )
+    got = sleep_limits(conn, TODAY, TODAY, MORNING, time(19, 0), FOCUS_MAX)
+    assert got == (time(19, 0), FOCUS_MAX, [])
+
+
 def test_short_night_and_illness_give_two_blocks_not_one(conn: sqlite3.Connection) -> None:
     illness_nights(conn, tonight=5)
     result = make(conn, MON, now=MORNING)

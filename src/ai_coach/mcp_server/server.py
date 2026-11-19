@@ -222,11 +222,15 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "ночь; rhr_mean7, hrv_mean7 - среднее за 7 предыдущих дней; rhr_high_from / hrv_low_from - "
         "границы личного коридора (±0,75 SD за 28 дней; null - данных меньше 14 дней); rhr_high, "
         "hrv_low, out_today - день вне коридора (пульс выше или HRV ниже); streak - таких дней "
-        "подряд, до 7; baseline_days - дней из 28 с пульсом и HRV; "
-        "days - 7 дней (date, rhr, hrv, out); confounders - что могло сдвинуть цифры без "
-        "болезни (short_night, trained_yesterday); tss_yesterday; sleep_debt - долг сна (риск "
-        "выше); signals - illness_risk (kind, value = streak, limit; пусто - норма) и слабый "
-        "corridor_out - первый день вне коридора. Не диагноз.",
+        "подряд, до 7; baseline_days - дней из 28 с пульсом и HRV; days - 7 дней (date, rhr, "
+        "hrv, out); confounders - что могло сдвинуть цифры без болезни (short_night, "
+        "trained_yesterday); tss_yesterday; sleep_debt - долг сна (риск выше); episode - фаза "
+        "болезни по текстам записей и форм (phase ill / rest / return / null, severe, "
+        "sick_first, sick_last, clean_days, rest_day, rest_step, return_day, until, by_cap, "
+        "not_clean - no_record, no_night, corridor); signals - illness_risk (kind, value = "
+        "streak, limit; пусто - норма), слабый corridor_out - первый день вне коридора, "
+        "illness_rest (value - день покоя, why - причины незачёта дня) и illness_return (value "
+        "- день возврата). Не диагноз.",
     ),
     "get_profile": (
         tools.profile,

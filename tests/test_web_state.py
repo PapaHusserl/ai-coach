@@ -244,6 +244,21 @@ def test_corridor_out_comes_from_illness_report(
     assert sources(view, "corridor_out") == ["illness"]
 
 
+def test_illness_rest_signal_keeps_why_and_gets_source(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = {"signals": [{"kind": "illness_rest", "value": 1, "limit": 2, "why": ["no_record"]}]}
+    monkeypatch.setattr("ai_coach.web.state.illness_report", lambda *args, **kwargs: fake)
+    [signal] = [s for s in state_view(conn, DAY, NOW)["signals"] if s["kind"] == "illness_rest"]
+    assert signal == {
+        "source": "illness",
+        "kind": "illness_rest",
+        "value": 1,
+        "limit": 2,
+        "why": ["no_record"],
+    }
+
+
 def test_overload_signals_come_from_overload_report(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

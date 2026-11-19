@@ -6,6 +6,9 @@ from datetime import date, timedelta
 from statistics import pstdev
 from typing import Any
 
+from workload_fakes import coach_event
+
+from ai_coach.load.episode import REST_DAYS, RETURN_DAYS
 from ai_coach.load.illness import (
     SHOWN_DAYS,
     STREAK_DAYS,
@@ -16,7 +19,10 @@ from ai_coach.load.illness import (
     illness_signals,
     out_streak,
 )
+from ai_coach.store.agenda import add_event
+from ai_coach.store.forms import add_form, add_form_entry, get_form
 from ai_coach.store.garmin_data import upsert_daily_metrics
+from ai_coach.store.journal import add_wellbeing
 
 TODAY = date(2026, 11, 2)
 
@@ -427,3 +433,337 @@ def test_report_has_no_raw_json(conn: sqlite3.Connection) -> None:
     base_28(conn)
     put(conn, 0, 58, 40)
     assert "SECRET" not in json.dumps(report(conn))
+
+
+# --- episode и сигналы фаз (Н33, партия 2б) ---
+
+EPISODE_KEYS = {
+    "phase",
+    "severe",
+    "sick_first",
+    "sick_last",
+    "clean_days",
+    "rest_day",
+    "rest_step",
+    "return_day",
+    "until",
+    "by_cap",
+    "not_clean",
+}
+
+
+def note(conn: sqlite3.Connection, days: int, text: str = "") -> None:
+    """Запись самочувствия за день back(days)."""
+    add_wellbeing(
+        conn,
+        {
+            "date": back(days).isoformat(),
+            "logged_at": f"{back(days).isoformat()} 09:00:00",
+            "score": 3,
+            "text": text,
+        },
+    )
+
+
+def normal_nights(conn: sqlite3.Connection) -> None:
+    """28 ночей базы и сегодняшняя ночь - в коридоре."""
+    base_28(conn)
+    put(conn, 0, 50, 60)
+
+
+def episode(conn: sqlite3.Connection) -> dict[str, Any]:
+    return report(conn)["episode"]
+
+
+def signal_of(conn: sqlite3.Connection, kind: str) -> dict[str, Any] | None:
+    found = [s for s in report(conn)["signals"] if s["kind"] == kind]
+    return found[0] if found else None
+
+
+def test_episode_without_illness_has_all_keys_and_no_phase(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    found = episode(conn)
+    assert set(found) == EPISODE_KEYS
+    assert found["phase"] is None
+    assert found["not_clean"] == []
+
+
+def test_episode_rest_day_one_without_record(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 1, "озноб")
+    assert episode(conn) == {
+        "phase": "rest",
+        "severe": True,
+        "sick_first": back(1).isoformat(),
+        "sick_last": back(1).isoformat(),
+        "clean_days": 0,
+        "rest_day": 1,
+        "rest_step": 1,
+        "return_day": None,
+        "until": None,
+        "by_cap": False,
+        "not_clean": ["no_record"],
+    }
+
+
+def test_illness_rest_signal_carries_why_of_today(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 1, "озноб")
+    assert signal_of(conn, "illness_rest") == {
+        "kind": "illness_rest",
+        "value": 1,
+        "limit": REST_DAYS,
+        "why": ["no_record"],
+    }
+
+
+def test_illness_rest_why_is_empty_for_counted_day(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 1, "озноб")
+    note(conn, 0)
+    assert signal_of(conn, "illness_rest") == {
+        "kind": "illness_rest",
+        "value": 1,
+        "limit": REST_DAYS,
+        "why": [],
+    }
+
+
+def test_illness_rest_value_is_step_not_count_of_clean_days(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 2, "озноб")
+    note(conn, 1)
+    note(conn, 0)
+    assert signal_of(conn, "illness_rest") == {
+        "kind": "illness_rest",
+        "value": 2,
+        "limit": REST_DAYS,
+        "why": [],
+    }
+
+
+def test_illness_rest_why_names_corridor(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    out_day(conn, 0)
+    note(conn, 1, "озноб")
+    note(conn, 0)
+    found = signal_of(conn, "illness_rest")
+    assert found is not None
+    assert found["why"] == ["corridor"]
+
+
+def test_illness_rest_why_names_night_without_data(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    note(conn, 1, "озноб")
+    note(conn, 0)
+    found = signal_of(conn, "illness_rest")
+    assert found is not None
+    assert found["why"] == ["no_night"]
+
+
+def test_illness_rest_why_keeps_order_of_codes(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    out_day(conn, 0)
+    note(conn, 1, "озноб")
+    found = signal_of(conn, "illness_rest")
+    assert found is not None
+    assert found["why"] == ["no_record", "corridor"]
+
+
+def test_illness_return_signal_has_no_why(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 3, "озноб")
+    note(conn, 2)
+    note(conn, 1)
+    assert signal_of(conn, "illness_return") == {
+        "kind": "illness_return",
+        "value": 1,
+        "limit": RETURN_DAYS,
+    }
+
+
+def test_episode_return_day_and_until(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 3, "озноб")
+    note(conn, 2)
+    note(conn, 1)
+    found = episode(conn)
+    assert found["phase"] == "return"
+    assert found["return_day"] == 1
+    assert found["until"] == (TODAY + timedelta(days=RETURN_DAYS - 1)).isoformat()
+
+
+def test_rest_phase_gives_no_return_signal(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 1, "озноб")
+    assert signal_of(conn, "illness_return") is None
+
+
+def test_return_phase_gives_no_rest_signal(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 3, "озноб")
+    note(conn, 2)
+    note(conn, 1)
+    assert signal_of(conn, "illness_rest") is None
+
+
+def test_ill_phase_gives_no_phase_signals(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 0, "озноб")
+    assert episode(conn)["phase"] == "ill"
+    kinds = [s["kind"] for s in report(conn)["signals"]]
+    assert "illness_rest" not in kinds
+    assert "illness_return" not in kinds
+
+
+def test_light_series_gives_no_phase_signals(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 1, "кашель")
+    assert episode(conn)["phase"] is None
+    assert [s["kind"] for s in report(conn)["signals"]] == []
+
+
+def test_other_signals_keep_their_keys_next_to_phase_signal(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    out_day(conn, 1)
+    out_day(conn, 0)
+    note(conn, 2, "озноб")
+    note(conn, 1)
+    assert signal_of(conn, "illness_risk") == {
+        "kind": "illness_risk",
+        "value": 2,
+        "limit": STREAK_DAYS,
+    }
+    assert signal_of(conn, "illness_rest") is not None
+
+
+def test_phase_signal_goes_after_illness_risk(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    out_day(conn, 1)
+    out_day(conn, 0)
+    note(conn, 2, "озноб")
+    kinds = [s["kind"] for s in report(conn)["signals"]]
+    assert kinds == ["illness_risk", "illness_rest"]
+
+
+def test_phase_signal_goes_after_corridor_out(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    put(conn, 1, 50, 60)
+    out_day(conn, 0)
+    note(conn, 2, "озноб")
+    kinds = [s["kind"] for s in report(conn)["signals"]]
+    assert kinds == ["corridor_out", "illness_rest"]
+
+
+def test_episode_reads_corridor_flags_over_whole_episode_window(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 12, "озноб")
+    note(conn, 11)
+    note(conn, 10)
+    note(conn, 2, "кашель")
+    found = episode(conn)
+    assert found["phase"] is None
+    assert found["severe"] is False
+    assert found["sick_first"] == back(2).isoformat()
+
+
+def put_form(
+    conn: sqlite3.Connection, days: int, answers: dict[str, Any], text: str | None = None
+) -> None:
+    fields = [
+        {"key": "temperature", "type": "number", "label": "Температура", "unit": "°C"},
+        {"key": "nose", "type": "yesno", "label": "Насморк"},
+    ]
+    if get_form(conn, "sick") is None:
+        add_form(
+            conn,
+            {
+                "name": "sick",
+                "title": "Болезнь",
+                "fields_json": json.dumps(fields, ensure_ascii=False),
+                "created_at": f"{back(20).isoformat()} 07:00:00",
+            },
+        )
+    add_form_entry(
+        conn,
+        {
+            "date": back(days).isoformat(),
+            "time": "09:00:00",
+            "event_id": add_event(conn, coach_event(survey="form:sick")),
+            "form": "sick",
+            "values_json": json.dumps(answers),
+            "text": text,
+        },
+    )
+
+
+def test_episode_takes_fever_from_form_answer_without_journal_record(
+    conn: sqlite3.Connection,
+) -> None:
+    normal_nights(conn)
+    put_form(conn, 1, {"temperature": 38.0})
+    found = episode(conn)
+    assert found["phase"] == "rest"
+    assert found["severe"] is True
+    assert found["sick_last"] == back(1).isoformat()
+
+
+def test_episode_takes_own_text_of_form_answer_without_wellbeing(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    put_form(conn, 1, {}, text="озноб")
+    assert episode(conn)["phase"] == "rest"
+
+
+def test_episode_form_answer_is_not_a_journal_record(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 2, "озноб")
+    put_form(conn, 1, {"nose": False})
+    put_form(conn, 0, {"nose": False})
+    assert episode(conn)["not_clean"] == ["no_record"]
+
+
+def test_report_streak_and_days_stay_within_shown_days_with_episode(
+    conn: sqlite3.Connection,
+) -> None:
+    base_28(conn)
+    for days in range(12, -1, -1):
+        put(conn, days, 100 + 10 * (12 - days), 50 - 3 * (12 - days))
+    found = report(conn)
+    assert found["streak"] == SHOWN_DAYS
+    assert len(found["days"]) == SHOWN_DAYS
+
+
+def test_report_mean7_is_rounded_to_one_digit(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    put(conn, 1, 52, 61)
+    put(conn, 0, 50, 60)
+    found = report(conn)
+    assert found["rhr_mean7"] == 50.3
+    assert found["hrv_mean7"] == 60.1
+
+
+def test_episode_window_reaches_twenty_days_back(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    note(conn, 20, "озноб")
+    found = episode(conn)
+    assert found["severe"] is True
+    assert found["sick_first"] == back(20).isoformat()
+
+
+def test_form_answer_after_answer_of_missing_form_is_still_read(conn: sqlite3.Connection) -> None:
+    normal_nights(conn)
+    put_form(conn, 1, {}, text="озноб")
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    add_form_entry(
+        conn,
+        {
+            "date": back(2).isoformat(),
+            "time": "09:00:00",
+            "event_id": add_event(conn, coach_event(survey="form:ghost")),
+            "form": "ghost",
+            "values_json": json.dumps({}),
+            "text": None,
+        },
+    )
+    assert episode(conn)["phase"] == "rest"

@@ -501,6 +501,48 @@ def test_sleep_topic_illness_thresholds_checked_on_data() -> None:
     assert "догадка" not in section
 
 
+def test_sleep_topic_illness_names_episode_and_phase_signals() -> None:
+    section = illness_section()
+    for needle in ("`episode`", "`illness_rest`", "`illness_return`"):
+        assert needle in section, needle
+
+
+def test_sleep_topic_illness_names_every_reason_code() -> None:
+    section = illness_section()
+    for code in ("no_record", "no_night", "corridor"):
+        assert f"`{code}`" in section, code
+
+
+def test_sleep_topic_illness_rest_days_match_constants() -> None:
+    from ai_coach.load.episode import REST_DAYS
+
+    assert f"{REST_DAYS} чистых дня" in illness_section()
+
+
+def test_sleep_topic_illness_rest_ceiling_matches_constant() -> None:
+    from ai_coach.load.episode import REST_MAX_DAYS
+
+    assert f"потолок покоя {REST_MAX_DAYS} дня" in illness_section()
+
+
+def test_sleep_topic_illness_return_days_match_constant() -> None:
+    from ai_coach.load.episode import RETURN_DAYS
+
+    lines = [ln for ln in illness_section().splitlines() if "возврат" in ln]
+    assert any(f"{RETURN_DAYS} дней" in ln for ln in lines)
+
+
+def test_pult_topic_state_tab_shows_rest_row_with_reason() -> None:
+    text = topic("pult.md")
+    assert "покой после болезни · день 1 из 2 — нет записи" in text
+
+
+def test_pult_topic_says_tail_after_dash_is_reason_day_not_counted() -> None:
+    lines = [ln for ln in topic("pult.md").splitlines() if "покой после болезни" in ln]
+    assert lines
+    assert any("причин" in ln and "не засчитан" in ln for ln in lines)
+
+
 def test_wellbeing_role_names_first_day_signal() -> None:
     text = (AGENTS / "coach-wellbeing.md").read_text(encoding="utf-8")
     lines = [ln for ln in text.splitlines() if "corridor_out" in ln]

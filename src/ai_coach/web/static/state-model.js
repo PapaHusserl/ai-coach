@@ -6,6 +6,8 @@ export const SIGNAL_WORDS = {
 	sleep_debt: "долг сна",
 	illness_risk: "возможно, заболеваешь",
 	corridor_out: "пульс или HRV вне нормы",
+	illness_rest: "покой после болезни",
+	illness_return: "возврат после болезни",
 	total_streak: "нагрузка три дня подряд",
 	evening_streak: "работа по вечерам три дня",
 	weekend_work: "работа в выходные",
@@ -46,15 +48,33 @@ function shown(value) {
 // У двух кодов «ниже нормы» limit — норма, не порог.
 const NORM_KINDS = ["wellbeing_below", "mood_below"];
 
+// Слова причин, по которым день покоя не засчитан (Н33, Р22 = а); неизвестный код — как есть.
+export const REASON_WORDS = {
+	no_record: "нет записи",
+	no_night: "нет ночи с часов",
+	corridor: SIGNAL_WORDS.corridor_out,
+};
+
+// Два кода фаз после болезни: «день N из M», у покоя — хвост причин.
+const PHASE_KINDS = ["illness_rest", "illness_return"];
+
+function detailOf(signal) {
+	if (PHASE_KINDS.includes(signal.kind)) {
+		const day = `день ${shown(signal.value)} из ${shown(signal.limit)}`;
+		const why = signal.kind === "illness_rest" ? signal.why ?? [] : [];
+		return why.length === 0 ? day : `${day} — ${why.map((code) => REASON_WORDS[code] ?? code).join(", ")}`;
+	}
+	if (signal.limit === null) return shown(signal.value);
+	return `${shown(signal.value)} (${NORM_KINDS.includes(signal.kind) ? "норма" : "порог"} ${shown(signal.limit)})`;
+}
+
 // Строки сигналов в порядке сервера: [{kind, source, word, detail}].
 export function signalRows(state) {
 	return state.signals.map((signal) => ({
 		kind: signal.kind,
 		source: signal.source,
 		word: SIGNAL_WORDS[signal.kind] ?? signal.kind,
-		detail: signal.limit === null
-			? shown(signal.value)
-			: `${shown(signal.value)} (${NORM_KINDS.includes(signal.kind) ? "норма" : "порог"} ${shown(signal.limit)})`,
+		detail: detailOf(signal),
 	}));
 }
 

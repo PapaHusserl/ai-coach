@@ -10,6 +10,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, db_file, tool_names
 
+from ai_coach.load.episode import REST_DAYS
 from ai_coach.load.illness import STREAK_DAYS, SWC_K, illness_report
 from ai_coach.mcp_server import build_server
 from ai_coach.store.garmin_data import upsert_activity, upsert_daily_metrics, upsert_threshold
@@ -150,6 +151,62 @@ def test_snapshot_has_illness_without_days(conn: sqlite3.Connection) -> None:
     full = call(conn, "get_illness", date=DAY)
     assert "days" not in section
     assert section == {k: v for k, v in full.items() if k != "days"}
+
+
+# --- episode и сигналы фаз (Н33, партия 2б) ---
+
+
+def heavy_yesterday(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import add_wellbeing
+
+    add_wellbeing(
+        conn,
+        {"date": shift(1), "logged_at": f"{shift(1)} 09:00:00", "score": 2, "text": "озноб"},
+    )
+
+
+def test_get_illness_answer_has_episode_with_phase(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    answer = call(conn, "get_illness", date=DAY)
+    assert answer["episode"]["phase"] == "rest"
+    assert answer["episode"]["not_clean"] == ["no_record", "corridor"]
+
+
+def test_get_illness_signal_illness_rest_has_why(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    signals = call(conn, "get_illness", date=DAY)["signals"]
+    rest = [s for s in signals if s["kind"] == "illness_rest"]
+    assert rest == [
+        {"kind": "illness_rest", "value": 1, "limit": REST_DAYS, "why": ["no_record", "corridor"]}
+    ]
+
+
+def test_get_illness_empty_base_has_episode_without_phase(conn: sqlite3.Connection) -> None:
+    answer = call(conn, "get_illness", date=DAY)
+    assert answer["episode"]["phase"] is None
+
+
+def test_get_illness_description_names_episode_and_phase_signals(
+    conn: sqlite3.Connection,
+) -> None:
+    server = build_server(db_file(conn))
+    tools = asyncio.run(server.list_tools())
+    text = next(t.description or "" for t in tools if t.name == "get_illness")
+    for needle in ("episode", "illness_rest", "illness_return", "why"):
+        assert needle in text, needle
+
+
+def test_snapshot_illness_has_episode_and_fits_limit(conn: sqlite3.Connection) -> None:
+    from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
+
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    text = call_text(conn, "get_morning_snapshot", date=DAY)
+    section = json.loads(text)["illness"]
+    assert section["episode"]["phase"] == "rest"
+    assert len(text) <= SNAPSHOT_MAX_CHARS
 
 
 def test_snapshot_illness_without_data(conn: sqlite3.Connection) -> None:
