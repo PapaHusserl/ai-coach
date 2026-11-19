@@ -1,0 +1,425 @@
+"""Серия болезни по дням (Н33, партия 2а): sick_days(texts, recorded) -> признаки по датам,
+episode_state(days, flags, today) -> фаза (ill / rest / return / None), счёт чистых дней,
+потолок покоя.
+
+Сигнатуры - «Партии» п. 2а, «Сигнатуры и границы»:
+texts - {дата: фразы дня (записи и ответы форм)}, recorded - даты со строкой журнала самочувствия,
+days - результат sick_days, flags - {дата: результат day_flags}, today - дата ISO."""
+
+from datetime import date, timedelta
+from typing import Any
+
+import pytest
+
+START = date(2026, 11, 1)
+
+# токен дня -> (тексты, есть строка журнала, {"out": флаг коридора})
+TOKENS: dict[str, tuple[list[str], bool, bool | None]] = {
+    "sick": (["температура 38"], True, False),
+    "mild": (["кашель"], True, False),
+    "clean": ([], True, False),
+    "norec": ([], False, False),
+    "nonight": ([], True, None),
+    "corr": ([], True, True),
+    "empty": ([], False, None),
+    "norec_corr": ([], False, True),
+    "formonly": (["хорошо"], False, False),
+}
+
+
+def day(index: int) -> str:
+    return (START + timedelta(days=index)).isoformat()
+
+
+def run(tokens: list[str]) -> dict[str, Any]:
+    """Последний токен - сегодня."""
+    from ai_coach.load.episode import episode_state, sick_days
+
+    texts = {day(i): list(TOKENS[t][0]) for i, t in enumerate(tokens) if TOKENS[t][0]}
+    recorded = {day(i) for i, t in enumerate(tokens) if TOKENS[t][1]}
+    flags = {day(i): {"out": TOKENS[t][2]} for i, t in enumerate(tokens)}
+    return episode_state(sick_days(texts, recorded), flags, day(len(tokens) - 1))
+
+
+def test_sick_days_symptoms_fever_severe_record() -> None:
+    from ai_coach.load.episode import sick_days
+
+    found = sick_days({"2026-11-01": ["горло болит, температура 37,0"]}, {"2026-11-01"})[
+        "2026-11-01"
+    ]
+    assert found["record"] is True
+    assert "горло" in found["symptoms"]
+    assert found["fever"] == 37.0
+    assert found["severe"] is True
+
+
+def test_sick_days_fever_below_limit_not_severe() -> None:
+    from ai_coach.load.episode import sick_days
+
+    found = sick_days({"2026-11-01": ["температура 36,9"]}, {"2026-11-01"})["2026-11-01"]
+    assert found["fever"] is None
+    assert found["severe"] is False
+
+
+@pytest.mark.parametrize("text", ["ломота", "озноб"])
+def test_sick_days_body_ache_and_chills_are_severe(text: str) -> None:
+    from ai_coach.load.episode import sick_days
+
+    assert sick_days({"2026-11-01": [text]}, {"2026-11-01"})["2026-11-01"]["severe"] is True
+
+
+def test_sick_days_cough_not_severe() -> None:
+    from ai_coach.load.episode import sick_days
+
+    found = sick_days({"2026-11-01": ["кашель"]}, {"2026-11-01"})["2026-11-01"]
+    assert found["symptoms"] == ["кашель"]
+    assert found["severe"] is False
+
+
+def test_sick_days_record_without_text_is_clean_record() -> None:
+    from ai_coach.load.episode import sick_days
+
+    found = sick_days({}, {"2026-11-01"})["2026-11-01"]
+    assert found["record"] is True
+    assert found["symptoms"] == []
+    assert found["fever"] is None
+
+
+def test_sick_days_form_answer_without_journal_row_is_not_record() -> None:
+    from ai_coach.load.episode import sick_days
+
+    assert sick_days({"2026-11-01": ["хорошо"]}, set())["2026-11-01"]["record"] is False
+
+
+def test_mild_series_opens_no_phase() -> None:
+    assert run(["mild", "mild"])["phase"] is None
+
+
+def test_mild_series_then_clean_days_no_phase() -> None:
+    assert run(["mild", "mild", "clean", "clean", "clean"])["phase"] is None
+
+
+def test_fever_at_limit_opens_ill() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["температура 37,0"]}, {day(0)})
+    assert episode_state(days, {day(0): {"out": False}}, day(0))["phase"] == "ill"
+
+
+def test_fever_below_limit_no_phase() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["температура 36,9"]}, {day(0)})
+    assert episode_state(days, {day(0): {"out": False}}, day(0))["phase"] is None
+
+
+@pytest.mark.parametrize("text", ["ломота", "озноб"])
+def test_body_ache_or_chills_open_ill(text: str) -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): [text]}, {day(0)})
+    assert episode_state(days, {day(0): {"out": False}}, day(0))["phase"] == "ill"
+
+
+def test_ill_state_severe_and_bounds() -> None:
+    state = run(["sick"])
+    assert state["severe"] is True
+    assert state["sick_first"] == day(0)
+    assert state["sick_last"] == day(0)
+
+
+@pytest.mark.parametrize(
+    ("clean_days", "phase", "rest_day", "return_day"),
+    [
+        (1, "rest", 1, None),
+        (2, "rest", 2, None),
+        (3, "return", None, 1),
+        (9, "return", None, 7),
+        (10, None, None, None),
+    ],
+)
+def test_ladder_after_severe_series(
+    clean_days: int, phase: str | None, rest_day: int | None, return_day: int | None
+) -> None:
+    state = run(["sick", *["clean"] * clean_days])
+    assert (state["phase"], state["rest_day"], state["return_day"]) == (phase, rest_day, return_day)
+
+
+def test_covid_word_same_ladder_no_covid_field() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["ковид, температура 38"]}, {day(i) for i in range(4)})
+    flags = {day(i): {"out": False} for i in range(4)}
+    state = episode_state(days, flags, day(3))
+    assert (state["phase"], state["return_day"]) == ("return", 1)
+    assert "covid" not in state
+
+
+def test_series_gap_of_one_day_joins() -> None:
+    state = run(["mild", "clean", "sick"])
+    assert state["phase"] == "ill"
+    assert state["sick_first"] == day(0)
+    assert state["sick_last"] == day(2)
+
+
+def test_series_gap_of_two_days_splits() -> None:
+    state = run(["mild", "clean", "clean", "sick"])
+    assert state["sick_first"] == day(3)
+
+
+def test_mild_day_after_one_clean_day_continues_ill() -> None:
+    assert run(["sick", "clean", "mild"])["phase"] == "ill"
+
+
+def test_new_symptom_in_return_is_ill_again() -> None:
+    assert run(["sick", "clean", "clean", "mild"])["phase"] == "ill"
+
+
+def test_clean_day_counts() -> None:
+    assert run(["sick", "clean"])["clean_days"] == 1
+
+
+def test_two_clean_days_count_two() -> None:
+    assert run(["sick", "clean", "clean"])["clean_days"] == 2
+
+
+def test_clean_day_not_clean_codes_empty() -> None:
+    assert run(["sick", "clean"])["not_clean"] == []
+
+
+def test_no_record_day_not_clean() -> None:
+    state = run(["sick", "norec", "clean"])
+    assert state["clean_days"] == 1
+    assert state["not_clean"] == []
+
+
+def test_today_without_record_waits_keeps_count_and_reports_reason() -> None:
+    state = run(["sick", "clean", "norec"])
+    assert state["clean_days"] == 1
+    assert state["not_clean"] == ["no_record"]
+    assert state["phase"] == "rest"
+
+
+def test_past_day_without_record_resets_count() -> None:
+    assert run(["sick", "clean", "norec", "norec"])["clean_days"] == 0
+
+
+def test_clean_norec_clean_counts_one_not_two() -> None:
+    assert run(["sick", "clean", "norec", "clean"])["clean_days"] == 1
+
+
+def test_form_answer_without_journal_row_is_no_record() -> None:
+    assert run(["sick", "clean", "formonly"])["not_clean"] == ["no_record"]
+
+
+def test_today_without_night_waits_reports_no_night() -> None:
+    state = run(["sick", "clean", "nonight"])
+    assert state["clean_days"] == 1
+    assert state["not_clean"] == ["no_night"]
+    assert state["phase"] == "rest"
+
+
+def test_clean_nonight_clean_counts_one_not_two() -> None:
+    assert run(["sick", "clean", "nonight", "clean"])["clean_days"] == 1
+
+
+def test_day_out_of_corridor_resets_count() -> None:
+    state = run(["sick", "clean", "corr"])
+    assert state["clean_days"] == 0
+    assert state["not_clean"] == ["corridor"]
+    assert state["phase"] == "rest"
+
+
+def test_cap_two_clean_days_return_on_third_not_by_cap() -> None:
+    state = run(["sick", "clean", "clean", "clean"])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, False)
+
+
+def test_cap_clean_dirty_clean_third_day_still_rest() -> None:
+    state = run(["sick", "clean", "corr", "clean"])
+    assert (state["phase"], state["rest_day"]) == ("rest", 3)
+
+
+def test_cap_clean_dirty_clean_returns_on_fourth_by_cap() -> None:
+    state = run(["sick", "clean", "corr", "clean", "clean"])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, True)
+
+
+def test_cap_three_dirty_days_third_still_rest() -> None:
+    assert run(["sick", "corr", "corr", "corr"])["phase"] == "rest"
+
+
+def test_cap_three_dirty_days_return_on_fourth_by_cap() -> None:
+    state = run(["sick", "corr", "corr", "corr", "corr"])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, True)
+
+
+def test_cap_dirty_clean_clean_returns_on_fourth_not_by_cap() -> None:
+    state = run(["sick", "corr", "clean", "clean", "clean"])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, False)
+
+
+def test_cap_fourth_day_without_record_and_night_still_return() -> None:
+    state = run(["sick", "corr", "corr", "corr", "empty"])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, True)
+
+
+def test_cap_symptom_on_fourth_day_is_ill() -> None:
+    assert run(["sick", "corr", "corr", "corr", "mild"])["phase"] == "ill"
+
+
+def test_cap_return_lasts_seven_days() -> None:
+    state = run(["sick", "corr", "corr", "corr", *["clean"] * 7])
+    assert (state["phase"], state["return_day"]) == ("return", 7)
+
+
+def test_cap_return_ends_after_seven_days() -> None:
+    assert run(["sick", "corr", "corr", "corr", *["clean"] * 8])["phase"] is None
+
+
+def test_return_ignores_day_out_of_corridor() -> None:
+    state = run(["sick", "clean", "clean", "clean", "corr"])
+    assert (state["phase"], state["return_day"]) == ("return", 2)
+
+
+@pytest.mark.parametrize(
+    ("tokens", "step"),
+    [
+        (["sick", "clean"], 1),
+        (["sick", "clean", "clean"], 2),
+        (["sick", "corr", "clean"], 1),
+        (["sick", "clean", "corr", "clean"], 1),
+        (["sick", "corr", "clean", "clean"], 2),
+        (["sick", "corr", "corr", "clean"], 1),
+    ],
+)
+def test_rest_step_counts_clean_days_before_today_plus_one(tokens: list[str], step: int) -> None:
+    assert run(tokens)["rest_step"] == step
+
+
+def test_rest_step_today_out_of_corridor_after_clean_day() -> None:
+    state = run(["sick", "clean", "corr"])
+    assert (state["clean_days"], state["rest_step"]) == (0, 2)
+
+
+@pytest.mark.parametrize(
+    "tokens",
+    [["sick"], ["sick", "clean", "clean", "clean"], ["mild"]],
+    ids=["ill", "return", "none"],
+)
+def test_rest_step_none_outside_rest(tokens: list[str]) -> None:
+    assert run(tokens)["rest_step"] is None
+
+
+@pytest.mark.parametrize("clean_days", [3, 9])
+def test_until_is_last_ladder_day_same_on_first_and_last_day(clean_days: int) -> None:
+    assert run(["sick", *["clean"] * clean_days])["until"] == day(9)
+
+
+def test_until_by_cap_is_one_day_later() -> None:
+    assert run(["sick", "corr", "corr", "corr", "corr"])["until"] == day(10)
+
+
+@pytest.mark.parametrize(
+    "tokens", [["sick", "clean"], ["sick"], ["mild"]], ids=["rest", "ill", "none"]
+)
+def test_until_none_outside_return(tokens: list[str]) -> None:
+    assert run(tokens)["until"] is None
+
+
+def test_today_without_record_and_out_of_corridor_reports_both() -> None:
+    state = run(["sick", "clean", "norec_corr"])
+    assert state["not_clean"] == ["no_record", "corridor"]
+    assert state["clean_days"] == 0
+
+
+def test_window_severe_day_at_today_minus_20_counts() -> None:
+    state = run(["sick", *["mild"] * 20])
+    assert (state["severe"], state["phase"]) == (True, "ill")
+
+
+def test_window_severe_day_at_today_minus_21_not_seen() -> None:
+    state = run(["sick", *["mild"] * 21])
+    assert (state["severe"], state["phase"]) == (False, None)
+
+
+def test_state_has_all_eleven_keys_without_illness() -> None:
+    assert set(run(["clean"])) == {
+        "phase",
+        "severe",
+        "sick_first",
+        "sick_last",
+        "clean_days",
+        "rest_day",
+        "rest_step",
+        "return_day",
+        "until",
+        "by_cap",
+        "not_clean",
+    }
+
+
+def test_no_illness_values_are_empty() -> None:
+    state = run(["clean"])
+    assert (state["phase"], state["sick_first"], state["sick_last"]) == (None, None, None)
+    assert (state["severe"], state["by_cap"], state["clean_days"], state["not_clean"]) == (
+        False,
+        False,
+        0,
+        [],
+    )
+
+
+def test_mild_series_keeps_bounds_without_phase() -> None:
+    state = run(["mild", "mild"])
+    assert (state["sick_first"], state["sick_last"]) == (day(0), day(1))
+    assert (state["severe"], state["phase"]) == (False, None)
+
+
+def test_sick_days_symptom_from_phrase_without_journal_row() -> None:
+    from ai_coach.load.episode import sick_days
+
+    found = sick_days({"2026-11-01": ["кашель"]}, set())["2026-11-01"]
+    assert found["record"] is False
+    assert found["symptoms"] == ["кашель"]
+
+
+def test_symptom_in_return_continues_series_from_severe_day() -> None:
+    state = run(["sick", *["clean"] * 4, "mild"])
+    assert (state["phase"], state["sick_first"], state["severe"]) == ("ill", day(0), True)
+
+
+def test_after_symptom_in_return_rest_starts_again() -> None:
+    state = run(["sick", *["clean"] * 4, "mild", "clean"])
+    assert (state["phase"], state["rest_day"]) == ("rest", 1)
+
+
+def test_symptom_right_after_return_ended_is_new_mild_series() -> None:
+    state = run(["sick", *["clean"] * 9, "mild"])
+    assert (state["phase"], state["sick_first"], state["severe"]) == (None, day(10), False)
+
+
+def test_symptom_in_rest_after_gap_continues_ill() -> None:
+    state = run(["sick", "corr", "clean", "mild"])
+    assert (state["phase"], state["sick_first"]) == ("ill", day(0))
+
+
+def test_symptom_after_today_is_ignored() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(1): ["кашель"]}, {day(0), day(1)})
+    state = episode_state(days, {day(0): {"out": False}, day(1): {"out": False}}, day(0))
+    assert (state["phase"], state["sick_first"], state["sick_last"]) == (None, None, None)
+
+
+def test_day_without_flags_is_no_night() -> None:
+    from ai_coach.load.episode import episode_state, sick_days
+
+    days = sick_days({day(0): ["температура 38"]}, {day(0), day(1)})
+    state = episode_state(days, {day(0): {"out": False}}, day(1))
+    assert state["not_clean"] == ["no_night"]
+
+
+def test_symptom_after_phase_ended_is_new_mild_series() -> None:
+    state = run(["sick", *["clean"] * 10, "mild"])
+    assert (state["phase"], state["sick_first"], state["severe"]) == (None, day(11), False)
