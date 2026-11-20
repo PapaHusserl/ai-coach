@@ -199,8 +199,37 @@ def test_agent_advises_only_otc_and_sends_prescription_to_doctor() -> None:
 
 def test_agent_lists_all_red_flags() -> None:
     text = agent_text().lower()
-    for flag in ["боль в груди", "обморок", "пульса в покое", "травма", "температур"]:
+    for flag in ["боль в груди", "обморок", "одышк", "пульса в покое", "травм", "температур"]:
         assert flag in text
+
+
+def red_flags_line() -> str:
+    lines = coach_only_text().splitlines()
+    return next(ln for ln in lines if ln.startswith("8б. Красные флаги")).lower()
+
+
+RED_FLAG_STEMS = ("боль в груди", "обморок", "одышк", "пульс", "травм", "температур")
+
+
+def test_coach_red_flags_line_has_new_flags_and_temperature_threshold() -> None:
+    line = red_flags_line()
+    for stem in ("боль в груди", "обморок", "одышк", "пульса в покое", "травм", "температур"):
+        assert stem in line, stem
+    assert "выше 39" in line
+
+
+def test_evening_skill_red_flags_line_lists_every_flag_of_step_8b() -> None:
+    text = (SKILLS / "coach-evening" / "SKILL.md").read_text().lower()
+    line = next(ln for ln in text.splitlines() if "красные флаги" in ln)
+    for stem in RED_FLAG_STEMS:
+        assert stem in line, stem
+
+
+def test_deviations_help_red_flags_line_lists_every_flag_of_step_8b() -> None:
+    text = (ROOT / "agents" / "coach-help" / "deviations.md").read_text().lower()
+    line = next(ln for ln in text.splitlines() if "боль в груди" in ln)
+    for stem in RED_FLAG_STEMS:
+        assert stem in line, stem
 
 
 def test_agent_red_flag_cancels_workout_and_records_feel() -> None:

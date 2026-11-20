@@ -1003,3 +1003,51 @@ def test_forms_topic_says_recurring_item_turns_red_every_past_day() -> None:
 
 def test_help_index_points_to_forms_topic() -> None:
     assert "coach-help/forms.md" in HELP.read_text()
+
+
+def advice_section() -> str:
+    text = topic("deviations.md")
+    return text.split("## Советы при сигнале болезни и красные флаги", 1)[1].split("\n## ", 1)[0]
+
+
+def test_deviations_topic_has_advice_section_with_research_and_threshold() -> None:
+    text = advice_section()
+    assert "не назначение" in text
+    assert "39" in text
+
+
+def test_deviations_advice_section_names_three_kinds_of_day() -> None:
+    text = advice_section()
+    for needle in ("illness_risk", "советы прежние", "слабост"):
+        assert needle in text, needle
+
+
+def test_deviations_topic_says_eight_hours_and_more() -> None:
+    assert "8 ч и больше" in topic("deviations.md")
+
+
+def test_deviations_advice_section_says_weakness_words_are_not_searched_by_code() -> None:
+    assert "кодом не ищутся" in advice_section()
+
+
+def test_deviations_trainer_line_for_symptoms_gives_first_days_advice() -> None:
+    lines = [ln for ln in topic("deviations.md").splitlines() if "Что делает тренер" in ln]
+    assert any("советы первых дней" in ln for ln in lines)
+
+
+def test_deviations_weakness_without_symptoms_line_mentions_sleep_line() -> None:
+    lines = [ln for ln in topic("deviations.md").splitlines() if "кодом не ищутся" in ln]
+    assert any("строк" in ln and "сне" in ln for ln in lines)
+
+
+def test_deviations_below_norm_section_mentions_the_weakness_line() -> None:
+    text = topic("deviations.md")
+    section = text.split("## Ниже своей нормы", 1)[1].split("\n## ", 1)[0]
+    assert "строк" in section and "сне" in section
+
+
+def test_deviations_below_norm_weakness_line_excludes_mood() -> None:
+    text = topic("deviations.md")
+    section = text.split("## Ниже своей нормы", 1)[1].split("\n## ", 1)[0]
+    line = next(ln for ln in section.splitlines() if "строк" in ln and "сне" in ln)
+    assert "не настроения" in line

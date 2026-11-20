@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from ai_coach.load import deviations
@@ -20,8 +21,6 @@ def test_coach_wellbeing_describes_illness_reaction() -> None:
         "streak",
         "confounders",
         "снять интенсивное",
-        "лечь раньше",
-        "нагрузку не добирать",
     ):
         assert needle in text, needle
 
@@ -336,9 +335,11 @@ def test_day_plan_role_mentions_sleep_signal() -> None:
 
 ILLNESS_SIDE = ROOT / "agents" / "coach-wellbeing" / "illness.md"
 LADDER_LIMIT = "40 минут"  # константы в коде нет: стоит в боковом файле и в sleep.md
+CARE_SIDE = ROOT / "agents" / "coach-wellbeing" / "care.md"
 MEASURE_TEXTS = (
     WELLBEING,
     ILLNESS_SIDE,
+    CARE_SIDE,
     ROOT / "skills" / "coach-plan" / "recalc.md",
     ROOT / "agents" / "coach-help" / "sleep.md",
     ROOT / "agents" / "coach-help" / "deviations.md",
@@ -474,3 +475,162 @@ def test_measure_texts_do_not_mention_covid() -> None:
         text = path.read_text(encoding="utf-8").lower()
         assert "ковид" not in text, path.name
         assert "covid" not in text, path.name
+
+
+def care() -> str:
+    return CARE_SIDE.read_text(encoding="utf-8")
+
+
+def care_lines(word: str) -> list[str]:
+    found = lines_with(care(), word)
+    assert found, word
+    return found
+
+
+def test_care_side_file_exists_and_is_not_empty() -> None:
+    assert CARE_SIDE.is_file()
+    assert CARE_SIDE.read_bytes()
+
+
+def test_allow_can_read_care_side_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach-wellbeing/care.md)" in allow
+
+
+def test_care_names_every_advice() -> None:
+    text = care().lower()
+    for needle in ("сон", "солевой раствор", "полоскан", "цинк", "флаг", "п. 8б"):
+        assert needle in text, needle
+
+
+def test_care_gives_source_in_brackets_for_advice() -> None:
+    text = care()
+    for source in ("Cohen 2009", "Little 2024", "Cochrane 2024"):
+        assert re.search(rf"\([^)]*{source}[^)]*\)", text), source
+
+
+def test_care_nose_and_throat_line_has_ramalingam_source_in_brackets() -> None:
+    assert any(re.search(r"\([^)]*Ramalingam 2019[^)]*\)", ln) for ln in care_lines("солевой"))
+
+
+def test_care_sleep_line_says_eight_hours_and_more() -> None:
+    assert "8 ч и больше" in care()
+
+
+def test_care_zinc_line_says_about_two_days_shorter_and_by_instruction() -> None:
+    lines = care_lines("цинк")
+    assert any("около 2 дней короче" in ln for ln in lines)
+    assert any("по инструкции" in ln for ln in lines)
+
+
+def test_care_does_not_say_small_effect() -> None:
+    assert "эффект небольшой" not in care()
+
+
+def test_care_weakness_words_list_has_plain_tiredness_without_reason_clause() -> None:
+    line = next(ln for ln in care_lines("Слова слабости:") if ln.startswith("Слова слабости:"))
+    assert "усталость" in line.lower()
+    assert "без причины" not in line
+
+
+def test_care_says_recap_of_research_not_prescription() -> None:
+    assert "не назначение" in care()
+
+
+def test_care_nose_and_throat_line_says_several_times_a_day_without_number() -> None:
+    assert any("несколько раз в день" in ln for ln in care_lines("солевой"))
+    assert "4–6" not in care()
+
+
+def test_care_zinc_line_names_low_data_quality() -> None:
+    assert any("низкое качество" in ln for ln in care_lines("цинк"))
+
+
+def test_care_hedges_nose_and_zinc_for_first_symptoms() -> None:
+    assert any("при первых симптомах" in ln for ln in care_lines("солевой"))
+    assert any("если симптомы начались сегодня" in ln for ln in care_lines("цинк"))
+
+
+def test_care_names_triggers() -> None:
+    text = care()
+    for code in ("illness_risk", "symptoms", "fever"):
+        assert code in text, code
+
+
+def test_care_says_other_signals_are_not_a_trigger() -> None:
+    for code in ("corridor_out", "hrv_streak", "mood_below", "mood"):
+        assert all("не повод" in ln for ln in care_lines(code)), code
+
+
+def test_care_full_set_starts_by_limit_or_sick_first() -> None:
+    text = care()
+    for needle in ("value", "limit", "episode.sick_first", "episode.sick_last"):
+        assert needle in text, needle
+
+
+def test_care_repeat_line_has_no_zinc() -> None:
+    line = next(ln for ln in care_lines("Одна фраза:") if ln.startswith("Одна фраза:"))
+    assert "советы прежние" in line
+    assert "цинк" not in line.lower()
+
+
+def test_care_weakness_line_names_fields_and_conditions() -> None:
+    text = care()
+    assert "wellbeing_below" in text
+    assert "серия не идёт" in text
+    for needle in ("wellbeing", "symptoms", "fever", "illness_risk"):
+        assert needle in text, needle
+
+
+def test_care_weakness_line_gives_sleep_saline_and_zinc_of_first_day() -> None:
+    text = care()
+    assert "Самочувствие ниже обычного - сегодня лечь раньше." in text
+    assert "солевой раствор в нос и полоскание несколько раз в день" in text
+    assert "цинк - только с первого дня симптомов, данные слабые" in text
+    assert "Появятся горло, нос или кашель - в тот же день" in text
+    assert "Это пересказ исследований, не назначение." in text
+
+
+def test_care_lists_weakness_words_and_says_trainer_reads_records() -> None:
+    text = care().lower()
+    for stem in ("слабост", "разбит", "вялост", "недомогани", "нет сил", "усталост"):
+        assert stem in text, stem
+    assert re.search(r"чита\w+ (записи|тексты)", text)
+
+
+def test_care_does_not_repeat_load_measures_and_points_to_illness_file() -> None:
+    text = care().lower()
+    assert "coach-wellbeing/illness.md" in text
+    for word in ("интервал", "лестниц"):
+        assert word not in text, word
+
+
+def test_wellbeing_illness_risk_paragraph_points_to_care_not_old_advice() -> None:
+    text = paragraph(WELLBEING.read_text(encoding="utf-8"), "Возможно, заболеваешь")
+    assert "coach-wellbeing/care.md" in text
+    assert "Совет: лечь раньше, нагрузку не добирать" not in text
+
+
+def test_wellbeing_symptoms_paragraph_points_to_care_and_keeps_measures() -> None:
+    text = paragraph(WELLBEING.read_text(encoding="utf-8"), "Симптомы в тексте")
+    assert "coach-wellbeing/care.md" in text
+    assert "снять интенсивное" in text
+    assert "Температура - п. 8б" in text
+
+
+def test_wellbeing_precursors_paragraph_points_to_care_and_keeps_plan() -> None:
+    text = paragraph(WELLBEING.read_text(encoding="utf-8"), "Предвестники")
+    assert "coach-wellbeing/care.md" in text
+    assert "план не трогай" in text
+
+
+def test_wellbeing_sleep_paragraph_names_season_and_overload_days() -> None:
+    text = paragraph(WELLBEING.read_text(encoding="utf-8"), "Сон:")
+    for needle in ("октябр", "март", "total_streak", "evening_streak"):
+        assert needle in text, needle
+
+
+def test_illness_side_file_points_red_flags_to_8b_and_not_to_care() -> None:
+    text = illness_side()
+    assert "красные флаги - п. 8б" in text
+    assert "care.md" not in text
