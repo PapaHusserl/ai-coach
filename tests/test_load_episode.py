@@ -22,6 +22,7 @@ TOKENS: dict[str, tuple[list[str], bool, bool | None]] = {
     "norec": ([], False, False),
     "nonight": ([], True, None),
     "corr": ([], True, True),
+    "cold": (["насморк"], True, False),
     "empty": ([], False, None),
     "norec_corr": ([], False, True),
     "formonly": (["хорошо"], False, False),
@@ -146,14 +147,14 @@ def test_ladder_after_severe_series(
     assert (state["phase"], state["rest_day"], state["return_day"]) == (phase, rest_day, return_day)
 
 
-def test_covid_word_same_ladder_no_covid_field() -> None:
+def test_covid_word_same_ladder_covid_false() -> None:
     from ai_coach.load.episode import episode_state, sick_days
 
     days = sick_days({day(0): ["ковид, температура 38"]}, {day(i) for i in range(4)})
     flags = {day(i): {"out": False} for i in range(4)}
     state = episode_state(days, flags, day(3))
     assert (state["phase"], state["return_day"]) == ("return", 1)
-    assert "covid" not in state
+    assert state["covid"] is False
 
 
 def test_series_gap_of_one_day_joins() -> None:
@@ -344,8 +345,10 @@ def test_window_severe_day_at_today_minus_21_not_seen() -> None:
     assert (state["severe"], state["phase"]) == (False, None)
 
 
-def test_state_has_all_eleven_keys_without_illness() -> None:
+def test_state_has_all_thirteen_keys_without_illness() -> None:
     assert set(run(["clean"])) == {
+        "covid",
+        "series_day",
         "phase",
         "severe",
         "sick_first",
@@ -612,3 +615,197 @@ def test_past_rest_day_with_metric_out_breaks_the_count() -> None:
     }
     state = episode_state(days, flags, day(3))
     assert (state["phase"], state["rest_step"]) == ("rest", 1)
+
+
+# --- Н49, партия 1: отметка COVID (episode_state(days, flags, today, marks)) ---
+
+
+def run_marked(tokens: list[str], marks: list[int]) -> dict[str, Any]:
+    """Как run, плюс даты отметок - индексы дней; последний токен - сегодня."""
+    from ai_coach.load.episode import episode_state, sick_days
+
+    texts = {day(i): list(TOKENS[t][0]) for i, t in enumerate(tokens) if TOKENS[t][0]}
+    recorded = {day(i) for i, t in enumerate(tokens) if TOKENS[t][1]}
+    flags = {day(i): {"out": TOKENS[t][2]} for i, t in enumerate(tokens)}
+    return episode_state(
+        sick_days(texts, recorded), flags, day(len(tokens) - 1), [day(i) for i in marks]
+    )
+
+
+def without_covid(state: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in state.items() if k not in ("covid", "series_day")}
+
+
+@pytest.mark.parametrize("clean_days", [1, 2, 3, 4])
+def test_covid_severe_rest_until_fifth_day(clean_days: int) -> None:
+    state = run_marked(["sick", *["clean"] * clean_days], [0])
+    assert state["phase"] == "rest"
+    assert state["rest_day"] == clean_days
+    assert state["series_day"] == clean_days + 1
+    assert state["covid"] is True
+
+
+def test_covid_severe_return_starts_on_sixth_day() -> None:
+    state = run_marked(["sick", *["clean"] * 5], [0])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, False)
+    assert state["until"] == day(11)
+    assert state["covid"] is True
+
+
+def test_covid_severe_return_last_day_is_seventh() -> None:
+    state = run_marked(["sick", *["clean"] * 11], [0])
+    assert (state["phase"], state["return_day"]) == ("return", 7)
+
+
+def test_covid_severe_after_return_no_phase() -> None:
+    assert run_marked(["sick", *["clean"] * 12], [0])["phase"] is None
+
+
+def test_severe_without_mark_same_series_returns_on_third_day() -> None:
+    state = run_marked(["sick", *["clean"] * 3], [])
+    assert (state["phase"], state["return_day"], state["covid"]) == ("return", 1, False)
+
+
+def test_covid_dirty_rest_days_still_return_on_sixth_day() -> None:
+    state = run_marked(["sick", *["norec"] * 5], [0])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, False)
+
+
+def test_covid_length_two_returns_on_sixth_day() -> None:
+    state = run_marked(["sick", "sick", "clean", "clean", "clean", "clean"], [0])
+    assert (state["phase"], state["return_day"]) == ("return", 1)
+
+
+@pytest.mark.parametrize("clean_days", [2, 3])
+def test_covid_length_two_rest_before_sixth_day(clean_days: int) -> None:
+    assert run_marked(["sick", "sick", *["clean"] * clean_days], [0])["phase"] == "rest"
+
+
+@pytest.mark.parametrize("rest", ["clean", "norec"])
+@pytest.mark.parametrize("after", [1, 2, 3, 4, 5, 6])
+def test_covid_length_three_same_dates_as_without_mark(rest: str, after: int) -> None:
+    tokens = ["sick", "sick", "sick", *[rest] * after]
+    marked = run_marked(tokens, [0])
+    assert without_covid(marked) == without_covid(run_marked(tokens, []))
+    assert marked["covid"] is True
+
+
+def test_covid_length_three_dirty_returns_by_cap_on_sixth_day() -> None:
+    state = run_marked(["sick", "sick", "sick", "norec", "norec", "norec", "norec"], [0])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, True)
+
+
+def test_covid_mark_arrives_later_rest_on_marked_day() -> None:
+    state = run_marked(["sick", "clean", "clean", "clean"], [3])
+    assert (state["phase"], state["rest_day"], state["covid"]) == ("rest", 3, True)
+
+
+def test_covid_mark_later_than_today_gives_general_ladder() -> None:
+    state = run_marked(["sick", "clean", "clean"], [3])
+    assert state["covid"] is False
+    assert (state["phase"], state["rest_day"]) == ("rest", 2)
+
+
+def test_covid_mark_before_first_day_is_ignored() -> None:
+    state = run_marked(["clean", "sick", "clean", "clean", "clean"], [0])
+    assert (state["covid"], state["phase"], state["return_day"]) == (False, "return", 1)
+
+
+def test_covid_mark_without_symptoms_does_nothing() -> None:
+    state = run_marked(["clean", "clean", "clean"], [1])
+    assert (state["sick_first"], state["covid"], state["phase"]) == (None, False, None)
+
+
+def test_covid_cough_on_third_day_same_series_then_general_ladder() -> None:
+    state = run_marked(["sick", "clean", "mild"], [0])
+    assert (state["phase"], state["sick_last"], state["series_day"]) == ("ill", day(2), 3)
+    later = run_marked(["sick", "clean", "mild", "clean", "clean", "clean"], [0])
+    assert (later["phase"], later["return_day"], later["series_day"]) == ("return", 1, 6)
+
+
+def test_covid_symptom_on_eleventh_day_keeps_series() -> None:
+    tokens = ["sick", *["clean"] * 10, "mild"]
+    assert run_marked(tokens, [0])["sick_first"] == day(0)
+    assert run_marked(tokens, [])["sick_first"] == day(11)
+
+
+def test_covid_mark_removed_gives_general_ladder() -> None:
+    state = run_marked(["sick", "clean", "clean", "clean"], [])
+    assert (state["covid"], state["phase"]) == (False, "return")
+
+
+def test_empty_base_covid_false_series_day_none() -> None:
+    state = run_marked(["clean"], [])
+    assert (state["covid"], state["series_day"]) == (False, None)
+
+
+def test_series_day_counts_from_first_day_without_mark() -> None:
+    assert run_marked(["sick", "clean", "clean"], [])["series_day"] == 3
+
+
+@pytest.mark.parametrize("clean_days", [0, 1, 2, 3, 4])
+def test_covid_light_series_days_one_to_five(clean_days: int) -> None:
+    state = run_marked(["mild", *["clean"] * clean_days], [0])
+    assert state["phase"] == "light"
+    assert state["series_day"] == clean_days + 1
+    assert state["until"] == day(4)
+    assert (state["severe"], state["covid"], state["rest_day"]) == (False, True, None)
+
+
+def test_covid_light_series_ends_after_five_days() -> None:
+    state = run_marked(["mild", *["clean"] * 5], [0])
+    assert (state["phase"], state["covid"]) == (None, True)
+
+
+@pytest.mark.parametrize("clean_days", [0, 1, 4, 5])
+def test_light_series_without_mark_has_no_phase(clean_days: int) -> None:
+    assert run_marked(["mild", *["clean"] * clean_days], [])["phase"] is None
+
+
+def test_covid_light_mark_on_fourth_day() -> None:
+    state = run_marked(["mild", "clean", "clean", "clean"], [3])
+    assert (state["phase"], state["series_day"]) == ("light", 4)
+    assert run_marked(["mild", *["clean"] * 5], [3])["phase"] is None
+
+
+def test_covid_light_new_symptom_after_gap_two_joins() -> None:
+    tokens = ["mild", "clean", "clean", "cold"]
+    assert run_marked(tokens, [0])["sick_first"] == day(0)
+    assert run_marked(tokens, [])["sick_first"] == day(3)
+
+
+def test_covid_light_new_cough_after_five_days_is_new_series() -> None:
+    state = run_marked(["mild", *["clean"] * 5, "mild"], [0])
+    assert (state["sick_first"], state["covid"], state["phase"]) == (day(6), False, None)
+
+
+def test_covid_light_turns_severe_on_fever() -> None:
+    state = run_marked(["mild", "clean", "sick"], [0])
+    assert (state["severe"], state["phase"], state["sick_first"]) == (True, "ill", day(0))
+
+
+# --- Н49, партия 1: _return_start напрямую (мутанты: значение покоя и признак потолка) ---
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_return_start_rest_dirty_gives_next_day_and_no_cap(n: int) -> None:
+    from ai_coach.load.episode import _return_start
+
+    assert _return_start(n, lambda k: False) == (n + 1, False)
+
+
+def test_return_start_today_clean_day_does_not_count_in_streak() -> None:
+    from ai_coach.load.episode import _return_start
+
+    assert _return_start(1, lambda k: True) == (2, False)
+
+
+def test_return_start_cap_flag_when_start_equals_floor() -> None:
+    from ai_coach.load.episode import _return_start
+
+    assert _return_start(5, lambda k: False, 4) == (4, True)
+
+
+def test_covid_length_two_dirty_returns_by_cap_on_fifth_day() -> None:
+    state = run_marked(["sick", "sick", "norec", "norec", "norec", "norec"], [0])
+    assert (state["phase"], state["return_day"], state["by_cap"]) == ("return", 1, True)

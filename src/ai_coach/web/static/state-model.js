@@ -9,6 +9,7 @@ export const SIGNAL_WORDS = {
 	hrv_streak: "статус HRV плохой подряд",
 	illness_rest: "покой после болезни",
 	illness_return: "возврат после болезни",
+	illness_light: "лёгкий режим при COVID",
 	total_streak: "нагрузка три дня подряд",
 	evening_streak: "работа по вечерам три дня",
 	weekend_work: "работа в выходные",
@@ -59,12 +60,22 @@ export const REASON_WORDS = {
 	spo2: "SpO2 ниже 92",
 };
 
-// Два кода фаз после болезни: «день N из M», у покоя — хвост причин.
-const PHASE_KINDS = ["illness_rest", "illness_return"];
+// Слова покоя и возврата у серии с отметкой COVID (Н49); лёгкий режим от отметки не зависит.
+const COVID_WORDS = {
+	illness_rest: "покой после COVID",
+	illness_return: "возврат после COVID",
+};
+
+// Три кода фаз после болезни: «день N из M», у покоя — хвост причин.
+const PHASE_KINDS = ["illness_rest", "illness_return", "illness_light"];
+
+function wordOf(signal) {
+	return (signal.covid && COVID_WORDS[signal.kind]) || SIGNAL_WORDS[signal.kind] || signal.kind;
+}
 
 function detailOf(signal) {
 	if (PHASE_KINDS.includes(signal.kind)) {
-		const day = `день ${shown(signal.value)} из ${shown(signal.limit)}`;
+		const day = `день ${signal.count === "series" ? "болезни " : ""}${shown(signal.value)} из ${shown(signal.limit)}`;
 		const why = signal.kind === "illness_rest" ? signal.why ?? [] : [];
 		return why.length === 0 ? day : `${day} — ${why.map((code) => REASON_WORDS[code] ?? code).join(", ")}`;
 	}
@@ -77,7 +88,7 @@ export function signalRows(state) {
 	return state.signals.map((signal) => ({
 		kind: signal.kind,
 		source: signal.source,
-		word: SIGNAL_WORDS[signal.kind] ?? signal.kind,
+		word: wordOf(signal),
 		detail: detailOf(signal),
 	}));
 }

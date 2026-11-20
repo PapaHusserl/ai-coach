@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from statistics import mean, pstdev
 from typing import Any
 
+from ai_coach.load.covid import COVID_LIGHT_DAYS, COVID_REST_DAYS
 from ai_coach.load.episode import (
     EPISODE_DAYS,
     HRV_STREAK_DAYS,
@@ -87,22 +88,50 @@ def out_streak(flags_by_date: dict[str, dict[str, bool | None]], day: str) -> in
 
 
 def _phase_signals(episode: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """illness_rest (value - день покоя, why - причины незачёта сегодня) и illness_return
-    (value - день возврата); в остальных фазах - ничего."""
+    """illness_rest (value - день покоя, why - причины незачёта сегодня), illness_return
+    (value - день возврата) и illness_light (value - день лёгкого режима при COVID); у всех covid.
+    Покой при COVID у серии не длиннее двух дней считает дни серии: value - день серии, limit -
+    COVID_REST_DAYS, why пуст, count "series". В остальных фазах - ничего."""
     if episode is None:
         return []
-    if episode["phase"] == "rest":
-        return [
-            {
-                "kind": "illness_rest",
-                "value": episode["rest_step"],
-                "limit": REST_DAYS,
-                "why": list(episode["not_clean"]),
-            }
-        ]
-    if episode["phase"] == "return":
-        return [{"kind": "illness_return", "value": episode["return_day"], "limit": RETURN_DAYS}]
-    return []
+    covid = episode["covid"]
+    phase = episode["phase"]
+    signal: dict[str, Any] | None = None
+    if phase == "rest":
+        signal = _rest_signal(episode)
+    elif phase == "return":
+        signal = {"kind": "illness_return", "value": episode["return_day"], "limit": RETURN_DAYS}
+    elif phase == "light":
+        signal = {
+            "kind": "illness_light",
+            "value": episode["series_day"],
+            "limit": COVID_LIGHT_DAYS,
+        }
+    if signal is None:
+        return []
+    signal["covid"] = covid
+    return [signal]
+
+
+def _rest_signal(episode: dict[str, Any]) -> dict[str, Any]:
+    """Сигнал покоя: у серии с отметкой не длиннее двух дней - по дням серии, иначе по ступеням."""
+    length = (
+        date.fromisoformat(episode["sick_last"]) - date.fromisoformat(episode["sick_first"])
+    ).days + 1
+    if episode["covid"] and length <= 2:
+        return {
+            "kind": "illness_rest",
+            "value": episode["series_day"],
+            "limit": COVID_REST_DAYS,
+            "why": [],
+            "count": "series",
+        }
+    return {
+        "kind": "illness_rest",
+        "value": episode["rest_step"],
+        "limit": REST_DAYS,
+        "why": list(episode["not_clean"]),
+    }
 
 
 def illness_signals(report: dict[str, Any]) -> list[dict[str, Any]]:

@@ -1,10 +1,16 @@
 """Болезнь: фразы из ответов форм для разбора симптомов; серия болезни по дням и фаза."""
 
 import operator
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from datetime import date, timedelta
 from typing import Any
 
+from ai_coach.load.covid import (
+    COVID_LIGHT_DAYS,
+    in_light,
+    rest_floor,
+    series_marked,
+)
 from ai_coach.load.deviations import BAD_HRV_STATUSES
 from ai_coach.load.symptom_text import find_fever, find_symptoms
 
@@ -58,53 +64,66 @@ def sick_days(texts: dict[str, list[str]], recorded: set[str]) -> dict[str, dict
     return result
 
 
-def _return_start(n: int, clean: Callable[[int], bool]) -> tuple[int | None, bool]:
+def _return_start(n: int, clean: Callable[[int], bool], floor: int = 0) -> tuple[int, bool]:
     """Номер дня после последнего дня болезни, с которого начинается возврат, и признак потолка;
-    n - сколько дней прошло. None - покой ещё идёт. clean(k) - чист ли k-й день покоя."""
+    n - сколько дней прошло. Больше n - покой ещё идёт. clean(k) - чист ли k-й день покоя; floor -
+    не раньше какого дня возврат (по полу признак потолка ложен)."""
     streak = 0
+    by_cap = n > REST_MAX_DAYS
+    start = REST_MAX_DAYS + 1 if by_cap else n + 1
     for k in range(1, min(REST_MAX_DAYS, n - 1) + 1):
         streak = streak + 1 if clean(k) else 0
         if streak >= REST_DAYS:
-            return k + 1, False
-    if n > REST_MAX_DAYS:
-        return REST_MAX_DAYS + 1, True
-    return None, False
+            start, by_cap = k + 1, False
+            break
+    return max(start, floor), by_cap and start >= floor
 
 
-def _phase(n: int, start: int | None) -> str | None:
+def _phase(n: int, start: int) -> str | None:
     if n == 0:
         return "ill"
-    if start is None:
+    if start > n:
         return "rest"
     return "return" if n - start < RETURN_DAYS else None
 
 
-def _alive(last: date, day: date, is_clean: Callable[[date], bool]) -> bool:
-    """День day попадает на покой или возврат тяжёлой серии, закончившейся в last."""
+def _alive(
+    first: date,
+    last: date,
+    day: date,
+    is_clean: Callable[[date], bool],
+    severe: bool,
+    marked: bool,
+) -> bool:
+    """День day попадает на покой или возврат тяжёлой серии, закончившейся в last, или на дни
+    лёгкой серии с отметкой."""
+    if not severe:
+        return in_light(first, day, marked)
     n = (day - last).days
-    start, _ = _return_start(n, lambda k: is_clean(last + timedelta(days=k)))
+    floor = rest_floor(first, last, marked)
+    start, _ = _return_start(n, lambda k: is_clean(last + timedelta(days=k)), floor)
     return _phase(n, start) in ("rest", "return")
 
 
 def _series(
-    days: dict[str, dict[str, Any]], today: date, is_clean: Callable[[date], bool]
+    days: dict[str, dict[str, Any]],
+    today: date,
+    is_clean: Callable[[date], bool],
+    marks: Collection[str],
 ) -> tuple[date, date, bool] | None:
     """Последняя серия болезни в окне: (первый день, последний день, тяжёлая)."""
     window = [today - timedelta(days=i) for i in range(EPISODE_DAYS - 1, -1, -1)]
     series: tuple[date, date, bool] | None = None
     for day in window:
-        found = days.get(day.isoformat())
-        if not found or not found["symptoms"]:
+        found = days.get(day.isoformat(), {})
+        if not found.get("symptoms"):
             continue
         severe = found["severe"]
-        if series is not None:
-            first, last, was_severe = series
-            gap = (day - last).days - 1
-            joined = gap <= GAP_MAX_DAYS or (was_severe and _alive(last, day, is_clean))
-            if joined:
-                series = (first, day, was_severe or severe)
-                continue
-        series = (day, day, severe)
+        first, last, was_severe = series or (day, day, severe)  # нет серии - начинается с day
+        gap = (day - last).days - 1
+        marked = series_marked(marks, first, day)
+        joined = gap <= GAP_MAX_DAYS or _alive(first, last, day, is_clean, was_severe, marked)
+        series = (first, day, was_severe or severe) if joined else (day, day, severe)
     return series
 
 
@@ -151,9 +170,13 @@ def _reasons(record: bool, found: Mapping[str, bool | None]) -> list[str]:
 
 
 def episode_state(
-    days: dict[str, dict[str, Any]], flags: Mapping[str, Mapping[str, bool | None]], today: str
+    days: dict[str, dict[str, Any]],
+    flags: Mapping[str, Mapping[str, bool | None]],
+    today: str,
+    marks: Collection[str] = (),
 ) -> dict[str, Any]:
-    """Фаза болезни на today (ill / rest / return / None) и счётчики; ключи всегда те же."""
+    """Фаза болезни на today (ill / rest / return / light / None) и счётчики; ключи всегда те же.
+    marks - даты отметок COVID: серия с отметкой от первого дня серии по today."""
     now = date.fromisoformat(today)
 
     def reasons_of(day: date) -> list[str]:
@@ -175,20 +198,34 @@ def episode_state(
         "until": None,
         "by_cap": False,
         "not_clean": [],
+        "covid": False,
+        "series_day": None,
     }
-    series = _series(days, now, is_clean)
+    series = _series(days, now, is_clean, marks)
     if series is None:
         return state
     first, last, severe = series
-    state.update(severe=severe, sick_first=first.isoformat(), sick_last=last.isoformat())
+    marked = series_marked(marks, first, now)
+    series_day = (now - first).days + 1
+    state.update(
+        severe=severe,
+        sick_first=first.isoformat(),
+        sick_last=last.isoformat(),
+        covid=marked,
+        series_day=series_day,
+    )
     if not severe:
+        if in_light(first, now, marked):
+            state["phase"] = "light"
+            state["until"] = (first + timedelta(days=COVID_LIGHT_DAYS - 1)).isoformat()
         return state
     n = (now - last).days
-    start, by_cap = _return_start(n, lambda k: is_clean(last + timedelta(days=k)))
+    floor = rest_floor(first, last, marked)
+    start, by_cap = _return_start(n, lambda k: is_clean(last + timedelta(days=k)), floor)
     state["phase"] = _phase(n, start)
     if state["phase"] == "rest":
         _fill_rest(state, n, last, now, reasons_of)
-    elif state["phase"] == "return" and start is not None:
+    elif state["phase"] == "return":
         state["return_day"] = n - start + 1
         state["until"] = (last + timedelta(days=start + RETURN_DAYS - 1)).isoformat()
         state["by_cap"] = by_cap

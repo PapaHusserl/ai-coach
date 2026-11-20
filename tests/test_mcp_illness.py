@@ -179,7 +179,13 @@ def test_get_illness_signal_illness_rest_has_why(conn: sqlite3.Connection) -> No
     signals = call(conn, "get_illness", date=DAY)["signals"]
     rest = [s for s in signals if s["kind"] == "illness_rest"]
     assert rest == [
-        {"kind": "illness_rest", "value": 1, "limit": REST_DAYS, "why": ["no_record", "corridor"]}
+        {
+            "kind": "illness_rest",
+            "value": 1,
+            "limit": REST_DAYS,
+            "why": ["no_record", "corridor"],
+            "covid": False,
+        }
     ]
 
 
@@ -195,6 +201,16 @@ def test_get_illness_description_names_episode_and_phase_signals(
     tools = asyncio.run(server.list_tools())
     text = next(t.description or "" for t in tools if t.name == "get_illness")
     for needle in ("episode", "illness_rest", "illness_return", "why"):
+        assert needle in text, needle
+
+
+def test_get_illness_description_names_covid_series_day_and_light(
+    conn: sqlite3.Connection,
+) -> None:
+    server = build_server(db_file(conn))
+    tools = asyncio.run(server.list_tools())
+    text = next(t.description or "" for t in tools if t.name == "get_illness")
+    for needle in ("covid", "series_day", "light", "illness_light"):
         assert needle in text, needle
 
 

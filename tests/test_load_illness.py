@@ -450,6 +450,8 @@ EPISODE_KEYS = {
     "until",
     "by_cap",
     "not_clean",
+    "covid",
+    "series_day",
 }
 
 
@@ -504,6 +506,8 @@ def test_episode_rest_day_one_without_record(conn: sqlite3.Connection) -> None:
         "until": None,
         "by_cap": False,
         "not_clean": ["no_record"],
+        "covid": False,
+        "series_day": 2,
     }
 
 
@@ -515,6 +519,7 @@ def test_illness_rest_signal_carries_why_of_today(conn: sqlite3.Connection) -> N
         "value": 1,
         "limit": REST_DAYS,
         "why": ["no_record"],
+        "covid": False,
     }
 
 
@@ -527,6 +532,7 @@ def test_illness_rest_why_is_empty_for_counted_day(conn: sqlite3.Connection) -> 
         "value": 1,
         "limit": REST_DAYS,
         "why": [],
+        "covid": False,
     }
 
 
@@ -540,6 +546,7 @@ def test_illness_rest_value_is_step_not_count_of_clean_days(conn: sqlite3.Connec
         "value": 2,
         "limit": REST_DAYS,
         "why": [],
+        "covid": False,
     }
 
 
@@ -580,6 +587,7 @@ def test_illness_return_signal_has_no_why(conn: sqlite3.Connection) -> None:
         "kind": "illness_return",
         "value": 1,
         "limit": RETURN_DAYS,
+        "covid": False,
     }
 
 
@@ -622,6 +630,90 @@ def test_light_series_gives_no_phase_signals(conn: sqlite3.Connection) -> None:
     note(conn, 1, "кашель")
     assert episode(conn)["phase"] is None
     assert [s["kind"] for s in report(conn)["signals"]] == []
+
+
+def covid_episode(phase: str, first: int, last: int, **fields: Any) -> dict[str, Any]:
+    """Эпизод по ключам episode_state; first и last - дни серии в днях назад от 2026-11-10."""
+    base = date(2026, 11, 10)
+    return {
+        "phase": phase,
+        "severe": phase != "light",
+        "sick_first": (base - timedelta(days=first)).isoformat(),
+        "sick_last": (base - timedelta(days=last)).isoformat(),
+        "rest_day": None,
+        "rest_step": None,
+        "return_day": None,
+        "not_clean": [],
+        "covid": True,
+        **fields,
+    }
+
+
+def phase_signal(episode: dict[str, Any]) -> list[dict[str, Any]]:
+    return illness_signals({"streak": 0, "episode": episode})
+
+
+def test_covid_rest_short_series_counts_series_days() -> None:
+    episode = covid_episode("rest", 2, 1, series_day=3, rest_day=2, rest_step=2)
+    assert phase_signal(episode) == [
+        {
+            "kind": "illness_rest",
+            "value": 3,
+            "limit": 5,
+            "why": [],
+            "covid": True,
+            "count": "series",
+        }
+    ]
+
+
+def test_covid_rest_short_series_why_is_empty_even_with_not_clean() -> None:
+    episode = covid_episode(
+        "rest", 1, 0, series_day=2, rest_day=1, rest_step=1, not_clean=["no_record"]
+    )
+    assert phase_signal(episode)[0]["why"] == []
+
+
+def test_covid_rest_long_series_keeps_old_shape_plus_covid() -> None:
+    episode = covid_episode(
+        "rest", 3, 0, series_day=4, rest_day=3, rest_step=1, not_clean=["no_record"]
+    )
+    assert phase_signal(episode) == [
+        {
+            "kind": "illness_rest",
+            "value": 1,
+            "limit": REST_DAYS,
+            "why": ["no_record"],
+            "covid": True,
+        }
+    ]
+
+
+def test_covid_rest_length_three_is_long() -> None:
+    episode = covid_episode("rest", 3, 1, series_day=4, rest_day=2, rest_step=2)
+    signal = phase_signal(episode)[0]
+    assert (signal["value"], signal["limit"], "count" in signal) == (2, REST_DAYS, False)
+
+
+def test_covid_return_signal() -> None:
+    episode = covid_episode("return", 6, 0, series_day=7, return_day=1)
+    assert phase_signal(episode) == [
+        {"kind": "illness_return", "value": 1, "limit": RETURN_DAYS, "covid": True}
+    ]
+
+
+def test_covid_light_signal() -> None:
+    episode = covid_episode("light", 1, 0, series_day=2)
+    assert phase_signal(episode) == [
+        {"kind": "illness_light", "value": 2, "limit": 5, "covid": True}
+    ]
+
+
+def test_signals_without_covid_have_covid_false() -> None:
+    rest = covid_episode("rest", 2, 1, series_day=3, rest_day=2, rest_step=2, covid=False)
+    ret = covid_episode("return", 6, 0, series_day=7, return_day=1, covid=False)
+    assert [s["covid"] for s in phase_signal(rest) + phase_signal(ret)] == [False, False]
+    assert "count" not in phase_signal(rest)[0]
 
 
 def test_other_signals_keep_their_keys_next_to_phase_signal(conn: sqlite3.Connection) -> None:

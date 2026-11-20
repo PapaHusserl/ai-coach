@@ -68,7 +68,7 @@ const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "corridor_out", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
-	"illness_rest", "illness_return", "hrv_streak",
+	"illness_rest", "illness_return", "hrv_streak", "illness_light",
 ];
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
@@ -84,7 +84,7 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 26 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 27 кодов отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -279,6 +279,50 @@ test("signalRows: illness_return — «возврат после болезни 
 test("signalRows: у illness_return причины не дописываются, даже если why пришло", async () => {
 	const row = await rowOf({ kind: "illness_return", value: 3, limit: 7, why: ["no_record"] });
 	assert.equal(row.detail, "день 3 из 7");
+});
+
+// Н49, партия 1: слова при отметке COVID (Решения пп. 7, 8).
+test("signalRows: покой при COVID, короткая серия — «покой после COVID · день болезни 3 из 5»", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 3, limit: 5, why: [], covid: true, count: "series" });
+	assert.equal(row.word, "покой после COVID");
+	assert.equal(row.detail, "день болезни 3 из 5");
+});
+
+test("signalRows: покой при COVID, длинная серия — «покой после COVID · день 1 из 2 — нет записи»", async () => {
+	const row = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["no_record"], covid: true });
+	assert.equal(row.word, "покой после COVID");
+	assert.equal(row.detail, "день 1 из 2 — нет записи");
+});
+
+test("signalRows: возврат при COVID — «возврат после COVID · день 1 из 7»", async () => {
+	const row = await rowOf({ kind: "illness_return", value: 1, limit: 7, covid: true });
+	assert.equal(row.word, "возврат после COVID");
+	assert.equal(row.detail, "день 1 из 7");
+});
+
+test("signalRows: лёгкая серия при COVID — «лёгкий режим при COVID · день 2 из 5»", async () => {
+	const row = await rowOf({ kind: "illness_light", value: 2, limit: 5, covid: true });
+	assert.equal(row.word, "лёгкий режим при COVID");
+	assert.equal(row.detail, "день 2 из 5");
+});
+
+test("SIGNAL_WORDS: illness_light — «лёгкий режим при COVID»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.illness_light, "лёгкий режим при COVID");
+});
+
+test("signalRows: illness_light без ключа covid — то же слово и «день 2 из 5»", async () => {
+	const row = await rowOf({ kind: "illness_light", value: 2, limit: 5 });
+	assert.equal(row.word, "лёгкий режим при COVID");
+	assert.equal(row.detail, "день 2 из 5");
+});
+
+test("signalRows: covid false — прежние слова покоя и возврата", async () => {
+	const rest = await rowOf({ kind: "illness_rest", value: 1, limit: 2, why: ["no_record"], covid: false });
+	assert.equal(rest.word, "покой после болезни");
+	assert.equal(rest.detail, "день 1 из 2 — нет записи");
+	const back = await rowOf({ kind: "illness_return", value: 3, limit: 7, covid: false });
+	assert.equal(back.word, "возврат после болезни");
 });
 
 test("signalRows: у других сигналов поле why хвоста не даёт", async () => {
