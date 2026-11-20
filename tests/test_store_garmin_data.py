@@ -217,12 +217,12 @@ def night_row(conn: sqlite3.Connection, day: str, raw: dict, seconds: int | None
     upsert_daily_metrics(conn, {"date": day, "sleep_seconds": seconds, "raw_json": raw})
 
 
-def test_sleep_nights_inclusive_range_sorted_four_columns(conn: sqlite3.Connection) -> None:
+def test_sleep_nights_inclusive_range_sorted_five_columns(conn: sqlite3.Connection) -> None:
     for day in ("2026-10-03", "2026-10-01", "2026-10-02", "2026-10-04"):
         night_row(conn, day, {})
     found = list_sleep_nights(conn, "2026-10-01", "2026-10-03")
     assert [r["date"] for r in found] == ["2026-10-01", "2026-10-02", "2026-10-03"]
-    assert set(found[0]) == {"date", "sleep_seconds", "sleep_end", "nap_seconds"}
+    assert set(found[0]) == {"date", "sleep_seconds", "sleep_end", "nap_seconds", "awake_seconds"}
     assert found[0]["sleep_seconds"] == 25200
 
 
@@ -258,6 +258,21 @@ def test_nap_seconds_sum_of_nap_list(conn: sqlite3.Connection) -> None:
 def test_nap_seconds_absent_is_none(conn: sqlite3.Connection) -> None:
     night_row(conn, "2026-10-31", {"sleep": {}})
     assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["nap_seconds"] is None
+
+
+def test_awake_seconds_from_daily_dto(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {"dailySleepDTO": {"awakeSleepSeconds": 1380}}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["awake_seconds"] == 1380
+
+
+def test_awake_seconds_from_import_sleep(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {"awakeSleepSeconds": 900}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["awake_seconds"] == 900
+
+
+def test_awake_seconds_absent_is_none(conn: sqlite3.Connection) -> None:
+    night_row(conn, "2026-10-31", {"sleep": {}})
+    assert list_sleep_nights(conn, "2026-10-31", "2026-10-31")[0]["awake_seconds"] is None
 
 
 # --- list_recovery_days ---

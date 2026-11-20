@@ -1,5 +1,6 @@
 """get_sleep(date) и секция sleep в snapshot. Синтетические данные."""
 
+import asyncio
 import json
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
@@ -7,9 +8,10 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from fake_clock import freeze
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, call_text, tool_names
+from mcp_fakes import call, call_text, db_file, tool_names
 
 from ai_coach.load.sleep import sleep_report
+from ai_coach.mcp_server import build_server
 from ai_coach.store.garmin_data import upsert_daily_metrics
 
 DAY = "2026-10-31"
@@ -26,6 +28,7 @@ KEYS = {
     "wake_at",
     "awake_h",
     "caution_from",
+    "efficiency",
     "signals",
 }
 
@@ -87,6 +90,29 @@ def test_awake_hours_today(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyP
     thirty_nights(conn)
     freeze(monkeypatch, "2026-10-31 11:00:00")
     assert call(conn, "get_sleep", date=DAY)["awake_h"] == 3.8
+
+
+def test_answer_efficiency_of_last_night(conn: sqlite3.Connection) -> None:
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": DAY,
+            "sleep_seconds": 27000,
+            "raw_json": {"sleep": {"dailySleepDTO": {"awakeSleepSeconds": 3000}}},
+        },
+    )
+    assert call(conn, "get_sleep", date=DAY)["efficiency"] == 90
+
+
+def test_answer_efficiency_null_without_night(conn: sqlite3.Connection) -> None:
+    assert call(conn, "get_sleep", date=DAY)["efficiency"] is None
+
+
+def test_description_names_efficiency(conn: sqlite3.Connection) -> None:
+    server = build_server(db_file(conn))
+    tools = asyncio.run(server.list_tools())
+    text = next(t.description or "" for t in tools if t.name == "get_sleep")
+    assert "efficiency" in text
 
 
 def test_bad_date_is_rejected(conn: sqlite3.Connection) -> None:

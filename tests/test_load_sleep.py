@@ -79,6 +79,39 @@ def test_night_hours_null_is_none() -> None:
     assert night_hours({"sleep_seconds": None}) is None
 
 
+# --- night_efficiency ---
+
+
+def efficiency_of(sleep_seconds: int | None, awake_seconds: int | None) -> int | None:
+    from ai_coach.load.sleep import night_efficiency
+
+    return night_efficiency({"sleep_seconds": sleep_seconds, "awake_seconds": awake_seconds})
+
+
+def test_efficiency_without_awake_time_is_full() -> None:
+    assert efficiency_of(25200, 0) == 100
+
+
+def test_efficiency_equal_sleep_and_awake_is_half() -> None:
+    assert efficiency_of(3600, 3600) == 50
+
+
+def test_efficiency_is_percent_of_sleep_over_sleep_plus_awake() -> None:
+    assert efficiency_of(27000, 3000) == 90
+
+
+def test_efficiency_zero_sleep_is_none() -> None:
+    assert efficiency_of(0, 600) is None
+
+
+def test_efficiency_null_sleep_is_none() -> None:
+    assert efficiency_of(None, 600) is None
+
+
+def test_efficiency_null_awake_is_none() -> None:
+    assert efficiency_of(25200, None) is None
+
+
 # --- sleep_norm ---
 
 
@@ -405,6 +438,46 @@ def test_report_few_nights_no_norm_no_debt(conn: sqlite3.Connection) -> None:
     assert report["debt_7_h"] is None
     assert report["debt_14_h"] is None
     assert report["signals"] == []
+
+
+def put_awake(conn: sqlite3.Connection, day: date, hours: float, awake_seconds: int) -> None:
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": day.isoformat(),
+            "sleep_seconds": int(hours * 3600),
+            "raw_json": {"sleep": {"dailySleepDTO": {"awakeSleepSeconds": awake_seconds}}},
+        },
+    )
+
+
+def test_report_efficiency_is_last_night(conn: sqlite3.Connection) -> None:
+    seven_hour_nights(conn, date(2026, 10, 7), 24)
+    put_awake(conn, date(2026, 10, 31), 6, 5400)
+    assert sleep_report(conn, DAY)["efficiency"] == 80
+
+
+def test_report_efficiency_ignores_earlier_nights(conn: sqlite3.Connection) -> None:
+    seven_hour_nights(conn, date(2026, 10, 7), 24)
+    put_awake(conn, date(2026, 10, 30), 6, 21600)
+    put_awake(conn, date(2026, 10, 31), 7, 0)
+    assert sleep_report(conn, DAY)["efficiency"] == 100
+
+
+def test_report_efficiency_none_without_night(conn: sqlite3.Connection) -> None:
+    seven_hour_nights(conn, date(2026, 10, 7), 24)
+    assert sleep_report(conn, DAY)["efficiency"] is None
+
+
+def test_report_efficiency_none_without_awake_time(conn: sqlite3.Connection) -> None:
+    filled(conn)
+    assert sleep_report(conn, DAY)["efficiency"] is None
+
+
+def test_report_efficiency_adds_no_signal(conn: sqlite3.Connection) -> None:
+    seven_hour_nights(conn, date(2026, 10, 7), 24)
+    put_awake(conn, date(2026, 10, 31), 7, 7200)
+    assert sleep_report(conn, DAY)["signals"] == []
 
 
 def test_report_has_no_raw_json(conn: sqlite3.Connection) -> None:

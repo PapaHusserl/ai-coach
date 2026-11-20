@@ -39,14 +39,17 @@ def _hrv_limit_sql(key: str) -> str:
 def list_sleep_nights(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Ночи start..end включительно, по возрастанию даты, без raw_json: date, sleep_seconds,
     sleep_end (подъём, местное 'YYYY-MM-DD HH:MM:SS'; None у импорта) и nap_seconds (дневной сон:
-    napTimeSeconds у API или сумма napList[].napTimeSec у импорта; None - не записан)."""
+    napTimeSeconds у API или сумма napList[].napTimeSec у импорта; None - не записан) и
+    awake_seconds (бодрствование в ночи: awakeSleepSeconds у API и импорта; None - не записано)."""
     sql = (
         "SELECT date, sleep_seconds, "
         "datetime(json_extract(raw_json, '$.sleep.dailySleepDTO.sleepEndTimestampLocal') / 1000, "
         "'unixepoch') AS sleep_end, "
         "COALESCE(json_extract(raw_json, '$.sleep.dailySleepDTO.napTimeSeconds'), "
         "(SELECT SUM(json_extract(value, '$.napTimeSec')) "
-        "FROM json_each(raw_json, '$.sleep.napList'))) AS nap_seconds "
+        "FROM json_each(raw_json, '$.sleep.napList'))) AS nap_seconds, "
+        "COALESCE(json_extract(raw_json, '$.sleep.dailySleepDTO.awakeSleepSeconds'), "
+        "json_extract(raw_json, '$.sleep.awakeSleepSeconds')) AS awake_seconds "
         "FROM daily_metrics WHERE date BETWEEN ? AND ? ORDER BY date"
     )
     return fetch_all(conn, sql, (start, end))

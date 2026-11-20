@@ -29,6 +29,15 @@ def night_hours(row: dict[str, Any]) -> float | None:
     return seconds / 3600 if seconds else None
 
 
+def night_efficiency(row: dict[str, Any]) -> int | None:
+    """Эффективность ночи: целые проценты сна от сна плюс бодрствования; нет сна или бодрствования
+    (0 и NULL у сна) - None."""
+    sleep, awake = row.get("sleep_seconds"), row.get("awake_seconds")
+    if not sleep or awake is None:
+        return None
+    return round(100 * sleep / (sleep + awake))
+
+
 def _window(nights: list[dict[str, Any]], today: date, days: int) -> list[dict[str, Any]]:
     """Ночи с данными за days дней до today включительно."""
     first = (today - timedelta(days=days - 1)).isoformat()
@@ -106,9 +115,10 @@ def _wake(sleep_end: str | None, day: str, now: datetime | None) -> dict[str, An
 
 
 def sleep_report(conn: sqlite3.Connection, day: str, now: datetime | None = None) -> dict[str, Any]:
-    """Сон на day: date, norm_h, norm_nights, last_night_h, nap_h, debt_7_h/nights_7,
-    debt_14_h/nights_14, wake_at, awake_h, caution_from (YYYY-MM-DD HH:MM), signals
-    (sleep_signals). Нет нормы - долги None, сигналов нет."""
+    """Сон на day: date, norm_h, norm_nights, last_night_h, nap_h, efficiency (проценты,
+    None без данных), debt_7_h/nights_7, debt_14_h/nights_14, wake_at, awake_h,
+    caution_from (YYYY-MM-DD HH:MM), signals (sleep_signals). Нет нормы - долги None,
+    сигналов нет."""
     today = date.fromisoformat(day)
     nights = list_sleep_nights(conn, (today - timedelta(days=NORM_DAYS - 1)).isoformat(), day)
     norm = sleep_norm(nights, today)
@@ -122,6 +132,7 @@ def sleep_report(conn: sqlite3.Connection, day: str, now: datetime | None = None
         "norm_nights": norm["nights"] if norm else len(_window(nights, today, NORM_DAYS)),
         "last_night_h": round(last, 2) if last is not None else None,
         "nap_h": round((row.get("nap_seconds") or 0) / 3600, 1),
+        "efficiency": night_efficiency(row),
         **_debts(nights, today, norm_h),
         **_wake(row.get("sleep_end"), day, now),
     }

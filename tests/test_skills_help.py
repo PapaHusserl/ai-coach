@@ -451,6 +451,10 @@ def test_sleep_topic_has_fields() -> None:
         assert needle in text, needle
 
 
+def test_sleep_topic_names_efficiency_field() -> None:
+    assert "efficiency" in topic("sleep.md")
+
+
 def test_sleep_topic_thresholds_match_constants() -> None:
     text = topic("sleep.md")
     for needle in (

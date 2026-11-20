@@ -295,9 +295,10 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 - MCP: `get_workload` отдаёт `claude_*` целыми (None — не считалось), при `events=true` на один день — ещё `claude_repos_names` (`workload_day`). Сводка: ключ `claude` (7 дней, `prompts/evening/decisions/repos/switches`, без имён), `workload` и `workload_ahead` без `claude_*`; `workload` — свой лимит `WORKLOAD_CHARS` 5 000 (7 дней вместо 6 при `SNAPSHOT_CHARS` 4 000).
 - Справка — `coach-help/claude-code.md`; отчёт разведки — `docs/research-claude.md`.
 
-## Н46: советы первых дней (партия 1)
+## Н46: советы первых дней и эффективность сна
 - Тексты без кода: правило трёх видов дня (полный набор, «советы прежние», строка дня слабости) живёт в `.claude/agents/coach-wellbeing/care.md`; в `coach-wellbeing.md` только отсылки. Повод — `illness_risk`, `symptoms`, `fever` и день слабости без них; слова слабости тренер читает сам, кодом не ищутся.
 - Красные флаги — п. 8б `coach.md`: боль в груди, обмороки, одышка, резкий рост пульса в покое, травма, температура выше 39; те же в `coach-evening`, `illness.md`, справке `coach-help/deviations.md`.
+- Партия 2: `store/garmin_data.list_sleep_nights` — колонка `awake_seconds` (`awakeSleepSeconds` из `raw_json`: `$.sleep.dailySleepDTO` у API, `$.sleep` у импорта; нет — NULL), без миграции. `load/sleep.night_efficiency` — целые проценты сна от сна плюс бодрствования, None без данных; `sleep_report` отдаёт `efficiency` последней ночи в `get_sleep` и в `sleep` сводки. Сигнала, порога в коде и строки пульта нет: число 92 и сезон живут в текстах `coach-wellbeing/care.md` и `coach-morning/recovery.md`.
 
 ## П12: формы (партия 2)
 - Миграция 0034: `forms(name PK, title, fields_json, created_at, archived_at)` и `form_log(id, date, time, event_id, form, values_json, text, wellbeing_id)`; повтор ответа — новая строка. `store/forms.py` (`add_form`, `get_form`, `list_forms`, `archive_form`, `add_form_entry`, `list_form_log`), `agenda/forms.py` (`check_form`, `check_answers`; типы `number`, `scale`, `yesno`, `choice`; ключ `score` — «Самочувствие»), `mcp_server/forms.py` (`create_form`, `archive_form`, `get_forms`, `get_form_log`). Значение `coach_events.survey = "form:<имя>"` допустимо у любого вида (`agenda/draft.py: _survey` проверяет активность формы при создании; перенос события форму не перепроверяет); готовое имя опросника — только у `checkin`.

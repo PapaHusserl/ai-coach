@@ -727,6 +727,18 @@ def test_snapshot_sleep_has_awake_hours_for_today(
     assert call(conn, "get_morning_snapshot", date=DAY)["sleep"]["awake_h"] == 3.8
 
 
+def test_snapshot_sleep_has_efficiency_number(conn: sqlite3.Connection) -> None:
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": DAY,
+            "sleep_seconds": 27000,
+            "raw_json": {"sleep": {"dailySleepDTO": {"awakeSleepSeconds": 3000}}},
+        },
+    )
+    assert call(conn, "get_morning_snapshot", date=DAY)["sleep"]["efficiency"] == 90
+
+
 @pytest.mark.parametrize("name", ["pantry", "pantry_expiring", "recipes"])
 def test_snapshot_short_lists_are_limited_by_chars(conn: sqlite3.Connection, name: str) -> None:
     big = "я" * 300

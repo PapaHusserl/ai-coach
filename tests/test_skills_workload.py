@@ -630,6 +630,36 @@ def test_wellbeing_sleep_paragraph_names_season_and_overload_days() -> None:
         assert needle in text, needle
 
 
+def care_sleep_section() -> str:
+    return CARE_SIDE.read_text().split("## Сон в сезон", 1)[1].split("\n## ", 1)[0]
+
+
+def test_care_season_section_names_efficiency_rule() -> None:
+    text = care_sleep_section()
+    for needle in (
+        "efficiency",
+        "92",
+        "без сигнала сна",
+        "эффективность сна",
+        "для часов порог не проверен",
+    ):
+        assert needle in text, needle
+
+
+def test_care_season_section_does_not_glue_efficiency_to_the_sleep_line() -> None:
+    assert "в той же строке" not in care_sleep_section()
+
+
+def test_morning_recovery_line_names_efficiency_rule() -> None:
+    line = next(
+        ln
+        for ln in (ROOT / "skills" / "coach-morning" / "recovery.md").read_text().splitlines()
+        if ln.startswith("- Восстановление")
+    )
+    for needle in ("efficiency", "92", "октябр", "март", "эффективность сна"):
+        assert needle in line, needle
+
+
 def test_illness_side_file_points_red_flags_to_8b_and_not_to_care() -> None:
     text = illness_side()
     assert "красные флаги - п. 8б" in text
