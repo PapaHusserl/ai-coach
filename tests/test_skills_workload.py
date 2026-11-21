@@ -336,12 +336,16 @@ def test_day_plan_role_mentions_sleep_signal() -> None:
 ILLNESS_SIDE = ROOT / "agents" / "coach-wellbeing" / "illness.md"
 LADDER_LIMIT = "40 минут"  # константы в коде нет: стоит в боковом файле и в sleep.md
 CARE_SIDE = ROOT / "agents" / "coach-wellbeing" / "care.md"
+COVID_SIDE = ROOT / "agents" / "coach-wellbeing" / "covid.md"
+COVID_TOPIC = ROOT / "agents" / "coach-help" / "illness-return.md"
 MEASURE_TEXTS = (
     WELLBEING,
     ILLNESS_SIDE,
     CARE_SIDE,
+    COVID_SIDE,
     ROOT / "skills" / "coach-plan" / "recalc.md",
     ROOT / "agents" / "coach-help" / "sleep.md",
+    COVID_TOPIC,
     ROOT / "agents" / "coach-help" / "deviations.md",
     ROOT / "agents" / "coach-help.md",
 )
@@ -470,20 +474,235 @@ def test_readme_illness_line_names_streak_rest_and_return() -> None:
         assert code in lines[0], code
 
 
-NO_COVID_TEXTS = tuple(path for path in MEASURE_TEXTS if path.name not in ("sleep.md",))
-COVID_TOPIC = ROOT / "agents" / "coach-help" / "illness-return.md"
+COVID_TEXTS = ("covid.md", "illness.md", "illness-return.md", "sleep.md")
+NO_COVID_TEXTS = tuple(path for path in MEASURE_TEXTS if path.name not in COVID_TEXTS)
 
 
-def test_texts_outside_covid_topics_do_not_mention_covid() -> None:
+def test_covid_is_named_only_in_covid_texts() -> None:
+    assert NO_COVID_TEXTS
     for path in NO_COVID_TEXTS:
         text = path.read_text(encoding="utf-8").lower()
+        if path == WELLBEING:  # ссылка на covid.md и ключ episode.covid разрешены
+            text = text.replace("coach-wellbeing/covid.md", "").replace("episode.covid", "")
         assert "ковид" not in text, path.name
         assert "covid" not in text, path.name
 
 
-def test_sleep_topic_and_illness_return_topic_mention_covid() -> None:
-    for path in (ROOT / "agents" / "coach-help" / "sleep.md", COVID_TOPIC):
+def sentence_around(line: str, needle: str) -> str:
+    """Предложение строки (границы — «. » и край строки), в котором стоит needle."""
+    at = line.index(needle)
+    start = line.rfind(". ", 0, at) + 2 if ". " in line[:at] else 0
+    end = line.find(". ", at)
+    return line[start : end if end >= 0 else len(line)]
+
+
+def coach_text() -> str:
+    return (ROOT / "agents" / "coach.md").read_text(encoding="utf-8")
+
+
+def test_coach_morning_step_reads_wellbeing_before_summary_without_covid_condition() -> None:
+    lines = lines_with(coach_text(), "2. Один раз вызови")
+    assert len(lines) == 1
+    command = "`cat .claude/agents/coach-wellbeing.md`"
+    for needle in ("illness.signals", "до сводки", command):
+        assert needle in lines[0], needle
+    assert lines[0].index("до сводки") < lines[0].index(command)
+    assert "series_day" not in lines[0]
+
+
+def test_coach_step_2a_reads_covid_side_before_summary_even_without_signals() -> None:
+    from ai_coach.load.covid import COVID_REST_DAYS
+
+    lines = [ln for ln in coach_text().splitlines() if ln.startswith("2а.")]
+    assert len(lines) == 1
+    command = "`cat .claude/agents/coach-wellbeing/covid.md`"
+    for needle in (
+        "illness.episode.series_day",
+        f"от 1 до {COVID_REST_DAYS}",
+        "illness.episode.covid",
+        "до сводки",
+        command,
+    ):
+        assert needle in lines[0], needle
+    assert lines[0].index("до сводки") < lines[0].index(command)
+
+
+def test_coach_step_3_keeps_past_entries_and_records_link() -> None:
+    step = next(ln for ln in coach_text().splitlines() if ln.startswith("3. Спроси"))
+    assert "--at" in step
+    assert "cat .claude/agents/coach/records.md" in step
+
+
+def test_coach_records_file_starts_with_past_entry_rule() -> None:
+    text = (ROOT / "agents" / "coach" / "records.md").read_text(encoding="utf-8")
+    assert "--at <YYYY-MM-DD>" in text
+    assert "12:00" in text
+    assert "в будущее нельзя" in text
+
+
+def test_wellbeing_illness_line_links_covid_side_with_condition() -> None:
+    from ai_coach.load.covid import COVID_REST_DAYS
+
+    lines = lines_with(WELLBEING.read_text(encoding="utf-8"), "Возможно, заболеваешь")
+    assert len(lines) == 1
+    command = "`cat .claude/agents/coach-wellbeing/covid.md`"
+    sentence = sentence_around(lines[0], command)
+    for needle in ("episode.series_day", f"от 1 до {COVID_REST_DAYS}", "episode.covid"):
+        assert needle in sentence, needle
+
+
+def test_illness_side_first_item_links_covid_side_with_condition() -> None:
+    from ai_coach.load.covid import COVID_REST_DAYS
+
+    lines = lines_with(illness_side(), "covid.md")
+    assert len(lines) == 1
+    for needle in (
+        "episode.series_day",
+        f"от 1 до {COVID_REST_DAYS}",
+        "episode.covid",
+        "illness_light",
+    ):
+        assert needle in lines[0], needle
+    items = [ln for ln in illness_side().splitlines() if ln.startswith("- ")]
+    assert items[0] == lines[0]
+
+
+def test_every_covid_path_condition_uses_covid_rest_days() -> None:
+    from ai_coach.load.covid import COVID_REST_DAYS
+
+    paths = (ROOT / "agents" / "coach.md", WELLBEING, ILLNESS_SIDE)
+    for path in paths:
+        found = re.findall(r"от 1 до (\d+)", path.read_text(encoding="utf-8"))
+        assert found, path.name
+        assert set(found) == {str(COVID_REST_DAYS)}, path.name
+
+
+def test_covid_side_first_line_names_all_source_files() -> None:
+    first = covid_side().splitlines()[0]
+    for name in ("coach.md", "coach-wellbeing.md", "illness.md"):
+        assert name in first, name
+
+
+def test_covid_question_and_reminder_lines_say_first_answer_of_session() -> None:
+    for marker in (COVID_QUESTION, COVID_REMINDER):
+        lines = lines_with(covid_side(), marker)
+        assert len(lines) == 1
+        assert "в первом ответе сессии" in lines[0], marker
+
+
+def test_covid_texts_mention_covid() -> None:
+    named = [path for path in MEASURE_TEXTS if path.name in COVID_TEXTS]
+    assert {path.name for path in named} == set(COVID_TEXTS)
+    for path in named:
         assert "covid" in path.read_text(encoding="utf-8").lower(), path.name
+
+
+COVID_QUESTION = "тест на COVID делал?"
+COVID_REMINDER = "если тест на COVID положительный — скажи: отмечу, будет 5 дней лёгкого режима"
+
+
+def covid_side() -> str:
+    return COVID_SIDE.read_text(encoding="utf-8")
+
+
+def test_covid_side_file_is_within_size_and_names_command_and_numbers() -> None:
+    assert COVID_SIDE.is_file()
+    text = covid_side()
+    assert len(text.encode("utf-8")) <= 4096
+    for needle in (
+        "coach covid",
+        "coach covid --undo",
+        "episode.covid",
+        "light",
+        "5",
+        "6-го",
+        "BJSM 2022",
+    ):
+        assert needle in text, needle
+
+
+def test_allow_can_read_covid_side_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach-wellbeing/covid.md)" in allow
+
+
+def test_covid_question_line_names_condition_keys() -> None:
+    lines = lines_with(covid_side(), COVID_QUESTION)
+    assert len(lines) == 1
+    for needle in ("episode.severe", "episode.series_day", "5", "episode.covid", "в каждой сессии"):
+        assert needle in lines[0], needle
+    assert "episode.sick_first" not in lines[0]
+
+
+def test_covid_question_commands_stand_after_yes() -> None:
+    lines = lines_with(covid_side(), COVID_QUESTION)
+    assert len(lines) == 1
+    for command in ("`uv run coach covid`", "`uv run coach covid --undo`"):
+        assert re.search(f"после «да»[^.;]*{re.escape(command)}", lines[0]), command
+
+
+def test_covid_reminder_line_names_keys_and_forbids_question_on_light() -> None:
+    lines = lines_with(covid_side(), COVID_REMINDER)
+    assert len(lines) == 1
+    for needle in ("episode.severe", "episode.sick_first", "episode.covid", "не спрашивай"):
+        assert needle in lines[0], needle
+    assert re.search("после «да»[^.;]*`uv run coach covid`", lines[0])
+
+
+def test_covid_severe_series_line_names_steps_and_source() -> None:
+    lines = lines_with(covid_side(), "тяжёлая серия")
+    assert len(lines) == 1
+    for needle in (
+        "episode.severe",
+        "episode.covid",
+        "после COVID",
+        "5-го",
+        "не раньше 6-го",
+        "13-го",
+        "BJSM 2022",
+        "дословно",
+        "episode.sick_first",
+        "ДД.ММ",
+        "(<дата 6-го дня>, BJSM 2022)",
+        "(<дата 13-го дня>)",
+        "на пункты не дели",
+    ):
+        assert needle in lines[0], needle
+    assert "можно добавить" not in lines[0]
+
+
+def test_covid_header_line_names_severe_by_symptoms() -> None:
+    lines = lines_with(covid_side(), "Поля `get_illness`")
+    assert len(lines) == 1
+    for needle in ("ознобом", "ломотой", "температурой от 37,0"):
+        assert needle in lines[0], needle
+    assert "тяжёлая серия" not in lines[0]
+
+
+def test_covid_light_series_line_names_days_and_source() -> None:
+    lines = [ln for ln in lines_with(covid_side(), "лёгкая серия") if "light" in ln]
+    assert len(lines) == 1
+    for needle in ("5 дней от начала болезни", "покоя нет", "40 минут", "BJSM 2022"):
+        assert needle in lines[0], needle
+
+
+def test_covid_topic_quotes_question_and_reminder_verbatim() -> None:
+    text = COVID_TOPIC.read_text(encoding="utf-8")
+    assert COVID_QUESTION in text
+    assert COVID_REMINDER in text
+
+
+def test_illness_side_links_covid_side_and_keeps_reserve() -> None:
+    assert "cat .claude/agents/coach-wellbeing/covid.md" in illness_side()
+    assert 4096 - len(ILLNESS_SIDE.read_bytes()) >= 200
+
+
+def test_readme_illness_line_names_covid_command() -> None:
+    text = (ROOT.parent / "README.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if ln.startswith("- Возможно, заболеваешь:")]
+    assert len(lines) == 1
+    assert "COVID" in lines[0]
+    assert "coach covid" in lines[0]
 
 
 def care() -> str:
