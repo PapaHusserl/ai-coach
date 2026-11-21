@@ -245,3 +245,44 @@ def test_snapshot_illness_has_no_raw_json(conn: sqlite3.Connection) -> None:
     thirty_days(conn)
     text = json.dumps(call(conn, "get_morning_snapshot", date=DAY)["illness"])
     assert "SECRET_RAW" not in text
+
+
+# --- отметка COVID из базы (Н49, партия 2) ---
+
+
+def mark_covid_row(conn: sqlite3.Connection, day: str) -> None:
+    conn.execute(
+        "INSERT INTO covid_marks (date, marked_at) VALUES (?, ?)", (day, f"{day} 10:00:00")
+    )
+    conn.commit()
+
+
+def test_get_illness_episode_covid_true_with_mark_in_series(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    mark_covid_row(conn, shift(1))
+    episode = call(conn, "get_illness", date=DAY)["episode"]
+    assert episode["covid"] is True
+    assert episode["series_day"] == 2
+
+
+def test_get_illness_episode_covid_false_after_mark_removed(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    mark_covid_row(conn, shift(1))
+    conn.execute("DELETE FROM covid_marks")
+    conn.commit()
+    assert call(conn, "get_illness", date=DAY)["episode"]["covid"] is False
+
+
+def test_get_illness_episode_covid_false_without_mark(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    assert call(conn, "get_illness", date=DAY)["episode"]["covid"] is False
+
+
+def test_get_illness_mark_before_series_is_not_covid(conn: sqlite3.Connection) -> None:
+    thirty_days(conn)
+    heavy_yesterday(conn)
+    mark_covid_row(conn, shift(5))
+    assert call(conn, "get_illness", date=DAY)["episode"]["covid"] is False

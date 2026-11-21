@@ -5,6 +5,8 @@
       "Bash(cat .claude/agents/coach/records.md)",
       "Bash(cat .claude/agents/coach-agenda/checkins.md)",
       "Bash(cat .claude/agents/coach-help/forms.md)",
+      "Bash(uv run coach covid:*)",
+      "Bash(cat .claude/agents/coach-help/illness-return.md)",
       "Bash(cat .claude/agents/coach-wellbeing/illness.md)",
       "Bash(cat .claude/agents/coach-wellbeing/care.md)",
       "Bash(uv run coach slip:*)",

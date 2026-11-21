@@ -28,7 +28,7 @@ from ai_coach.load.episode import (
 from ai_coach.load.sleep import sleep_report
 from ai_coach.store.forms import get_form, list_form_log
 from ai_coach.store.garmin_data import list_recovery_days
-from ai_coach.store.journal import list_wellbeing
+from ai_coach.store.journal import list_covid_marks, list_wellbeing
 
 CENTER_DAYS = 7
 MIN_CENTER_DAYS = 4
@@ -180,7 +180,8 @@ def _episode(
     for mark in marks:
         if mark["text"]:
             texts.setdefault(mark["date"], []).append(mark["text"])
-    return episode_state(sick_days(texts, {m["date"] for m in marks}), flags, day)
+    covid = list_covid_marks(conn, start, day)
+    return episode_state(sick_days(texts, {m["date"] for m in marks}), flags, day, covid)
 
 
 def _edges(found: dict[str, float] | None, sign: int) -> tuple[float | None, float | None]:

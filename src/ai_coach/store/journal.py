@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from ai_coach.store.db import fetch_all, fetch_one, insert
+from ai_coach.store.db import fetch_all, fetch_one, insert, upsert
 
 EVENING_CUTOFF = time(4, 0)  # чек-ин раньше этого времени относится к прошедшему вечеру
 MIN_WEIGHT_KG = 20
@@ -232,6 +232,22 @@ def evening_done(conn: sqlite3.Connection, day: str) -> bool:
     )
     row = fetch_one(conn, sql, (day,))
     return bool(row and row["n"])
+
+
+def mark_covid(conn: sqlite3.Connection, day: str, marked_at: str) -> None:
+    """Отметить COVID за день (повтор обновляет время отметки)."""
+    upsert(conn, "covid_marks", ["date"], {"date": day, "marked_at": marked_at})
+
+
+def unmark_covid(conn: sqlite3.Connection, day: str) -> bool:
+    """Снять отметку за день (другие дни не трогает). False - отметки нет."""
+    return conn.execute("DELETE FROM covid_marks WHERE date = ?", (day,)).rowcount > 0
+
+
+def list_covid_marks(conn: sqlite3.Connection, start: str, end: str) -> list[str]:
+    """Даты отметок COVID start..end включительно, по возрастанию."""
+    sql = "SELECT date FROM covid_marks WHERE date BETWEEN ? AND ? ORDER BY date"
+    return [row["date"] for row in fetch_all(conn, sql, (start, end))]
 
 
 def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:

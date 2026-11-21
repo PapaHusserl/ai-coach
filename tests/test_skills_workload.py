@@ -470,11 +470,20 @@ def test_readme_illness_line_names_streak_rest_and_return() -> None:
         assert code in lines[0], code
 
 
-def test_measure_texts_do_not_mention_covid() -> None:
-    for path in MEASURE_TEXTS:
+NO_COVID_TEXTS = tuple(path for path in MEASURE_TEXTS if path.name not in ("sleep.md",))
+COVID_TOPIC = ROOT / "agents" / "coach-help" / "illness-return.md"
+
+
+def test_texts_outside_covid_topics_do_not_mention_covid() -> None:
+    for path in NO_COVID_TEXTS:
         text = path.read_text(encoding="utf-8").lower()
         assert "ковид" not in text, path.name
         assert "covid" not in text, path.name
+
+
+def test_sleep_topic_and_illness_return_topic_mention_covid() -> None:
+    for path in (ROOT / "agents" / "coach-help" / "sleep.md", COVID_TOPIC):
+        assert "covid" in path.read_text(encoding="utf-8").lower(), path.name
 
 
 def care() -> str:

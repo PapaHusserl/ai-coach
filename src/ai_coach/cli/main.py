@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from ai_coach.cli.agenda import event_app
+from ai_coach.cli.covid import covid
 from ai_coach.cli.decide import decide_app
 from ai_coach.cli.habits import habit_app
 from ai_coach.cli.journal import (
@@ -84,6 +85,7 @@ app.command()(focus)
 app.command()(slip)
 app.command()(pvt)
 app.command()(who5)
+app.command()(covid)
 app.command("web")(web)
 app.add_typer(pantry_app, name="pantry")
 app.add_typer(meal_app, name="meal")

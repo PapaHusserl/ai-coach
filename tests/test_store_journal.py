@@ -215,3 +215,50 @@ def test_who5_rejects_score_not_equal_sum_times_four(conn: sqlite3.Connection) -
     values = who5_values("2026-03-10") | {"score": 99}
     with pytest.raises(sqlite3.IntegrityError):
         add_who5(conn, values)
+
+
+# --- отметки COVID (Н49, партия 2) ---
+
+
+def test_list_covid_marks_inclusive_bounds_ascending(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import list_covid_marks, mark_covid
+
+    for day in ("2026-11-18", "2026-10-30", "2026-11-21", "2026-10-31", "2026-11-20"):
+        mark_covid(conn, day, f"{day} 12:00:00")
+    assert list_covid_marks(conn, "2026-10-31", "2026-11-20") == [
+        "2026-10-31",
+        "2026-11-18",
+        "2026-11-20",
+    ]
+
+
+def test_list_covid_marks_empty_table(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import list_covid_marks
+
+    assert list_covid_marks(conn, "2026-10-31", "2026-11-20") == []
+
+
+def test_mark_covid_twice_keeps_one_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import mark_covid
+
+    mark_covid(conn, "2026-11-20", "2026-11-20 12:00:00")
+    mark_covid(conn, "2026-11-20", "2026-11-20 13:00:00")
+    assert conn.execute("SELECT COUNT(*) AS n FROM covid_marks").fetchone()["n"] == 1
+
+
+def test_unmark_covid_removes_row_and_repeat_is_false(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import list_covid_marks, mark_covid, unmark_covid
+
+    mark_covid(conn, "2026-11-20", "2026-11-20 12:00:00")
+    assert unmark_covid(conn, "2026-11-20") is True
+    assert list_covid_marks(conn, "2026-11-20", "2026-11-20") == []
+    assert unmark_covid(conn, "2026-11-20") is False
+
+
+def test_unmark_covid_keeps_other_days(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import list_covid_marks, mark_covid, unmark_covid
+
+    mark_covid(conn, "2026-11-18", "2026-11-18 12:00:00")
+    mark_covid(conn, "2026-11-20", "2026-11-20 12:00:00")
+    unmark_covid(conn, "2026-11-20")
+    assert list_covid_marks(conn, "2026-11-01", "2026-11-30") == ["2026-11-18"]

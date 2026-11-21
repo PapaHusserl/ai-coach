@@ -513,35 +513,127 @@ def test_sleep_topic_illness_thresholds_checked_on_data() -> None:
     assert "догадка" not in section
 
 
-def test_sleep_topic_illness_names_episode_and_phase_signals() -> None:
-    section = illness_section()
-    for needle in ("`episode`", "`illness_rest`", "`illness_return`"):
-        assert needle in section, needle
+def return_topic() -> str:
+    return topic("illness-return.md")
 
 
-def test_sleep_topic_illness_names_every_reason_code() -> None:
-    section = illness_section()
-    for code in ("no_record", "no_night", "corridor"):
-        assert f"`{code}`" in section, code
+def test_sleep_topic_illness_names_episode() -> None:
+    assert "`episode`" in illness_section()
 
 
-def test_sleep_topic_illness_rest_days_match_constants() -> None:
+def test_illness_return_topic_names_phase_signals() -> None:
+    text = return_topic()
+    for needle in ("`illness_rest`", "`illness_return`", "`illness_light`"):
+        assert needle in text, needle
+
+
+def test_illness_return_topic_names_every_reason_code() -> None:
+    text = return_topic()
+    for code in ("no_record", "no_night", "corridor", "skin_temp", "respiration", "spo2"):
+        assert f"`{code}`" in text, code
+
+
+def test_illness_return_topic_rest_days_match_constants() -> None:
     from ai_coach.load.episode import REST_DAYS
 
-    assert f"{REST_DAYS} чистых дня" in illness_section()
+    assert f"{REST_DAYS} чистых дня" in return_topic()
 
 
-def test_sleep_topic_illness_rest_ceiling_matches_constant() -> None:
+def test_illness_return_topic_rest_ceiling_matches_constant() -> None:
     from ai_coach.load.episode import REST_MAX_DAYS
 
-    assert f"потолок покоя {REST_MAX_DAYS} дня" in illness_section()
+    assert f"потолок покоя {REST_MAX_DAYS} дня" in return_topic()
 
 
-def test_sleep_topic_illness_return_days_match_constant() -> None:
+def test_illness_return_topic_return_days_match_constant() -> None:
     from ai_coach.load.episode import RETURN_DAYS
 
-    lines = [ln for ln in illness_section().splitlines() if "возврат" in ln]
+    lines = [ln for ln in return_topic().splitlines() if "возврат" in ln]
     assert any(f"{RETURN_DAYS} дней" in ln for ln in lines)
+
+
+def test_illness_return_topic_covid_days_match_constants() -> None:
+    from ai_coach.load.covid import COVID_LIGHT_DAYS, COVID_REST_DAYS
+
+    text = return_topic()
+    rest_lines = [ln for ln in text.splitlines() if "покой после COVID" in ln]
+    light_lines = [ln for ln in text.splitlines() if "лёгк" in ln]
+    assert f"не раньше {COVID_REST_DAYS + 1}-го дня" in text
+    assert any(f"из {COVID_REST_DAYS}" in ln for ln in rest_lines)
+    assert any(f"{COVID_LIGHT_DAYS} дней" in ln for ln in light_lines)
+
+
+def test_illness_return_topic_covid_return_and_normal_plan_days_say_illness_day() -> None:
+    from ai_coach.load.covid import COVID_REST_DAYS
+    from ai_coach.load.episode import RETURN_DAYS
+
+    text = return_topic()
+    assert f"не раньше {COVID_REST_DAYS + 1}-го дня болезни" in text
+    assert f"не раньше {COVID_REST_DAYS + RETURN_DAYS + 1}-го дня болезни" in text
+
+
+def test_illness_return_topic_reminder_line_is_verbatim() -> None:
+    from ai_coach.load.covid import COVID_LIGHT_DAYS
+
+    phrase = (
+        "если тест на COVID положительный — скажи: отмечу, "
+        f"будет {COVID_LIGHT_DAYS} дней лёгкого режима"
+    )
+    assert phrase in return_topic()
+
+
+def test_illness_return_topic_zones_belong_to_light_mode() -> None:
+    lines = [ln for ln in return_topic().splitlines() if "зоны 1-2" in ln]
+    assert lines
+    assert all("в лёгком режиме" in ln for ln in lines)
+
+
+def test_illness_return_topic_names_covid_command_and_undo() -> None:
+    text = return_topic()
+    assert "coach covid" in text
+    assert "coach covid --undo" in text
+    assert "--date" in text
+
+
+def test_illness_return_topic_names_three_pult_rows() -> None:
+    text = return_topic()
+    for row in ("покой после COVID", "возврат после COVID", "лёгкий режим при COVID"):
+        assert row in text, row
+
+
+def test_illness_return_topic_says_when_coach_asks_and_reminds() -> None:
+    text = return_topic()
+    assert "тест на COVID" in text
+    assert "до 5-го дня" in text
+    assert "напомин" in text
+    assert "лёгк" in text
+
+
+def test_illness_return_topic_names_covid_keys() -> None:
+    text = return_topic()
+    for needle in ("`covid`", "`series_day`", "`light`"):
+        assert needle in text, needle
+
+
+def test_sleep_topic_links_illness_return_topic() -> None:
+    assert "coach-help/illness-return.md" in topic("sleep.md")
+
+
+def test_sleep_topic_has_no_rest_and_return_paragraph() -> None:
+    assert "потолок покоя" not in topic("sleep.md")
+
+
+def test_sleep_topic_phase_list_has_light() -> None:
+    lines = [ln for ln in illness_section().splitlines() if "`phase`" in ln]
+    assert any("`light`" in ln for ln in lines)
+
+
+def test_illness_return_topic_is_in_index() -> None:
+    assert "illness-return.md" in HELP.read_text()
+
+
+def test_covid_command_is_allowed() -> None:
+    assert "Bash(uv run coach covid:*)" in allow()
 
 
 def test_sleep_topic_illness_names_hrv_streak_with_days_from_constant() -> None:
@@ -555,16 +647,10 @@ def test_sleep_topic_illness_names_vitals() -> None:
     assert "`vitals`" in illness_section()
 
 
-def test_sleep_topic_illness_names_metric_reason_codes() -> None:
-    section = illness_section()
-    for code in ("skin_temp", "respiration", "spo2"):
-        assert f"`{code}`" in section, code
-
-
-def test_sleep_topic_illness_spo2_limit_matches_constant() -> None:
+def test_illness_return_topic_spo2_limit_matches_constant() -> None:
     from ai_coach.load.episode import SPO2_MIN
 
-    assert f"не ниже {SPO2_MIN}" in illness_section()
+    assert f"не ниже {SPO2_MIN}" in return_topic()
 
 
 def test_sleep_topic_illness_says_metric_without_value_is_not_checked() -> None:

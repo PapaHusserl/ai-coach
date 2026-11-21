@@ -491,6 +491,6 @@ def test_registered_commands_keep_order() -> None:
         assert command.callback is not None
         names.append(command.name or command.callback.__name__)
     assert names == [
-        "weight", "food", "focus", "slip", "pvt", "who5", "web", "shop", "login", "sync",
+        "weight", "food", "focus", "slip", "pvt", "who5", "covid", "web", "shop", "login", "sync",
         "import", "approve", "link", "push", "cancel", "status", "feel", "screen", "claude",
     ]  # fmt: skip
