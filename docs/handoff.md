@@ -6,7 +6,7 @@
 
 - Шаг Н49 закрыт ✅ — [plan-n49.md](plan-n49.md): лестница COVID (пол возврата с 6-го дня, фаза light),
   команда `coach covid`, тексты тренера `coach-wellbeing/covid.md` (BACKLOG 148).
-- Итог тестя: смета 45–49 $ → факт 64,34 $; по metrics.py на коммите закрытия — пока нет.
+- Итог тестя: смета 45–49 $ → факт 64,34 $; по metrics.py на коммите закрытия 0a0355b — 65,69 $.
 - BACKLOG 149, 152 — в Н50; 150, 153–157 в ROADMAP не встроены — к перебору.
 
 ## Следующие 3 шага
@@ -52,5 +52,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n49.md](plan-n49.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: «Н49 закрытие» — пока нет (`git log -1`). Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: «Н49 закрытие» 0a0355b. Правила: AGENTS.md, docs/RULES.md.
 - Отклик: `~/projects/semia-kabanov/otkliki/orkestrator/ai-coach/2026-11-21-n49.md`.
