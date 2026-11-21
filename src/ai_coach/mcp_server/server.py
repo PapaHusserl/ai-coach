@@ -286,7 +286,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "Недельный обзор: последние weeks ISO-недель (Пн-Вс, от 1 до 12, по умолчанию 4), от "
         "старой к новой, последняя - текущая неполная (partial). По неделе: tss, total (общая "
         "нагрузка), work_hours, evening_hours, weekend_work_hours, todo_closed, todo_open, mood, "
-        "stress, sleep, readiness (средние, null - данных нет), days_with_data, delta - разница "
+        "stress, fatigue, irritability, sleep, readiness (средние, null - данных нет), "
+        "days_with_data, delta - разница "
         "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
     ),
     "get_decisions": (

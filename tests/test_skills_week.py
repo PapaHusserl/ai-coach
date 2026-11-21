@@ -84,5 +84,39 @@ def test_week_file_has_decisions_line_with_stats_words() -> None:
         assert word in text
 
 
+def week_item(number: int) -> str:
+    lines = (AGENTS / "coach-week.md").read_text().splitlines()
+    found = [line for line in lines if line.startswith(f"{number}. ")]
+    assert found
+    return found[0]
+
+
+# шаг Н38, партия 3: усталость и раздражительность в обзоре
+
+
+def test_week_fields_item_names_fatigue_and_irritability() -> None:
+    item = week_item(2)
+    assert "`fatigue`" in item
+    assert "`irritability`" in item
+
+
+def test_week_fields_item_names_fatigue_after_stress() -> None:
+    item = week_item(2)
+    assert item.index("`stress`") < item.index("`fatigue`") < item.index("`irritability`")
+
+
+def test_week_fields_item_names_scale_direction_of_new_marks() -> None:
+    item = week_item(2)
+    assert "5 - выжат" in item
+    assert "5 - всё бесит" in item
+
+
+def test_week_conclusions_item_names_burnout_with_fatigue_and_irritability() -> None:
+    item = week_item(3)
+    sentence = next(s for s in item.split(". ") if "ход к выгоранию" in s)
+    assert "fatigue" in sentence
+    assert "irritability" in sentence
+
+
 def test_week_decisions_line_names_threshold_ten() -> None:
     assert re.search(r"\b10\b", decisions_line())

@@ -347,3 +347,160 @@ def test_no_rest_hr_gives_none_tss_and_delta(conn: sqlite3.Connection) -> None:
     rows = weekly_review(conn, WED)
     assert all(r["tss"] is None for r in rows)
     assert rows[-1]["delta"]["tss"] is None
+
+
+# --- шаг Н38, партия 3: усталость и раздражительность ---
+
+
+def rate(conn: sqlite3.Connection, day: str, at: str = "21:00", **marks: int) -> None:
+    """Запись самочувствия с заданными оценками (fatigue, irritability, mood, stress)."""
+    columns = ", ".join(["date", "logged_at", "score", *marks])
+    holders = ", ".join("?" * (3 + len(marks)))
+    conn.execute(
+        f"INSERT INTO wellbeing_log ({columns}) VALUES ({holders})",
+        (day, f"{day} {at}:00", 3, *marks.values()),
+    )
+
+
+def test_fatigue_and_irritability_means_of_week(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-12", fatigue=4)
+    rate(conn, "2026-10-13", fatigue=2, irritability=3)
+    row = weekly_review(conn, WED, weeks=1)[0]
+    assert row["fatigue"] == pytest.approx(3.0)
+    assert row["irritability"] == pytest.approx(3.0)
+
+
+def test_fatigue_and_irritability_none_without_marks(filled: sqlite3.Connection) -> None:
+    row = by_start(weekly_review(filled, WED))["2026-09-28"]
+    assert row["fatigue"] is None
+    assert row["irritability"] is None
+
+
+def test_fatigue_and_irritability_none_on_empty_database(conn: sqlite3.Connection) -> None:
+    for row in weekly_review(conn, WED):
+        assert [row["fatigue"], row["irritability"]] == [None, None]
+
+
+def test_fatigue_keeps_latest_given_value_of_day(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", at="20:00", fatigue=4)
+    rate(conn, "2026-10-13", at="22:00", mood=3)
+    assert weekly_review(conn, WED, weeks=1)[0]["fatigue"] == pytest.approx(4)
+
+
+def test_fatigue_takes_last_of_two_values_in_day(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", at="20:00", fatigue=2)
+    rate(conn, "2026-10-13", at="22:00", fatigue=5)
+    assert weekly_review(conn, WED, weeks=1)[0]["fatigue"] == pytest.approx(5)
+
+
+def test_only_fatigue_leaves_other_means_none(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", fatigue=4)
+    row = weekly_review(conn, WED, weeks=1)[0]
+    assert row["fatigue"] == pytest.approx(4)
+    assert [row["mood"], row["stress"], row["irritability"]] == [None] * 3
+
+
+def test_only_mood_leaves_fatigue_none(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", mood=4)
+    row = weekly_review(conn, WED, weeks=1)[0]
+    assert row["mood"] == pytest.approx(4)
+    assert row["fatigue"] is None
+    assert row["irritability"] is None
+
+
+def test_day_with_only_fatigue_is_a_day_with_data(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", fatigue=4)
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 1
+
+
+def test_day_with_only_irritability_is_a_day_with_data(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", irritability=4)
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 1
+
+
+def test_day_with_wellbeing_record_without_marks_is_not_counted(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, logged_at, score) "
+        "VALUES ('2026-10-13', '2026-10-13 21:00:00', 3)"
+    )
+    assert weekly_review(conn, WED, weeks=1)[0]["days_with_data"] == 0
+
+
+def test_delta_of_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-06", fatigue=3, irritability=2)
+    rate(conn, "2026-10-13", fatigue=4, irritability=5)
+    delta = weekly_review(conn, WED, weeks=2)[1]["delta"]
+    assert delta["fatigue"] == pytest.approx(1.0)
+    assert delta["irritability"] == pytest.approx(3.0)
+
+
+def test_delta_of_fatigue_is_none_when_one_week_has_no_mean(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", fatigue=4)
+    delta = weekly_review(conn, WED, weeks=2)[1]["delta"]
+    assert delta["fatigue"] is None
+    assert delta["irritability"] is None
+
+
+def test_delta_keys_are_thirteen_with_new_marks(conn: sqlite3.Connection) -> None:
+    from ai_coach.review.service import DELTA_KEYS
+
+    delta = weekly_review(conn, WED, weeks=2)[1]["delta"]
+    assert len(DELTA_KEYS) == 13
+    assert set(delta) == set(DELTA_KEYS)
+    assert {"fatigue", "irritability"} <= set(delta)
+
+
+def test_marks_after_today_are_not_in_fatigue_mean(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-13", fatigue=2)
+    rate(conn, "2026-10-16", fatigue=5)
+    assert weekly_review(conn, WED, weeks=1)[0]["fatigue"] == pytest.approx(2)
+
+
+def test_existing_means_do_not_change_with_new_marks(filled: sqlite3.Connection) -> None:
+    before = by_start(weekly_review(filled, WED))["2026-09-28"]
+    rate(filled, "2026-10-02", at="22:00", fatigue=4, irritability=2)
+    after = by_start(weekly_review(filled, WED))["2026-09-28"]
+    for key in ["mood", "stress", "sleep", "readiness"]:
+        assert after[key] == before[key]
+
+
+# --- границы today и округление сумм ---
+
+
+def test_marks_of_today_are_in_fatigue_mean(conn: sqlite3.Connection) -> None:
+    rate(conn, "2026-10-14", fatigue=4)
+    assert weekly_review(conn, WED, weeks=1)[0]["fatigue"] == pytest.approx(4)
+
+
+def test_week_is_partial_on_saturday(conn: sqlite3.Connection) -> None:
+    assert weekly_review(conn, date(2026, 10, 10), weeks=1)[0]["partial"] is True
+
+
+def test_week_is_complete_on_sunday(conn: sqlite3.Connection) -> None:
+    assert weekly_review(conn, date(2026, 10, 11), weeks=1)[0]["partial"] is False
+
+
+def test_tss_of_week_is_rounded_to_one_decimal(conn: sqlite3.Connection) -> None:
+    strength(conn, 9, "2026-10-13", 1000)  # 35 * 1000 / 3600 = 9.72
+    metric(conn, "2026-10-13", 80, 60)
+    assert weekly_review(conn, WED, weeks=1)[0]["tss"] == 9.7
+
+
+def test_total_of_week_keeps_two_decimals(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_hours", 1.234)
+    assert weekly_review(conn, WED, weeks=1)[0]["total"] == 1.23
+
+
+def test_work_hours_of_week_are_rounded_to_two_decimals(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_hours", 1.234)
+    assert weekly_review(conn, WED, weeks=1)[0]["work_hours"] == 1.23
+
+
+def test_evening_hours_of_week_are_rounded_to_two_decimals(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-13", "screen_work_evening_hours", 1.234)
+    assert weekly_review(conn, WED, weeks=1)[0]["evening_hours"] == 1.23
+
+
+def test_weekend_work_hours_are_rounded_to_two_decimals(conn: sqlite3.Connection) -> None:
+    screen(conn, "2026-10-10", "screen_work_hours", 1.234)
+    assert by_start(weekly_review(conn, WED))["2026-10-05"]["weekend_work_hours"] == 1.23

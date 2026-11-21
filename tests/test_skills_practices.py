@@ -37,6 +37,11 @@ def test_wellbeing_file_keeps_reserve_below_limit() -> None:
     assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200
 
 
+def test_week_file_keeps_reserve_below_limit() -> None:
+    size = len((AGENTS / "coach-week.md").read_bytes())
+    assert AGENT_LIMITS["coach-week.md"] - size >= 200
+
+
 def test_wellbeing_file_reserve_is_larger_than_before_n38() -> None:
     size = len((AGENTS / "coach-wellbeing.md").read_bytes())
     assert AGENT_LIMITS["coach-wellbeing.md"] - size > 209

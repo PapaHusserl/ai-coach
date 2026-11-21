@@ -24,6 +24,8 @@ DELTA_KEYS = (
     "todo_open",
     "mood",
     "stress",
+    "fatigue",
+    "irritability",
     "sleep",
     "readiness",
 )
@@ -81,10 +83,10 @@ def _has_data(day: dict[str, Any]) -> bool:
 
 
 def _wellbeing(conn: sqlite3.Connection, start: str, end: str) -> dict[str, dict[str, Any]]:
-    """mood и stress по дням: последнее заданное за день."""
+    """mood, stress, fatigue и irritability по дням: последнее заданное за день."""
     found: dict[str, dict[str, Any]] = {}
     for mark in list_wellbeing(conn, start, end):
-        for key in ("mood", "stress"):
+        for key in ("mood", "stress", "fatigue", "irritability"):
             if mark[key] is not None:
                 found.setdefault(mark["date"], {})[key] = mark[key]
     return found
@@ -132,6 +134,8 @@ def _week(
         "todo_open": opened[-1] if opened else None,
         "mood": average(wellbeing, "mood"),
         "stress": average(wellbeing, "stress"),
+        "fatigue": average(wellbeing, "fatigue"),
+        "irritability": average(wellbeing, "irritability"),
         "sleep": average(metrics, "sleep_score"),
         "readiness": average(metrics, "readiness_score"),
         "days_with_data": len(counted),
@@ -147,10 +151,11 @@ def weekly_review(
     """Последние weeks ISO-недель (последняя - текущая, partial) от старой к новой. Поля недели:
     week_start, week_end, partial, tss, total (сумма total_load дней), work_hours (ручные часы
     главнее календарных), evening_hours, weekend_work_hours, todo_closed, todo_open (последний
-    снимок недели), mood, stress (среднее последних за день), sleep (sleep_score), readiness
-    (средние; None - данных нет), days_with_data, delta - разница числовых полей с предыдущей
-    неделей (у первой недели delta - None, где нет данных - None в значении). tss по дням можно
-    передать, иначе считается из активностей (нет пульса покоя - tss недель None)."""
+    снимок недели), mood, stress, fatigue, irritability (среднее последних за день), sleep
+    (sleep_score), readiness (средние; None - данных нет), days_with_data, delta - разница
+    числовых полей с предыдущей неделей (у первой недели delta - None, где нет данных - None в
+    значении). tss по дням можно передать, иначе считается из активностей (нет пульса покоя -
+    tss недель None)."""
     current = date.fromisoformat(today) if isinstance(today, str) else today
     first = monday(current) - timedelta(days=7 * (weeks - 1))
     start, end = first.isoformat(), current.isoformat()

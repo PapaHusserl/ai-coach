@@ -1,11 +1,15 @@
 """get_weekly_review(weeks=4): 1..12, {rows, truncated}; snapshot week_review_due (шаг v2.5)."""
 
+import asyncio
 import sqlite3
+from datetime import date, timedelta
 
 import pytest
 from fake_clock import freeze
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp_fakes import call, rows, tool_names
+from mcp_fakes import call, db_file, rows, tool_names
+
+from ai_coach.mcp_server import build_server
 
 # 2026-10-11 - воскресенье, 12 - понедельник, 13 - вторник
 SUN, MON, TUE, WED, SAT = "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-10"
@@ -62,9 +66,35 @@ def test_row_has_expected_fields(conn: sqlite3.Connection, monkeypatch: pytest.M
     need = {
         "week_start", "week_end", "partial", "tss", "work_hours", "evening_hours",
         "weekend_work_hours", "todo_closed", "todo_open", "mood", "stress", "sleep",
-        "readiness", "days_with_data", "delta",
+        "readiness", "days_with_data", "delta", "fatigue", "irritability",
     }  # fmt: skip
     assert need <= set(rows(conn, "get_weekly_review")[0])
+
+
+def test_tool_description_names_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
+    server = build_server(db_file(conn))
+    tool = next(t for t in asyncio.run(server.list_tools()) if t.name == "get_weekly_review")
+    description = tool.description or ""
+    assert "fatigue" in description
+    assert "irritability" in description
+
+
+def test_twelve_weeks_with_marks_every_day_are_not_truncated(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{WED} 12:00:00")
+    for offset in range(12 * 7):
+        day = (date.fromisoformat(WED) - timedelta(days=offset)).isoformat()
+        conn.execute(
+            "INSERT INTO wellbeing_log (date, logged_at, score, fatigue, irritability) "
+            "VALUES (?, ?, 3, 4, 2)",
+            (day, f"{day} 21:00:00"),
+        )
+    result = call(conn, "get_weekly_review", weeks=12)
+    assert result["truncated"] is False
+    assert len(result["rows"]) == 12
+    assert result["rows"][-1]["fatigue"] == pytest.approx(4)
+    assert result["rows"][-1]["irritability"] == pytest.approx(2)
 
 
 # --- week_review_due ---

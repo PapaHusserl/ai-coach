@@ -325,6 +325,27 @@ def test_deviations_topic_keeps_reserve_below_limit() -> None:
     assert HELP_TOPIC_LIMIT - len((TOPICS / "deviations.md").read_bytes()) >= 200
 
 
+def weekly_review_lines() -> list[str]:
+    section = topic("workload.md").split("## Недельный обзор", 1)[1].split("\n## ", 1)[0]
+    return section.splitlines()
+
+
+def test_workload_weekly_review_lists_fatigue_and_irritability_after_stress() -> None:
+    line = next(ln for ln in weekly_review_lines() if ln.startswith("- Что это"))
+    assert "стресс, усталость, раздражительность" in line
+
+
+def test_workload_weekly_review_result_names_burnout_with_fatigue_and_irritability() -> None:
+    line = next(ln for ln in weekly_review_lines() if ln.startswith("- Что получу"))
+    assert "ход к выгоранию" in line
+    assert "усталост" in line
+    assert "раздражительност" in line
+
+
+def test_workload_topic_stays_within_limit() -> None:
+    assert len((TOPICS / "workload.md").read_bytes()) <= HELP_TOPIC_LIMIT
+
+
 def test_deviations_topic_keeps_first_day_of_symptoms_in_weakness_line() -> None:
     assert "строка о сне и первом дне симптомов" in topic("deviations.md")
 
