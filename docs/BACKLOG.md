@@ -644,3 +644,21 @@ updated: 2026-11-21
 `tests/test_skills_help.py::test_pult_marks_scale_poles_match_wellbeing_topic` (9 ≠ 10), читающем
 `marks-model.js`. Обход — `rsync -a --exclude='*.py' src/ mutants/src/` перед прогоном. Идея — шаг в
 `make mutate` или `also_copy`. Находка — Н38 партия 1, 2026-11-21.
+
+## 161. Общий тест запаса 200 Б для всех тем справки
+status: idea
+priority: medium
+updated: 2026-11-21
+
+В `tests/test_skills_help.py` тест запаса 200 Б (правило AGENTS.md) есть только у `coach-help.md` и `sleep.md`;
+остальные `coach-help/*.md` его не стерегут — `wellbeing.md` дошёл до запаса 132 Б без красного теста. Идея — один
+параметризованный тест по всем файлам `coach-help/*.md`. Находка папы — `docs/plan-n38.md`, партия 2.
+
+## 162. Оглавление coach-help.md у предела запаса
+status: idea
+priority: low
+updated: 2026-11-21
+
+После выноса `evening-signals.md` (Н38 партия 2) запас `coach-help.md` ≈ 213 Б (счёт папы); следующая новая тема
+справки упрётся в правило 200 Б. Идея — вынос части оглавления отдельным шагом (рядом с BACKLOG 108). Находка папы —
+`docs/plan-n38.md`, партия 2.

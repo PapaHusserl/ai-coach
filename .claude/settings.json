@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "mcp__ai-coach",
+      "Bash(cat .claude/agents/coach-help/evening-signals.md)",
 	  "Bash(cat .claude/agents/coach-wellbeing/precursors.md)",
       "Bash(cat .claude/agents/coach-wellbeing/covid.md)",
       "Bash(cat .claude/agents/coach/records.md)",

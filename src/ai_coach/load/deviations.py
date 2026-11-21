@@ -18,6 +18,12 @@ BELOW_DROP = 1
 WELLBEING_MAX = 2
 MOOD_MAX = 2
 STRESS_MIN = 4
+FATIGUE_MIN = 4
+IRRITABILITY_MIN = 4
+# Вечерние строки, которые утром следующего дня переносятся с ключом day (Н38, Р7).
+EVENING_KINDS = ("mood", "stress", "mood_below", "fatigue", "irritability")
+# Вечерние оценки: заданы за сегодня - вчерашние строки не переносятся.
+EVENING_SCORES = ("mood", "stress", "fatigue", "irritability")
 READINESS_MIN = 33
 BAD_HRV_STATUSES = ("LOW", "UNBALANCED", "BELOW")
 ATL_OVER_CTL_MAX = 15
@@ -25,13 +31,13 @@ SLEEP_MIN_HOURS = 6
 
 
 def main_wellbeing(marks: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Основная запись дня (последняя); mood и stress - последние непустые за день, чтобы вечерняя
-    оценка не терялась от более поздней записи без неё. Записей нет - None."""
+    """Основная запись дня (последняя); mood, stress, fatigue и irritability - последние непустые за
+    день, чтобы вечерняя оценка не терялась от более поздней записи без неё. Записей нет - None."""
     if not marks:
         return None
     main = dict(marks[-1])
-    for key in ("mood", "stress"):
-        given = [m[key] for m in marks if m[key] is not None]
+    for key in EVENING_SCORES:
+        given = [m[key] for m in marks if m.get(key) is not None]
         main[key] = given[-1] if given else None
     main["texts"] = [m["text"] for m in marks if m["text"]]
     return main
@@ -78,7 +84,15 @@ def _score_rows(wellbeing: dict[str, Any] | None) -> list[dict[str, Any]]:
         found.append({"kind": "mood", "value": wellbeing["mood"], "limit": MOOD_MAX})
     if wellbeing.get("stress") is not None and wellbeing["stress"] >= STRESS_MIN:
         found.append({"kind": "stress", "value": wellbeing["stress"], "limit": STRESS_MIN})
+    for key, top in (("fatigue", FATIGUE_MIN), ("irritability", IRRITABILITY_MIN)):
+        if wellbeing.get(key) is not None and wellbeing[key] >= top:
+            found.append({"kind": key, "value": wellbeing[key], "limit": top})
     return found
+
+
+def evening_rows(rows: list[dict[str, Any]], day: str) -> list[dict[str, Any]]:
+    """Вечерние строки (EVENING_KINDS) вчерашнего дня с ключом day; прочие коды не переносятся."""
+    return [{**row, "day": day} for row in rows if row["kind"] in EVENING_KINDS]
 
 
 def _text_rows(texts: list[str]) -> list[dict[str, Any]]:

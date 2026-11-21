@@ -579,6 +579,26 @@ def test_snapshot_deviations_use_load_of_the_day(conn: sqlite3.Connection) -> No
     assert "atl_over_ctl" in kinds
 
 
+def test_snapshot_atl_over_ctl_of_yesterday_is_not_carried(conn: sqlite3.Connection) -> None:
+    fill(conn)
+    upsert_activity(
+        conn,
+        {
+            "activity_id": 2,
+            "start_time_local": f"{day_shift(-1)} 07:00:00",
+            "type_key": "running",
+            "name": "Длинный бег",
+            "duration_s": 10800,
+            "avg_hr": 170,
+            "raw_json": {},
+        },
+    )
+    found = call(conn, "get_morning_snapshot", date=DAY)["deviations"]["rows"]
+    atl = [r for r in found if r["kind"] == "atl_over_ctl"]
+    assert len(atl) <= 1
+    assert all("day" not in r for r in atl)
+
+
 def test_snapshot_goals_keep_first_rows_when_cut(conn: sqlite3.Connection) -> None:
     for number in range(SNAPSHOT_ROWS + 5):
         add_goal(conn, {"title": f"Цель {number}", "status": "active"})

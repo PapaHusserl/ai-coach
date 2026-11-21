@@ -21,6 +21,8 @@ export const SIGNAL_WORDS = {
 	wellbeing: "самочувствие",
 	mood: "настроение",
 	stress: "стресс",
+	fatigue: "усталость",
+	irritability: "раздражительность",
 	wellbeing_below: "самочувствие ниже нормы",
 	mood_below: "настроение ниже нормы",
 	symptoms: "симптомы",
@@ -70,7 +72,8 @@ const COVID_WORDS = {
 const PHASE_KINDS = ["illness_rest", "illness_return", "illness_light"];
 
 function wordOf(signal) {
-	return (signal.covid && COVID_WORDS[signal.kind]) || SIGNAL_WORDS[signal.kind] || signal.kind;
+	const word = (signal.covid && COVID_WORDS[signal.kind]) || SIGNAL_WORDS[signal.kind] || signal.kind;
+	return signal.day ? `вчера вечером: ${word}` : word;
 }
 
 function detailOf(signal) {

@@ -79,10 +79,54 @@ def test_recalc_and_wellbeing_mention_symptoms() -> None:
     assert "symptoms" in WELLBEING.read_text()
 
 
-def test_coach_wellbeing_has_precursors_paragraph_that_keeps_the_plan() -> None:
-    text = WELLBEING.read_text()
+PRECURSORS = ROOT / "agents" / "coach-wellbeing" / "precursors.md"
+
+
+def test_precursors_file_has_paragraph_that_keeps_the_plan() -> None:
+    text = PRECURSORS.read_text()
     assert "Предвестники" in text
     assert "план не трогай" in text
+
+
+def test_coach_wellbeing_links_precursors_file() -> None:
+    assert "cat .claude/agents/coach-wellbeing/precursors.md" in WELLBEING.read_text()
+
+
+def test_allow_can_read_precursors_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert "Bash(cat .claude/agents/coach-wellbeing/precursors.md)" in allow
+
+
+def test_recalc_names_new_rows_and_points_to_precursors_file() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    for needle in ("fatigue", "irritability", "`day`", "coach-wellbeing/precursors.md"):
+        assert needle in text, needle
+
+
+def test_recalc_deviations_sentence_does_not_list_new_rows() -> None:
+    text = (ROOT / "skills" / "coach-plan" / "recalc.md").read_text()
+    deviations_part = text.split("или есть сигналы перегруза")[0]
+    assert "fatigue" not in deviations_part
+    assert "irritability" not in deviations_part
+
+
+def test_precursors_file_names_thresholds_and_yesterday_evening_rule() -> None:
+    text = PRECURSORS.read_text()
+    for needle in ("fatigue", "irritability", "`day`", "вчера вечером"):
+        assert needle in text, needle
+
+
+def test_precursors_yesterday_paragraph_names_below_norm_and_recalc_argument() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Вчерашний вечер")
+    for needle in ("`mood_below`", "довод в пересчёте", "`recalc.md`"):
+        assert needle in text, needle
+
+
+def test_precursors_paragraph_asks_whether_illness_starts() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Предвестники")
+    assert "не заболевает ли" in text
+    assert "fatigue" in text
+    assert "irritability" in text
 
 
 def paragraph(text: str, start: str) -> str:
@@ -204,7 +248,7 @@ def test_allow_can_read_wellbeing_fields_file() -> None:
 def test_wellbeing_below_codes_are_in_symptoms_paragraph_not_in_precursors() -> None:
     text = WELLBEING.read_text()
     symptoms = paragraph(text, "Симптомы в тексте")
-    precursors = paragraph(text, "Предвестники")
+    precursors = paragraph(PRECURSORS.read_text(), "Предвестники")
     for code in ("wellbeing_below", "mood_below"):
         assert code in symptoms, code
         assert code not in precursors, code
@@ -847,7 +891,7 @@ def test_wellbeing_symptoms_paragraph_points_to_care_and_keeps_measures() -> Non
 
 
 def test_wellbeing_precursors_paragraph_points_to_care_and_keeps_plan() -> None:
-    text = paragraph(WELLBEING.read_text(encoding="utf-8"), "Предвестники")
+    text = paragraph(PRECURSORS.read_text(encoding="utf-8"), "Предвестники")
     assert "coach-wellbeing/care.md" in text
     assert "план не трогай" in text
 

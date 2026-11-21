@@ -491,7 +491,19 @@ def test_later_mood_replaces_earlier_one(conn: sqlite3.Connection) -> None:
 def test_mood_of_another_day_does_not_leak(conn: sqlite3.Connection) -> None:
     feel(conn, shift(DAY, -1), "21:00:00", score=4, mood=1, stress=5)
     feel(conn, DAY, "08:00:00", score=4)
-    assert deviation_kinds(conn) == []
+    found = rows(conn, "get_deviations", date=DAY)
+    assert [r["kind"] for r in found] == ["mood", "stress"]
+    assert [r.get("day") for r in found] == [shift(DAY, -1)] * 2
+
+
+def test_carried_yesterday_mood_norm_excludes_yesterday(conn: sqlite3.Connection) -> None:
+    for number, mood in zip(range(2, 9), (4, 4, 4, 5, 5, 5, 5), strict=True):
+        feel(conn, shift(DAY, -number), "21:00:00", score=4, mood=mood)
+    feel(conn, shift(DAY, -1), "21:00:00", score=4, mood=4)
+    found = rows(conn, "get_deviations", date=DAY)
+    assert found == [
+        {"kind": "mood_below", "value": 4, "limit": 5, "day": shift(DAY, -1)},
+    ]
 
 
 def test_overload_catches_a_falling_mood(conn: sqlite3.Connection) -> None:

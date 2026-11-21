@@ -1,7 +1,12 @@
+import asyncio
 import sqlite3
 from datetime import date, timedelta
 
-from mcp_fakes import call, rows, tool_names
+import pytest
+from fake_clock import freeze
+from mcp_fakes import call, db_file, rows, tool_names
+
+from ai_coach.mcp_server import build_server
 
 DAY = "2026-10-07"
 
@@ -307,6 +312,162 @@ def test_snapshot_deviations_include_below_norm(conn: sqlite3.Connection) -> Non
     feel(conn, DAY, 3, None, f"{DAY} 08:00:00")
     section = call(conn, "get_morning_snapshot", date=DAY)["deviations"]
     assert [r["kind"] for r in section["rows"]] == ["wellbeing_below"]
+
+
+# Н38, партия 2: усталость, раздражительность и вчерашний вечер утром.
+YESTERDAY = "2026-10-06"
+DAY_BEFORE = "2026-10-05"
+
+
+def put_mark(conn: sqlite3.Connection, day: str, at: str, **fields: object) -> None:
+    values = {"date": day, "logged_at": f"{day} {at}", "score": 4, **fields}
+    names = ", ".join(values)
+    marks = ", ".join("?" for _ in values)
+    conn.execute(f"INSERT INTO wellbeing_log ({names}) VALUES ({marks})", tuple(values.values()))
+
+
+def deviation_rows(conn: sqlite3.Connection) -> list[dict[str, object]]:
+    return rows(conn, "get_deviations", date=DAY)
+
+
+def test_get_deviations_description_names_new_rows_and_day_key(conn: sqlite3.Connection) -> None:
+    server = build_server(db_file(conn))
+    tool = next(t for t in asyncio.run(server.list_tools()) if t.name == "get_deviations")
+    description = tool.description or ""
+    for needle in ("fatigue", "irritability", "day"):
+        assert needle in description, needle
+
+
+def test_fatigue_of_today_is_a_row_without_day_key(conn: sqlite3.Connection) -> None:
+    put_mark(conn, DAY, "20:00:00", fatigue=4)
+    assert deviation_rows(conn) == [{"kind": "fatigue", "value": 4, "limit": 4}]
+
+
+def test_irritability_of_today_is_a_row_without_day_key(conn: sqlite3.Connection) -> None:
+    put_mark(conn, DAY, "20:00:00", irritability=5)
+    assert deviation_rows(conn) == [{"kind": "irritability", "value": 5, "limit": 4}]
+
+
+def test_last_given_fatigue_of_the_day_counts_after_later_entry_without_it(
+    conn: sqlite3.Connection,
+) -> None:
+    put_mark(conn, DAY, "20:00:00", fatigue=4)
+    put_mark(conn, DAY, "21:00:00")
+    assert kinds(conn) == ["fatigue"]
+
+
+def test_yesterday_evening_mood_is_carried_with_day_key(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2)
+    assert deviation_rows(conn) == [{"kind": "mood", "value": 2, "limit": 2, "day": YESTERDAY}]
+
+
+def test_yesterday_evening_stress_fatigue_irritability_are_carried(
+    conn: sqlite3.Connection,
+) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", stress=5, fatigue=4, irritability=4)
+    found = {r["kind"]: r for r in deviation_rows(conn)}
+    assert set(found) == {"stress", "fatigue", "irritability"}
+    assert {r["day"] for r in found.values()} == {YESTERDAY}
+
+
+def test_todays_rows_have_no_day_key_while_carried_ones_do(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", stress=5)
+    put_mark(conn, DAY, "08:00:00", text="горло")
+    found = {r["kind"]: r for r in deviation_rows(conn)}
+    assert "day" not in found["symptoms"]
+    assert found["stress"]["day"] == YESTERDAY
+
+
+def test_carried_rows_go_after_todays(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", stress=5)
+    put_mark(conn, DAY, "08:00:00", score=2)
+    assert kinds(conn) == ["wellbeing", "stress"]
+
+
+def test_morning_entry_with_only_score_keeps_the_carry(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2)
+    put_mark(conn, DAY, "08:00:00", score=4)
+    assert deviation_rows(conn) == [{"kind": "mood", "value": 2, "limit": 2, "day": YESTERDAY}]
+
+
+def test_todays_mood_drops_the_carry(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", stress=5)
+    put_mark(conn, DAY, "08:00:00", mood=4)
+    assert kinds(conn) == []
+
+
+def test_todays_stress_drops_the_carry(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2)
+    put_mark(conn, DAY, "08:00:00", stress=1)
+    assert kinds(conn) == []
+
+
+def test_todays_fatigue_drops_the_carry(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2)
+    put_mark(conn, DAY, "08:00:00", fatigue=1)
+    assert kinds(conn) == []
+
+
+def test_todays_irritability_drops_the_carry(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2)
+    put_mark(conn, DAY, "08:00:00", irritability=1)
+    assert kinds(conn) == []
+
+
+def test_mood_below_of_yesterday_uses_the_norm_of_yesterday(conn: sqlite3.Connection) -> None:
+    for back in range(
+        9, 16
+    ):  # 7 дней: в окне вчера (14 дней до него), для сегодня норма не набрана
+        day = (date.fromisoformat(DAY) - timedelta(days=back)).isoformat()
+        put_mark(conn, day, "08:00:00", mood=4)
+    put_mark(conn, YESTERDAY, "21:00:00", mood=3)
+    assert deviation_rows(conn) == [
+        {"kind": "mood_below", "value": 3, "limit": 4, "day": YESTERDAY}
+    ]
+
+
+def test_only_evening_kinds_of_yesterday_are_carried(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", score=1, mood=2, text="горло, температура 38")
+    metrics(conn, YESTERDAY, readiness_score=10, hrv_status="LOW", sleep_seconds=4 * 3600)
+    assert kinds(conn) == ["mood"]
+
+
+def test_wellbeing_below_of_yesterday_is_not_carried(conn: sqlite3.Connection) -> None:
+    for back in range(2, 9):
+        day = (date.fromisoformat(DAY) - timedelta(days=back)).isoformat()
+        put_mark(conn, day, "08:00:00", score=4)
+    put_mark(conn, YESTERDAY, "21:00:00", score=3)
+    assert kinds(conn) == []
+
+
+def test_day_before_yesterday_is_not_carried(conn: sqlite3.Connection) -> None:
+    put_mark(conn, DAY_BEFORE, "21:00:00", mood=1, stress=5, fatigue=5, irritability=5)
+    assert kinds(conn) == []
+
+
+def test_yesterday_without_entries_gives_no_rows(conn: sqlite3.Connection) -> None:
+    assert deviation_rows(conn) == []
+
+
+def test_yesterday_evening_in_norm_gives_no_rows(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=4, stress=2, fatigue=2, irritability=2)
+    assert deviation_rows(conn) == []
+
+
+def test_snapshot_deviations_include_carried_rows(conn: sqlite3.Connection) -> None:
+    put_mark(conn, YESTERDAY, "21:00:00", mood=2, fatigue=4)
+    section = call(conn, "get_morning_snapshot", date=DAY)["deviations"]
+    assert section["rows"] == deviation_rows(conn)
+    assert {r["day"] for r in section["rows"]} == {YESTERDAY}
+
+
+def test_checkin_at_0030_is_carried_at_0040(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_mark(conn, YESTERDAY, "00:30:00", stress=5)
+    freeze(monkeypatch, f"{DAY} 00:40:00")
+    found = deviation_rows(conn)
+    assert [(r["kind"], r["day"]) for r in found] == [("stress", YESTERDAY)]
 
 
 # Н33, партия 1: ответы форм дня идут в разбор симптомов.

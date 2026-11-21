@@ -26,6 +26,15 @@ def test_evening_skill_uses_feel_with_all_options() -> None:
         assert option in text
 
 
+def test_evening_skill_deviations_step_names_new_thresholds_by_constants() -> None:
+    from ai_coach.load import deviations
+
+    lines = EVENING.read_text().splitlines()
+    line = next(ln for ln in lines if ln.startswith("4.") and "get_deviations" in ln)
+    assert f"усталость >= {deviations.FATIGUE_MIN}" in line
+    assert f"раздражительность >= {deviations.IRRITABILITY_MIN}" in line
+
+
 def test_evening_skill_reads_snapshot_and_checks_evening_done() -> None:
     text = EVENING.read_text()
     assert "get_morning_snapshot" in text

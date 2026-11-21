@@ -220,6 +220,32 @@ def test_score_below_own_norm_is_a_deviation_signal(conn: sqlite3.Connection) ->
     assert (signal["value"], signal["limit"]) == (3, 4)
 
 
+def put_mark(conn: sqlite3.Connection, day: date, at: str, **fields: object) -> None:
+    values = {"date": day.isoformat(), "logged_at": f"{day.isoformat()} {at}", "score": 4, **fields}
+    names = ", ".join(values)
+    marks = ", ".join("?" for _ in values)
+    conn.execute(f"INSERT INTO wellbeing_log ({names}) VALUES ({marks})", tuple(values.values()))
+
+
+def test_fatigue_of_the_day_is_a_deviation_signal(conn: sqlite3.Connection) -> None:
+    put_mark(conn, DAY, "20:00:00", fatigue=4)
+    view = state_view(conn, DAY, NOW)
+    assert sources(view, "fatigue") == ["deviations"]
+    signal = next(s for s in view["signals"] if s["kind"] == "fatigue")
+    assert (signal["value"], signal["limit"]) == (4, 4)
+    assert "day" not in signal
+
+
+def test_yesterday_evening_row_comes_with_day_and_after_todays(conn: sqlite3.Connection) -> None:
+    yesterday = DAY - timedelta(days=1)
+    put_mark(conn, yesterday, "21:00:00", irritability=5)
+    put_mark(conn, DAY, "08:00:00", text="горло")
+    view = state_view(conn, DAY, NOW)
+    assert kinds(view) == ["symptoms", "irritability"]
+    signal = view["signals"][1]
+    assert (signal["value"], signal["limit"], signal["day"]) == (5, 4, yesterday.isoformat())
+
+
 def test_low_who5_comes_from_who5(conn: sqlite3.Connection) -> None:
     put_who5(conn, 24)
     view = state_view(conn, DAY, NOW)

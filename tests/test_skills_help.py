@@ -284,6 +284,64 @@ def test_deviations_topic_thresholds_match_deviations() -> None:
         assert needle in text, needle
 
 
+def test_evening_signals_topic_thresholds_match_deviations() -> None:
+    text = topic("evening-signals.md")
+    for needle in (
+        f"усталость {deviations.FATIGUE_MIN} и выше",
+        f"раздражительность {deviations.IRRITABILITY_MIN} и выше",
+    ):
+        assert needle in text, needle
+
+
+def test_evening_signals_topic_tells_about_yesterday_evening_in_the_morning() -> None:
+    text = topic("evening-signals.md")
+    assert "вчера вечером" in text
+    assert "довод в пересчёте" in text
+
+
+def test_evening_signals_topic_asks_about_illness() -> None:
+    assert "не заболеваете ли" in topic("evening-signals.md")
+
+
+def test_wellbeing_topic_links_evening_signals_topic() -> None:
+    text = topic("wellbeing.md")
+    assert "cat .claude/agents/coach-help/evening-signals.md" in text
+    assert "усталость и раздражительность берутся последние заданные" in text
+
+
+def test_help_index_names_evening_signals_topic() -> None:
+    assert "evening-signals.md" in HELP.read_text()
+
+
+def test_evening_signals_topic_is_within_limit() -> None:
+    assert len((TOPICS / "evening-signals.md").read_bytes()) <= HELP_TOPIC_LIMIT
+
+
+def test_wellbeing_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "wellbeing.md").read_bytes()) >= 200
+
+
+def test_deviations_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "deviations.md").read_bytes()) >= 200
+
+
+def test_deviations_topic_keeps_first_day_of_symptoms_in_weakness_line() -> None:
+    assert "строка о сне и первом дне симптомов" in topic("deviations.md")
+
+
+def test_deviations_topic_points_scales_to_wellbeing_topic() -> None:
+    text = topic("deviations.md")
+    assert "wellbeing.md" in text
+    assert "кодом не ищутся" in text
+
+
+def test_pult_topic_describes_yesterday_evening_rows() -> None:
+    text = topic("pult.md")
+    assert "вчера вечером" in text
+    assert "усталость" in text
+    assert "раздражительность" in text
+
+
 def test_deviations_topic_lists_every_symptom_word() -> None:
     text = topic("deviations.md")
     words = set(dict(deviations.SYMPTOMS).values())

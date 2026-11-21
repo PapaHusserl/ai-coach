@@ -68,7 +68,7 @@ const CODES = [
 	"short_night", "sleep_debt", "illness_risk", "corridor_out", "total_streak", "evening_streak", "weekend_work",
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
-	"illness_rest", "illness_return", "hrv_streak", "illness_light",
+	"illness_rest", "illness_return", "hrv_streak", "illness_light", "fatigue", "irritability",
 ];
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
@@ -84,9 +84,55 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 27 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 29 кодов отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
+});
+
+// Н38, партия 2, Р8 = 1: новые строки и пометка «вчера вечером» у перенесённых (ключ day).
+const DEVIATION = { source: "deviations", value: 4, limit: 4 };
+
+test("signalRows: усталость · 4 (порог 4)", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...DEVIATION, kind: "fatigue" }]));
+	assert.equal(row.word, "усталость");
+	assert.equal(row.detail, "4 (порог 4)");
+});
+
+test("signalRows: раздражительность · 4 (порог 4)", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...DEVIATION, kind: "irritability" }]));
+	assert.equal(row.word, "раздражительность");
+	assert.equal(row.detail, "4 (порог 4)");
+});
+
+test("signalRows: строка с day — «вчера вечером: настроение», деталь прежняя", async () => {
+	const { signalRows } = await stateModel();
+	const carried = { source: "deviations", kind: "mood", value: 2, limit: 2, day: "2026-11-06" };
+	const [row] = signalRows(stateOf([carried]));
+	assert.equal(row.word, "вчера вечером: настроение");
+	assert.equal(row.detail, "2 (порог 2)");
+});
+
+test("signalRows: mood_below с day — «вчера вечером: настроение ниже нормы», норма 4", async () => {
+	const { signalRows } = await stateModel();
+	const carried = { source: "deviations", kind: "mood_below", value: 3, limit: 4, day: "2026-11-06" };
+	const [row] = signalRows(stateOf([carried]));
+	assert.equal(row.word, "вчера вечером: настроение ниже нормы");
+	assert.equal(row.detail, "3 (норма 4)");
+});
+
+test("signalRows: у сегодняшней строки пометки «вчера вечером» нет", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...DEVIATION, kind: "stress" }]));
+	assert.equal(row.word, "стресс");
+});
+
+test("signalRows: порядок сервера — перенесённые после сегодняшних", async () => {
+	const { signalRows } = await stateModel();
+	const carried = { source: "deviations", kind: "stress", value: 5, limit: 4, day: "2026-11-06" };
+	const rows = signalRows(stateOf([{ ...DEVIATION, kind: "fatigue" }, carried]));
+	assert.deepEqual(rows.map((row) => row.word), ["усталость", "вчера вечером: стресс"]);
 });
 
 test("SIGNAL_WORDS: слова Р10 = 1", async () => {

@@ -22,7 +22,12 @@ from ai_coach.load import (
     resolve_thresholds,
     sleep_report,
 )
-from ai_coach.load.deviations import BELOW_DAYS, wellbeing_norms
+from ai_coach.load.deviations import (
+    BELOW_DAYS,
+    EVENING_SCORES,
+    evening_rows,
+    wellbeing_norms,
+)
 from ai_coach.load.illness import form_texts
 from ai_coach.load.sleep import awake_hours
 from ai_coach.load.stress import stress_at
@@ -237,15 +242,23 @@ def who5_log(conn: sqlite3.Connection, start: str, end: str) -> dict[str, Any]:
 def day_deviations(
     conn: sqlite3.Connection, day: str, load_row: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
+    yesterday = (parse_day(day) - timedelta(days=1)).isoformat()
     start = (parse_day(day) - timedelta(days=BELOW_DAYS)).isoformat()
-    recent = list_wellbeing(conn, start, day)
+    recent = list_wellbeing(
+        conn, (parse_day(yesterday) - timedelta(days=BELOW_DAYS)).isoformat(), day
+    )
     marks = [m for m in recent if m["date"] == day]
-    norms = wellbeing_norms([m for m in recent if m["date"] < day])
+    norms = wellbeing_norms([m for m in recent if start <= m["date"] < day])
     metrics = list_daily_metrics(conn, day, day)
     phrases = form_texts(conn, day, day).get(day, [])
-    return find_deviations(
-        main_wellbeing(marks), metrics[0] if metrics else None, load_row, norms, phrases
-    )
+    today = main_wellbeing(marks)
+    found = find_deviations(today, metrics[0] if metrics else None, load_row, norms, phrases)
+    if today and any(today[key] is not None for key in EVENING_SCORES):
+        return found
+    before = [m for m in recent if m["date"] < yesterday]
+    last = main_wellbeing([m for m in recent if m["date"] == yesterday])
+    carried = find_deviations(last, None, None, wellbeing_norms(before))
+    return found + evening_rows(carried, yesterday)
 
 
 def deviations(
