@@ -34,7 +34,7 @@ def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any
         of(r["event_id"])["forms"].append({**entry, "logged_at": f"{r['date']} {r['time']}"})
     for r in list_wellbeing(conn, day, day):
         if r["event_id"] is not None and r["id"] not in of_forms:
-            keys = ("score", "text", "mood", "stress", "logged_at")
+            keys = ("score", "text", "mood", "stress", "fatigue", "irritability", "logged_at")
             of(r["event_id"])["feel"].append({k: r[k] for k in keys})
     for r in list_slip(conn, day, day):
         if r["event_id"] is not None:

@@ -244,11 +244,27 @@ def test_training_topic_describes_pult_window() -> None:
         assert needle in text, needle
 
 
+def test_wellbeing_topic_names_fatigue_and_irritability() -> None:
+    text = topic("wellbeing.md")
+    for needle in (
+        "--fatigue",
+        "--irritability",
+        "1 - спокоен, 5 - всё бесит",
+        "1 - свеж, 5 - выжат",
+    ):
+        assert needle in text, needle
+
+
+def test_pult_marks_topic_names_new_evening_scales() -> None:
+    text = topic("pult-marks.md")
+    assert "настроение, стресс, усталость, раздражительность, часы работы" in text
+
+
 def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
     model = ROOT / "src" / "ai_coach" / "web" / "static" / "marks-model.js"
     script = model.read_text(encoding="utf-8")
     poles = re.findall(r'low: "([^"]+)", high: "([^"]+)"', script)
-    assert len(poles) == 9
+    assert len(poles) == 10
     text = topic("wellbeing.md")
     for low, high in poles:
         assert f"1 - {low}, 5 - {high}" in text, (low, high)

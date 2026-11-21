@@ -395,6 +395,43 @@ def test_checkin_flow_zero_is_saved(conn: sqlite3.Connection) -> None:
     assert list_wellbeing(conn, D, D)[0]["flow"] == 0
 
 
+def test_checkin_saves_score_text_and_flow(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=3, text="устал", flow=1), at("20:05"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["score"], row["text"], row["flow"]) == (3, "устал", 1)
+
+
+def test_checkin_saves_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=4, fatigue=4, irritability=2), at("20:05"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["fatigue"], row["irritability"]) == (4, 2)
+
+
+def test_checkin_without_new_scales_leaves_them_null(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=4), at("20:05"))
+    [row] = list_wellbeing(conn, D, D)
+    assert (row["fatigue"], row["irritability"]) == (None, None)
+
+
+@pytest.mark.parametrize("name", ["fatigue", "irritability"])
+@pytest.mark.parametrize("value", [6, 0, "4", True])
+def test_checkin_bad_new_scale_is_rejected(conn: sqlite3.Connection, name: str, value: Any) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    with pytest.raises(MarkError):
+        save_mark(conn, payload(eid, "checkin", score=4, **{name: value}), at("20:05"))
+    assert list_wellbeing(conn, D, D) == []
+
+
+def test_marks_for_day_feel_has_new_scales(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "checkin", "20:00", "20:15")
+    save_mark(conn, payload(eid, "checkin", score=4, fatigue=4, irritability=2), at("20:05"))
+    [row] = marks_for_day(conn, D)[eid]["feel"]
+    assert (row["fatigue"], row["irritability"]) == (4, 2)
+
+
 def test_checkin_hours_accept_zero_and_limit(conn: sqlite3.Connection) -> None:
     eid = event(conn, "checkin", "20:00", "20:15")
     save_mark(conn, payload(eid, "checkin", score=4, work=0, hobby=24), at("20:05"))

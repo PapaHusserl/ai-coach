@@ -10,6 +10,7 @@ from fake_clock import freeze
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
+from ai_coach.store.journal import evening_done
 
 runner = CliRunner()
 TODAY = "2026-10-14"
@@ -197,6 +198,63 @@ def test_detachment_without_mood_stress_keeps_hours_and_score(isolated: Path) ->
     runner.invoke(main.app, ["feel", "4", "--thoughts", "2", "--work", "6"])
     assert counters(isolated) == {"work_hours": 6.0}
     assert wellbeing(isolated)[0]["score"] == 4
+
+
+def new_scales(db: Path) -> tuple[Any, ...]:
+    row = wellbeing(db)[0]
+    return (row["fatigue"], row["irritability"])
+
+
+def test_fatigue_and_irritability_are_saved(isolated: Path) -> None:
+    args = ["feel", "4", "--mood", "3", "--stress", "2", "--fatigue", "4", "--irritability", "2"]
+    result = runner.invoke(main.app, args)
+    assert result.exit_code == 0
+    assert "Самочувствие 4 записано." in result.output
+    assert len(wellbeing(isolated)) == 1
+    assert new_scales(isolated) == (4, 2)
+
+
+def test_new_scales_absent_are_null(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "4"])
+    assert new_scales(isolated) == (None, None)
+
+
+def test_only_fatigue_leaves_irritability_null(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "4", "--fatigue", "5"])
+    assert new_scales(isolated) == (5, None)
+
+
+def test_only_irritability_leaves_fatigue_null(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "4", "--irritability", "1"])
+    assert new_scales(isolated) == (None, 1)
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "text"),
+    [
+        ("--fatigue", "0", "Усталость: от 1 до 5."),
+        ("--fatigue", "6", "Усталость: от 1 до 5."),
+        ("--irritability", "0", "Раздражительность: от 1 до 5."),
+        ("--irritability", "6", "Раздражительность: от 1 до 5."),
+    ],
+)
+def test_bad_new_scale_is_rejected_with_text_and_nothing_saved(
+    isolated: Path, option: str, value: str, text: str
+) -> None:
+    result = runner.invoke(main.app, ["feel", "3", option, value])
+    assert result.exit_code == 1
+    assert text in result.output
+    assert wellbeing(isolated) == []
+
+
+def test_only_fatigue_does_not_make_evening_done(isolated: Path) -> None:
+    runner.invoke(main.app, ["feel", "3", "--fatigue", "4"])
+    conn = sqlite3.connect(isolated)
+    conn.row_factory = sqlite3.Row
+    try:
+        assert evening_done(conn, TODAY) is False
+    finally:
+        conn.close()
 
 
 def test_bad_score_with_options_is_still_rejected(isolated: Path) -> None:

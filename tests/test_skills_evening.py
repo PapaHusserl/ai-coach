@@ -68,6 +68,12 @@ def test_evening_skill_has_detachment_options() -> None:
         assert option in text
 
 
+def test_evening_skill_has_fatigue_and_irritability_options() -> None:
+    text = EVENING.read_text()
+    for option in ("--fatigue", "--irritability"):
+        assert option in text
+
+
 def test_evening_ritual_offers_day_plan_without_todo() -> None:
     text = EVENING.read_text()
     assert "что осталось и с чего начнёшь завтра" not in text

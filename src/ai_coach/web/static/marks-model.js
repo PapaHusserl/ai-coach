@@ -56,6 +56,7 @@ export const FIELDS = {
 	score: { label: "Самочувствие", low: "плохо", high: "отлично" },
 	mood: { label: "Настроение", low: "плохое", high: "отличное" },
 	stress: { label: "Стресс", low: "нет", high: "сильный" },
+	irritability: { label: "Раздражительность", low: "спокоен", high: "всё бесит" },
 	thoughts: { label: "Мысли о работе вечером", low: "не думал", high: "всё время" },
 	hindrance: { label: "Помехи", low: "почти не было", high: "весь день" },
 	valuable: { label: "Ценность сделанного", low: "почти ничего", high: "всё ценное" },
@@ -63,7 +64,7 @@ export const FIELDS = {
 export const TAB_FIELDS = {
 	rating: ["focus", "fatigue", "effort"],
 	feel: ["score"],
-	checkin: ["score", "mood", "stress", "thoughts", "hindrance", "valuable"],
+	checkin: ["score", "mood", "stress", "fatigue", "irritability", "thoughts", "hindrance", "valuable"],
 };
 // Обязательные шкалы вкладки; остальные из TAB_FIELDS — по желанию (повторный клик снимает).
 export const REQUIRED = {
@@ -168,12 +169,17 @@ export function remainingText(meal) {
 	return parts.join(" · ");
 }
 
-// «Самочувствие 4, настроение 3, стресс 2»: у записи чек-ина есть настроение и стресс, пустые не выводятся.
+// «Самочувствие 4, настроение 3, стресс 2, усталость 4, раздражительность 2»: пустые не выводятся.
+const FEEL_HEAD_WORDS = [
+	["mood", "настроение"],
+	["stress", "стресс"],
+	["fatigue", "усталость"],
+	["irritability", "раздражительность"],
+];
+
 function feelHead(r) {
-	const parts = [`Самочувствие ${r.score}`];
-	if (r.mood != null) parts.push(`настроение ${r.mood}`);
-	if (r.stress != null) parts.push(`стресс ${r.stress}`);
-	return parts.join(", ");
+	const given = FEEL_HEAD_WORDS.filter(([key]) => r[key] != null);
+	return [`Самочувствие ${r.score}`, ...given.map(([key, word]) => `${word} ${r[key]}`)].join(", ");
 }
 
 // Все отметки пункта по времени: {time: "HH:MM", tab, text}.

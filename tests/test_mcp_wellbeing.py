@@ -143,7 +143,16 @@ def test_snapshot_wellbeing_rows_are_projected(conn: sqlite3.Connection) -> None
         (DAY, f"{DAY} 08:00:00"),
     )
     row = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"][0]
-    assert list(row) == ["date", "logged_at", "score", "mood", "stress", "text"]
+    assert list(row) == [
+        "date",
+        "logged_at",
+        "score",
+        "mood",
+        "stress",
+        "fatigue",
+        "irritability",
+        "text",
+    ]
     assert (row["mood"], row["stress"]) == (3, 2)
 
 
@@ -155,6 +164,30 @@ def test_get_wellbeing_keeps_all_columns(conn: sqlite3.Connection) -> None:
     )
     row = rows(conn, "get_wellbeing", start=DAY, end=DAY)[0]
     assert (row["work_thoughts"], row["event_id"]) == (5, 7)
+
+
+def test_get_wellbeing_gives_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, logged_at, fatigue, irritability)"
+        " VALUES (?, 4, ?, 4, 2)",
+        (DAY, f"{DAY} 20:00:00"),
+    )
+    feel(conn, DAY, 3, None, f"{DAY} 21:00:00")
+    first, second = rows(conn, "get_wellbeing", start=DAY, end=DAY)
+    assert (first["fatigue"], first["irritability"]) == (4, 2)
+    assert (second["fatigue"], second["irritability"]) == (None, None)
+
+
+def test_snapshot_wellbeing_rows_have_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO wellbeing_log (date, score, logged_at, fatigue, irritability)"
+        " VALUES (?, 4, ?, 4, 2)",
+        (DAY, f"{DAY} 20:00:00"),
+    )
+    feel(conn, DAY, 3, None, f"{DAY} 21:00:00")
+    first, second = call(conn, "get_morning_snapshot", date=DAY)["wellbeing"]["rows"]
+    assert (first["fatigue"], first["irritability"]) == (4, 2)
+    assert (second["fatigue"], second["irritability"]) == (None, None)
 
 
 def test_snapshot_wellbeing_has_history_not_only_today(conn: sqlite3.Connection) -> None:

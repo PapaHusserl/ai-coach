@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	FIELDS,
+	REQUIRED,
+	TAB_FIELDS,
 	TAB_LABELS,
 	buildPayload,
 	canSave,
@@ -341,6 +343,54 @@ test("buildPayload: числа, пустой текст не уходит", () =
 		text: "ок",
 	});
 	assert.deepEqual(buildPayload("slip", { ...base, text: "бесит" }), { ...base, mark: "slip", text: "бесит" });
+});
+
+test("TAB_FIELDS.checkin: усталость и раздражительность после стресса (Р3)", () => {
+	assert.deepEqual(TAB_FIELDS.checkin, [
+		"score",
+		"mood",
+		"stress",
+		"fatigue",
+		"irritability",
+		"thoughts",
+		"hindrance",
+		"valuable",
+	]);
+	assert.deepEqual(REQUIRED.checkin, ["score"]);
+});
+
+test("FIELDS.irritability: подпись и полюса (Р2)", () => {
+	assert.equal(FIELDS.irritability.label, "Раздражительность");
+	assert.equal(FIELDS.irritability.low, "спокоен");
+	assert.equal(FIELDS.irritability.high, "всё бесит");
+});
+
+test("вкладка «Оценка» прежняя: три обязательные шкалы", () => {
+	assert.deepEqual(TAB_FIELDS.rating, ["focus", "fatigue", "effort"]);
+	assert.deepEqual(REQUIRED.rating, ["focus", "fatigue", "effort"]);
+});
+
+test("buildPayload checkin: новые поля шлются числами, пустые — нет", () => {
+	const base = { event_id: 9, date: "2026-11-08", score: 4 };
+	const full = buildPayload("checkin", { ...base, fatigue: 4, irritability: 2 });
+	assert.equal(full.fatigue, 4);
+	assert.equal(full.irritability, 2);
+	const empty = buildPayload("checkin", { ...base, fatigue: null, irritability: undefined });
+	assert.equal("fatigue" in empty, false);
+	assert.equal("irritability" in empty, false);
+});
+
+test("historyRows: усталость и раздражительность в строке чек-ина, пустые не выводятся", () => {
+	const feel = (extra) => ({
+		...empty,
+		feel: [{ score: 4, text: "", mood: null, stress: null, logged_at: "2026-11-08 20:00:00", ...extra }],
+	});
+	assert.equal(
+		historyRows(feel({ mood: 3, stress: 2, fatigue: 4, irritability: 2 }))[0].text,
+		"Самочувствие 4, настроение 3, стресс 2, усталость 4, раздражительность 2",
+	);
+	assert.equal(historyRows(feel({ irritability: 2 }))[0].text, "Самочувствие 4, раздражительность 2");
+	assert.equal(historyRows(feel({ fatigue: 4 }))[0].text, "Самочувствие 4, усталость 4");
 });
 
 test("canSave чек-ина: нужно только самочувствие", () => {

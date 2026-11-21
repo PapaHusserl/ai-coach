@@ -51,7 +51,16 @@ WELLBEING_DAYS = 7
 WORKLOAD_AHEAD_DAYS = 7
 AGENDA_BACK_DAYS = 1
 AGENDA_AHEAD_DAYS = 7
-WELLBEING_FIELDS = ("date", "logged_at", "score", "mood", "stress", "text")
+WELLBEING_FIELDS = (
+    "date",
+    "logged_at",
+    "score",
+    "mood",
+    "stress",
+    "fatigue",
+    "irritability",
+    "text",
+)
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
 WORKLOAD_CHARS = 5000
 WORKLOAD_SKIP = CLAUDE_COUNTERS

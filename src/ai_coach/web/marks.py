@@ -30,6 +30,8 @@ HOURS = ("work", "hobby", "rest")
 CHECKIN_SCORES = {
     "mood": "mood",
     "stress": "stress",
+    "fatigue": "fatigue",
+    "irritability": "irritability",
     "thoughts": "work_thoughts",
     "hindrance": "hindrance",
     "valuable": "valuable",

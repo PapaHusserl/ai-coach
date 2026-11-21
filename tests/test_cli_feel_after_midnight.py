@@ -62,6 +62,13 @@ def test_feel_at_0151_goes_to_yesterday(isolated: Path, monkeypatch: pytest.Monk
     assert feel_dates(isolated) == ["2026-10-10"]
 
 
+def test_fatigue_at_0100_goes_to_yesterday(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    freeze(monkeypatch, "2026-10-11 01:00:00")
+    runner.invoke(main.app, ["feel", "3", "--fatigue", "4"])
+    row = query(isolated, "SELECT date, fatigue FROM wellbeing_log")[0]
+    assert (row["date"], row["fatigue"]) == ("2026-10-10", 4)
+
+
 def test_feel_at_midnight_goes_to_yesterday(
     isolated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

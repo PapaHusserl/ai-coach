@@ -304,6 +304,9 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 ## П12: формы (партия 2)
 - Миграция 0034: `forms(name PK, title, fields_json, created_at, archived_at)` и `form_log(id, date, time, event_id, form, values_json, text, wellbeing_id)`; повтор ответа — новая строка. `store/forms.py` (`add_form`, `get_form`, `list_forms`, `archive_form`, `add_form_entry`, `list_form_log`), `agenda/forms.py` (`check_form`, `check_answers`; типы `number`, `scale`, `yesno`, `choice`; ключ `score` — «Самочувствие»), `mcp_server/forms.py` (`create_form`, `archive_form`, `get_forms`, `get_form_log`). Значение `coach_events.survey = "form:<имя>"` допустимо у любого вида (`agenda/draft.py: _survey` проверяет активность формы при создании; перенос события форму не перепроверяет); готовое имя опросника — только у `checkin`.
 
+## Н38: усталость и раздражительность (партия 1)
+- Миграция 0036: `wellbeing_log.fatigue`, `wellbeing_log.irritability` — INTEGER 1–5 с CHECK, NULL — не спрашивали (как `mood`, `stress`; имя `fatigue` совпадает с `focus_log.fatigue`, таблицы разные). Пишут `coach feel --fatigue --irritability` и анкета вечера пульта (`web/marks.py: CHECKIN_SCORES`); читают `get_wellbeing`, ряд `wellbeing` сводки (`WELLBEING_FIELDS`), история пункта в пульте. `evening_done` не меняется (по `mood` или `stress`); отклонения партия 1 не трогает.
+
 ## Н19: срыв в момент (партия 1)
 - Миграция 0027: `slip_log(id, date, logged_at, text NOT NULL CHECK (length(trim(text)) > 0))`, индекс по `date`; отдельная таблица, как `focus_log`. Текст — свободные эмоции как есть, без силы и списка поводов.
 - `store/journal.py`: `add_slip`, `list_slip`. CLI (`cli/journal.py`): `coach slip "текст" [--at HH:MM]` (слова без кавычек склеиваются; `--at` — время сегодняшнего дня самочувствия, будущее — ошибка; дата — `wellbeing_day`), `coach log slip [--date D]`. Записи только добавляются.
