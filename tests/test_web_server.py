@@ -1,6 +1,7 @@
 """HTTP-сервер пульта: /api/day, /static, методы, ошибки (шаг П1, партия 2)."""
 
 import http.client
+import importlib
 import json
 import socket
 import threading
@@ -91,6 +92,53 @@ def test_api_screen_without_date_is_200(
 
 def test_api_screen_garbage_date_is_400_with_text(port: int) -> None:
     status, body = request(port, "/api/screen?date=" + quote("мусор"))
+    assert status == 400
+    assert body.decode() == "date: нужна дата YYYY-MM-DD."
+
+
+def test_api_weather_returns_json(port: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ai_coach import location, weather
+    from ai_coach.web import weather as web_weather
+
+    importlib.reload(web_weather)  # место и кэш погоды - модульные
+    today = datetime.now().date()
+    days = [(today + timedelta(days=i)).isoformat() for i in range(7)]
+    answer = {
+        "utc_offset_seconds": 3600,
+        "current": {
+            "time": f"{days[0]}T14:00",
+            "temperature_2m": 3.7,
+            "apparent_temperature": 0.3,
+            "weather_code": 2,
+            "wind_speed_10m": 3.09,
+            "pressure_msl": 1015.4,
+        },
+        "daily": {
+            "time": days,
+            "weather_code": [3] * 7,
+            "temperature_2m_max": [5.6] * 7,
+            "temperature_2m_min": [1.9] * 7,
+            "precipitation_probability_max": [88] * 7,
+        },
+    }
+    monkeypatch.setattr(location, "read_place", lambda *_, **__: location.Place(52.52, 13.41))
+    monkeypatch.setattr(weather, "fetch_forecast", lambda place: answer)
+    try:
+        status, body = request(port, "/api/weather")
+    finally:
+        importlib.reload(web_weather)
+    assert status == 200
+    assert json.loads(body)["current"]["temperature"] == 3.7
+
+
+def test_api_weather_far_past_date_is_missing_range(port: int) -> None:
+    status, body = request(port, "/api/weather?date=2020-01-01")
+    assert status == 200
+    assert json.loads(body) == {"missing": "range"}
+
+
+def test_api_weather_garbage_date_is_400_with_text(port: int) -> None:
+    status, body = request(port, "/api/weather?date=" + quote("мусор"))
     assert status == 400
     assert body.decode() == "date: нужна дата YYYY-MM-DD."
 

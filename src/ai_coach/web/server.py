@@ -1,8 +1,8 @@
 """HTTP-сервер пульта на стандартной библиотеке: GET /, /static/*, /api/day?date=, /api/week?date=
 (неделя Пн-Вс и нагрузка вкладки «Тренировки»), /api/meeting?id=, /api/screen?date= (часы экрана,
-живое чтение ActivityWatch, в базу не пишет); пишет в базу
-только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry, /api/todo, /api/meeting;
-Origin = Host, Р1 = 2 П2), на каждый запрос своё соединение.
+живое чтение ActivityWatch, в базу не пишет), /api/weather?date= (погода, в базу не пишет); пишет
+в базу только POST из таблицы POST_ROUTES (/api/mark, /api/event, /api/pantry, /api/todo,
+/api/meeting; Origin = Host, Р1 = 2 П2), на каждый запрос своё соединение.
 Без ключа доступа: решение Влада (Р6 = 1)."""
 
 import json
@@ -32,6 +32,7 @@ from ai_coach.web.plan import apply_event
 from ai_coach.web.screen import screen_view
 from ai_coach.web.state import state_view
 from ai_coach.web.todo import save_todo, todo_view
+from ai_coach.web.weather import weather_view
 
 MAX_BODY = 64 * 1024
 SYNC_PATH = "/api/sync"
@@ -139,6 +140,7 @@ GET_VIEWS: dict[str, Callable[..., dict[str, Any]]] = {
     "/api/meeting": meeting_view,
     "/api/state": state_view,
     "/api/screen": screen_view,
+    "/api/weather": weather_view,
     SYNC_PATH: sync_view,
 }
 
