@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 from workload_fakes import write_config
@@ -380,6 +381,46 @@ def screen_cfg(tmp_path: Path, text: str) -> ScreenConfig:
     screen = load_config(write_config(tmp_path / "d.toml", text)).screen
     assert screen is not None
     return screen
+
+
+def weather_cfg(tmp_path: Path, text: str) -> Any:
+    return load_config(write_config(tmp_path / "w.toml", text)).weather
+
+
+def test_weather_section_gives_config(tmp_path: Path) -> None:
+    from ai_coach.workload.config import WeatherConfig
+
+    config = weather_cfg(tmp_path, "[weather]\nlatitude = 52.5234\nlongitude = 13.4114\n")
+    assert config == WeatherConfig(52.5234, 13.4114)
+
+
+def test_weather_no_section_is_none(tmp_path: Path) -> None:
+    assert weather_cfg(tmp_path, FULL) is None
+
+
+def test_weather_limits_are_inclusive(tmp_path: Path) -> None:
+    from ai_coach.workload.config import WeatherConfig
+
+    config = weather_cfg(tmp_path, "[weather]\nlatitude = -90.0\nlongitude = 180.0\n")
+    assert config == WeatherConfig(-90.0, 180.0)
+
+
+@pytest.mark.parametrize(
+    ("text", "key"),
+    [
+        ('[weather]\nlatitude = "52.5"\nlongitude = 13.4\n', "weather.latitude"),
+        ("[weather]\nlatitude = 52.5\nlongitude = true\n", "weather.longitude"),
+        ("[weather]\nlatitude = 120.0\nlongitude = 13.4\n", "weather.latitude"),
+        ("[weather]\nlatitude = 52.5\nlongitude = -180.5\n", "weather.longitude"),
+        ("[weather]\nlatitude = nan\nlongitude = 13.4\n", "weather.latitude"),
+        ("[weather]\nlatitude = 52.5\nlongitude = nan\n", "weather.longitude"),
+        ("[weather]\nlongitude = 13.4\n", "weather.latitude"),
+        ("[weather]\nlatitude = 52.5\n", "weather.longitude"),
+    ],
+)
+def test_weather_bad_section_is_config_error(tmp_path: Path, text: str, key: str) -> None:
+    with pytest.raises(WorkloadConfigError, match=key):
+        weather_cfg(tmp_path, text)
 
 
 def test_screen_demand_lists_are_lowercased(tmp_path: Path) -> None:

@@ -49,6 +49,14 @@ class ScreenConfig:
 
 
 @dataclass(frozen=True)
+class WeatherConfig:
+    """Запасное место для погоды ([weather]), когда macOS не дал геолокацию."""
+
+    lat: float
+    lon: float
+
+
+@dataclass(frozen=True)
 class WorkloadConfig:
     """categories: название календаря (strip) -> категория; ignore - названия, которые
     пропускаем; todo_path и hb_watch_path - откуда читать туду и груминг;
@@ -63,6 +71,7 @@ class WorkloadConfig:
     coach_calendar: str | None = None
     screen: ScreenConfig | None = None
     demand_rules: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
+    weather: WeatherConfig | None = None
 
     @property
     def has_calendar(self) -> bool:
@@ -235,6 +244,20 @@ def _screen(section: dict[str, Any]) -> ScreenConfig:
     )
 
 
+def _degrees(section: dict[str, Any], key: str, limit: float) -> float:
+    value = section.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise WorkloadConfigError(f"Конфиг нагрузки: weather.{key} должен быть числом.")
+    if not abs(value) <= limit:
+        raise WorkloadConfigError(f"Конфиг нагрузки: weather.{key} вне пределов ±{limit:g}.")
+    return float(value)
+
+
+def _weather(section: dict[str, Any]) -> WeatherConfig:
+    """[weather]: latitude в пределах ±90 и longitude в пределах ±180 - запасное место."""
+    return WeatherConfig(_degrees(section, "latitude", 90), _degrees(section, "longitude", 180))
+
+
 def _calendar_demand(section: dict[str, Any]) -> dict[str, list[str]]:
     """[calendar.demand]: challenge - regex на заголовок рабочей встречи (остальные - помеха).
     Чужой ключ, кавычка и плохая regex - ошибка."""
@@ -278,6 +301,15 @@ def load_config(path: str | Path | None = None) -> WorkloadConfig:
     hb_watch = Path(_path(paths, "hb_watch", fallback.hb_watch_path)).expanduser()
     projects = Path(_path(paths, "claude_projects", fallback.claude_projects_path)).expanduser()
     screen = _screen(_table(data, "screen")) if "screen" in data else None
+    weather = _weather(_table(data, "weather")) if "weather" in data else None
     return WorkloadConfig(
-        categories, ignore, todo, hb_watch, projects, coach, screen, _calendar_demand(section)
+        categories,
+        ignore,
+        todo,
+        hb_watch,
+        projects,
+        coach,
+        screen,
+        _calendar_demand(section),
+        weather,
     )

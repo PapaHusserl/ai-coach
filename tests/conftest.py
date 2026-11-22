@@ -33,6 +33,21 @@ def clean_syncer_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syncer, "_state", dict(_CLEAN_SYNC))  # pyright: ignore[reportPrivateUsage]
 
 
+@pytest.fixture(autouse=True)
+def no_real_place_and_weather(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Настоящие геолокация и сеть в тестах не вызываются: оба читателя по умолчанию отказывают."""
+    from ai_coach import location, weather
+
+    def refuse_place(*args: object, **kwargs: object) -> location.Place:
+        raise location.LocationError("unavailable")
+
+    def refuse_forecast(*args: object, **kwargs: object) -> dict[str, object]:
+        raise weather.WeatherError("тест: сеть не вызывается")
+
+    monkeypatch.setattr(location, "read_place", refuse_place)
+    monkeypatch.setattr(weather, "fetch_forecast", refuse_forecast)
+
+
 @pytest.fixture
 def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
     connection = open_db(tmp_path / "coach.db")

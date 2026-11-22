@@ -1,0 +1,49 @@
+{
+  "latitude": 52.52,
+  "longitude": 13.419998,
+  "generationtime_ms": 0.09,
+  "utc_offset_seconds": 3600,
+  "timezone": "Europe/Berlin",
+  "timezone_abbreviation": "GMT+1",
+  "elevation": 38.0,
+  "current_units": {
+    "time": "iso8601",
+    "interval": "seconds",
+    "temperature_2m": "°C",
+    "apparent_temperature": "°C",
+    "weather_code": "wmo code",
+    "wind_speed_10m": "m/s",
+    "pressure_msl": "hPa"
+  },
+  "current": {
+    "time": "2026-11-22T14:00",
+    "interval": 900,
+    "temperature_2m": 3.7,
+    "apparent_temperature": 0.3,
+    "weather_code": 2,
+    "wind_speed_10m": 3.09,
+    "pressure_msl": 1018.4
+  },
+  "daily_units": {
+    "time": "iso8601",
+    "weather_code": "wmo code",
+    "temperature_2m_max": "°C",
+    "temperature_2m_min": "°C",
+    "precipitation_probability_max": "%"
+  },
+  "daily": {
+    "time": [
+      "2026-11-22",
+      "2026-11-23",
+      "2026-11-24",
+      "2026-11-25",
+      "2026-11-26",
+      "2026-11-27",
+      "2026-11-28"
+    ],
+    "weather_code": [80, 3, 61, 45, 0, 2, 71],
+    "temperature_2m_max": [5.6, 3.5, 4.1, 2.0, 1.2, 2.8, 0.4],
+    "temperature_2m_min": [1.9, -0.3, 1.0, -1.5, -3.2, -2.1, -2.6],
+    "precipitation_probability_max": [88, 28, 74, 10, 0, 5, 60]
+  }
+}
