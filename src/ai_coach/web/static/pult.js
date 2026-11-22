@@ -24,6 +24,7 @@ import { pantryBusy } from "./pantry-pane.js";
 import { renderScale, scaleBusy } from "./scale-pane.js";
 import { refreshPanels, setupTabs } from "./tabs.js";
 import { loadTodo, todoBusy } from "./todo-pane.js";
+import { loadWeather } from "./weather-line.js";
 
 export * from "./pult-model.js";
 export * from "./week-model.js";
@@ -159,6 +160,7 @@ if (typeof document !== "undefined") {
 			render(view);
 			renderScale(view, load, openRow);
 			renderHeader(view.header, load);
+			loadWeather(view.date);
 			loadTodo(load);
 			document.body.dataset.day = view.date;
 			document.body.dataset.today = view.now.slice(0, 10);

@@ -188,6 +188,16 @@ def test_pult_topic_says_event_note_is_shown_under_the_item() -> None:
     assert "заметк" in topic("pult.md")
 
 
+def test_pult_topic_describes_weather_lines() -> None:
+    assert "погода" in topic("pult.md").lower()
+
+
+def test_pult_topic_names_weather_service_in_caution() -> None:
+    lines = [ln for ln in topic("pult.md").splitlines() if ln.startswith("- Осторожно")]
+    assert len(lines) == 1
+    assert "Open-Meteo" in lines[0]
+
+
 def test_pult_topic_describes_weight_and_sync_button() -> None:
     text = topic("pult.md")
     for needle in ("вес", "обновить", "coach sync"):
