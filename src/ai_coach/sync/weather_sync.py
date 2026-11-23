@@ -16,10 +16,12 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from ai_coach import location, weather
+from ai_coach.load.weather_signal import weather_report
 from ai_coach.location import LocationError, Place
 from ai_coach.store.journal import add_sync_log, first_wellbeing_day
 from ai_coach.store.weather import (
     add_weather_now,
+    add_weather_signal,
     days_with_hours,
     upsert_weather_day,
     upsert_weather_hours,
@@ -120,6 +122,24 @@ def backfill_weather(
     return message
 
 
+def _write_signals(conn: sqlite3.Connection, now: datetime) -> None:
+    """Сработавшие сегодня сигналы по часам базы; первая запись дня и кода остаётся."""
+    day = now.date()
+    for signal in weather_report(conn, day.isoformat(), now)["signals"]:
+        at_day = day + timedelta(days=1) if signal["next_day"] else day
+        add_weather_signal(
+            conn,
+            {
+                "date": day.isoformat(),
+                "kind": signal["kind"],
+                "value": signal["value"],
+                "limit_value": signal["limit"],
+                "extreme_at": f"{at_day.isoformat()}T{signal['at']}",
+                "created_at": now.isoformat(timespec="seconds"),
+            },
+        )
+
+
 def sync_weather(
     conn: sqlite3.Connection,
     now: datetime | None = None,
@@ -168,6 +188,7 @@ def sync_weather(
         for day in data["days"]:
             upsert_weather_day(conn, {**day, "fetched_at": started, **spot})
         upsert_weather_hours(conn, [{**hour, **hour_extra} for hour in hours])
+        _write_signals(conn, now)
         _log(conn, started, message, "ok")
     archive = backfill_weather(conn, place, source, now)
     return message if archive is None else f"{message}\n{archive}"

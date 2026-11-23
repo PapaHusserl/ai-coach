@@ -182,3 +182,44 @@ def test_days_with_hours_empty_table_is_empty(conn: sqlite3.Connection) -> None:
     from ai_coach.store.weather import days_with_hours
 
     assert not list(days_with_hours(conn, "2026-11-01", "2026-11-30"))
+
+
+def signal_row(**values: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "date": "2026-11-22",
+        "kind": "pressure_drop",
+        "value": 7.0,
+        "limit_value": 5,
+        "extreme_at": "2026-11-22T19:00",
+        "created_at": "2026-11-22T07:20:00",
+    }
+    return {**row, **values}
+
+
+def stored_signals(conn: sqlite3.Connection) -> list[tuple[object, ...]]:
+    sql = "SELECT date, kind, value, extreme_at FROM weather_signals ORDER BY date, kind"
+    return [tuple(r) for r in conn.execute(sql)]
+
+
+def test_add_weather_signal_writes_the_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import add_weather_signal
+
+    add_weather_signal(conn, signal_row())
+    assert stored_signals(conn) == [("2026-11-22", "pressure_drop", 7.0, "2026-11-22T19:00")]
+
+
+def test_add_weather_signal_first_record_of_day_stays(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import add_weather_signal
+
+    add_weather_signal(conn, signal_row())
+    add_weather_signal(conn, signal_row(value=9.5, extreme_at="2026-11-23T03:00"))
+    assert stored_signals(conn) == [("2026-11-22", "pressure_drop", 7.0, "2026-11-22T19:00")]
+
+
+def test_add_weather_signal_other_kind_and_other_day_are_new_rows(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import add_weather_signal
+
+    add_weather_signal(conn, signal_row())
+    add_weather_signal(conn, signal_row(kind="temperature_rise"))
+    add_weather_signal(conn, signal_row(date="2026-11-23"))
+    assert len(stored_signals(conn)) == 3

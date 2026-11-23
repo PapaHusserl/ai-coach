@@ -50,6 +50,16 @@ def days_with_hours(conn: sqlite3.Connection, start: str, end: str) -> set[str]:
     return {row["day"] for row in fetch_all(conn, sql, (start, end))}
 
 
+def add_weather_signal(conn: sqlite3.Connection, row: dict[str, Any]) -> None:
+    """Сигнал: date и kind (ключ), value, limit_value, extreme_at, created_at;
+    повтор даты и кода - первая запись остаётся."""
+    conn.execute(
+        "INSERT OR IGNORE INTO weather_signals (date, kind, value, limit_value, extreme_at, "
+        "created_at) VALUES (:date, :kind, :value, :limit_value, :extreme_at, :created_at)",
+        row,
+    )
+
+
 def last_weather_now(conn: sqlite3.Connection) -> dict[str, Any] | None:
     """Последнее наблюдение по времени observed_at."""
     sql = f"SELECT {NOW_COLUMNS} FROM weather_now ORDER BY observed_at DESC LIMIT 1"

@@ -738,3 +738,126 @@ def test_archive_does_not_count_as_sync_run(
     sync(conn)
     assert sync_runs_on(conn, NOW.date().isoformat()) == 0
     assert sync_runs_on(conn, date.today().isoformat()) == 0
+
+
+def shaped(
+    pressure: dict[str, float] | None = None, temperature: dict[str, float] | None = None
+) -> dict[str, Any]:
+    """Ответ с ровным рядом (давление 1015, температура 4) и точками по времени часа."""
+    data = answer()
+    hourly = data["hourly"]
+    times = hourly["time"]
+    for series, base, points in (
+        ("pressure_msl", 1015.0, pressure or {}),
+        ("temperature_2m", 4.0, temperature or {}),
+    ):
+        hourly[series][:] = [points.get(t, base) for t in times]
+    return data
+
+
+def set_limits(
+    monkeypatch: pytest.MonkeyPatch, pressure: float | None, temperature: float | None
+) -> None:
+    monkeypatch.setattr("ai_coach.load.weather_signal.PRESSURE_LIMIT", pressure)
+    monkeypatch.setattr("ai_coach.load.weather_signal.TEMPERATURE_LIMIT", temperature)
+
+
+def stored_signals(conn: sqlite3.Connection) -> list[tuple[Any, ...]]:
+    sql = "SELECT date, kind, value, limit_value, extreme_at FROM weather_signals ORDER BY kind"
+    return [tuple(r) for r in conn.execute(sql)]
+
+
+def test_signal_is_written_with_date_value_limit_and_full_hour(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    data = shaped(pressure={"2026-11-22T19:00": 1008.0})
+    sync(conn, fetch=lambda place: data)
+    assert stored_signals(conn) == [("2026-11-22", "pressure_drop", 7.0, 5, "2026-11-22T19:00")]
+
+
+def test_signal_created_at_is_started_at_of_the_sync_log_row(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    data = shaped(pressure={"2026-11-22T19:00": 1008.0})
+    sync(conn, fetch=lambda place: data)
+    created = conn.execute("SELECT created_at FROM weather_signals").fetchone()["created_at"]
+    started = conn.execute("SELECT started_at FROM sync_log WHERE kind = 'weather'").fetchone()[
+        "started_at"
+    ]
+    assert created == started == "2026-11-22T14:10:00"
+
+
+def test_signal_extreme_tomorrow_keeps_tomorrows_date(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    data = shaped(pressure={"2026-11-23T03:00": 1008.0})
+    sync(conn, fetch=lambda place: data)
+    [row] = stored_signals(conn)
+    assert (row[0], row[4]) == ("2026-11-22", "2026-11-23T03:00")
+
+
+def test_second_sync_same_day_keeps_first_record(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    first = shaped(pressure={"2026-11-22T19:00": 1008.0})
+    later = shaped(pressure={"2026-11-22T19:00": 1000.0})
+    sync(conn, fetch=lambda place: first)
+    sync(conn, now=NOW + timedelta(minutes=20), fetch=lambda place: later)
+    assert stored_signals(conn) == [("2026-11-22", "pressure_drop", 7.0, 5, "2026-11-22T19:00")]
+
+
+def test_no_signal_in_the_morning_and_signal_after_day_sync(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    sync(conn, now=datetime(2026, 11, 22, 7, 20), fetch=lambda place: shaped())
+    assert stored_signals(conn) == []
+    data = shaped(pressure={"2026-11-22T19:00": 1006.0})
+    sync(conn, fetch=lambda place: data)
+    assert stored_signals(conn) == [("2026-11-22", "pressure_drop", 9.0, 5, "2026-11-22T19:00")]
+
+
+def test_two_codes_in_one_day_are_two_rows(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, 7)
+    data = shaped(pressure={"2026-11-22T19:00": 1008.0}, temperature={"2026-11-22T16:00": 12.0})
+    sync(conn, fetch=lambda place: data)
+    assert [r[1] for r in stored_signals(conn)] == ["pressure_drop", "temperature_rise"]
+
+
+def test_sync_without_signal_writes_no_rows(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, 7)
+    sync(conn, fetch=lambda place: shaped())
+    assert stored_signals(conn) == []
+
+
+def test_unset_limits_write_no_rows_at_any_series(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, None, None)
+    data = shaped(pressure={"2026-11-22T19:00": 990.0}, temperature={"2026-11-22T16:00": 25.0})
+    sync(conn, fetch=lambda place: data)
+    assert stored_signals(conn) == []
+
+
+def test_signal_is_not_added_to_the_summary(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, None)
+    data = shaped(pressure={"2026-11-22T19:00": 1008.0})
+    assert sync(conn, fetch=lambda place: data) == "погода: записана, +4°"
+
+
+def test_failed_sync_writes_no_signal(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_limits(monkeypatch, 5, 7)
+    sync(conn, fetch=no_network)
+    assert stored_signals(conn) == []
