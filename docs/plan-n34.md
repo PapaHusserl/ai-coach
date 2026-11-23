@@ -386,6 +386,10 @@ report done <id> --backlog <N>` (или `--drop` с причиной в чате
 - на выходе П1: `make check` 01:15–01:22 2026-11-24 (после правки vulture, круг 4) — rc=0, pytest 7228 passed за
   6 мин 14 с, smells 0, `make dead` чисто. Первый прогон 01:14 был красным на `make dead` (report_add/list/done) —
   исправлено в `pyproject.toml` `[tool.vulture]`.
+- mutmut П1 (режим «долго», Влад): 01:23–01:25 — 71 killed, 13 survived (`store/reports.py`); доеба —
+  `tests/test_store_reports.py`; повтор 01:26–01:27 — убиты `close_report` _6, _13, _30; 10 выживших эквивалентны
+  (регистр имён SQL и ключей update в SQLite; сверено мамой по `mutmut show`, круг 5).
+- Строки allow (`coach report`, `coach/report.md`) в `.claude/settings.json` — добавил Влад (окно 2026-11-24).
 
 ## Смета (кабан-тесть, режим 1)
 
