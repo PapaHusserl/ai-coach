@@ -60,7 +60,11 @@ def test_sync_writes_sync_log(isolated: Path, monkeypatch: pytest.MonkeyPatch) -
     use_client(monkeypatch, FakeGarmin())
     runner.invoke(main.app, ["sync", "--days", "1"])
     rows = sync_log(isolated)
-    assert [(r["kind"], r["status"]) for r in rows] == [("sync", "ok"), ("workload", "ok")]
+    assert [(r["kind"], r["status"]) for r in rows] == [
+        ("sync", "ok"),
+        ("workload", "ok"),
+        ("weather", "error"),
+    ]
 
 
 def test_repeated_sync_does_not_change_database(

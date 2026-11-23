@@ -1,5 +1,6 @@
 """Синк из пульта: поток-демон, один запуск за раз, статус (шаг П4, партия 3)."""
 
+import json
 import threading
 import time
 from collections.abc import Iterator
@@ -165,6 +166,55 @@ def test_unexpected_failure_goes_to_status_error(db: Path, monkeypatch: pytest.M
     status = syncer.status()
     assert status["running"] is False
     assert status["error"] == "сбой воркера"
+
+
+def with_weather(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ai_coach import location, weather
+
+    path = Path(__file__).parent / "fixtures" / "weather" / "open_meteo.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(location, "read_place", lambda *a, **k: location.Place(52.52, 13.41))
+    monkeypatch.setattr(weather, "fetch_forecast", lambda place: raw)
+
+
+def kinds(db: Path) -> list[str]:
+    conn = open_db(db)
+    try:
+        return [r["kind"] for r in conn.execute("SELECT kind FROM sync_log ORDER BY id")]
+    finally:
+        conn.close()
+
+
+def test_run_syncs_weather_after_workload(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_weather(monkeypatch)
+    syncer.start(db)
+    wait_idle()
+    conn = open_db(db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM weather_now").fetchone()[0] == 1
+    finally:
+        conn.close()
+    log = kinds(db)
+    assert log.index("weather") > log.index("workload")
+
+
+def test_weather_failure_is_not_in_status_error(db: Path) -> None:
+    syncer.start(db)
+    wait_idle()
+    assert "weather" in kinds(db)
+    assert syncer.status()["error"] is None
+
+
+def test_weather_runs_even_after_garmin_error(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_tokens(*a: object, **k: object) -> None:
+        raise GarminAuthError("Токенов Garmin нет.")
+
+    monkeypatch.setattr(syncer, "load_client", no_tokens)
+    with_weather(monkeypatch)
+    syncer.start(db)
+    wait_idle()
+    assert "weather" in kinds(db)
+    assert syncer.status()["error"] == "Токенов Garmin нет."
 
 
 def test_sync_thread_is_daemon(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:

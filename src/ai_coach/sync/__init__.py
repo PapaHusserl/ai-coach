@@ -3,6 +3,7 @@
 from ai_coach.sync.export_import import ExportImportResult, import_export, summary
 from ai_coach.sync.fit_import import FitImportError, import_fit
 from ai_coach.sync.garmin_sync import sync
+from ai_coach.sync.weather_sync import sync_weather
 from ai_coach.sync.workload_sync import sync_workload
 
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "import_fit",
     "summary",
     "sync",
+    "sync_weather",
     "sync_workload",
 ]

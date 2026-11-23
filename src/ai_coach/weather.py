@@ -83,9 +83,13 @@ def fetch_forecast(place: Place) -> dict[str, Any]:
         raise WeatherError(f"Open-Meteo не ответил: {e}") from None
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
 def parse_forecast(answer: Any) -> dict[str, Any]:
-    """{"current": {...}, "days": [...], "utc_offset_seconds": int}; нет ключа, не тот тип или
-    списки дня разной длины - WeatherError."""
+    """{"current": {...}, "days": [...], "utc_offset_seconds": int}; нет ключа, не тот тип, не
+    число в current или в code/t_max/t_min дня или списки дня разной длины - WeatherError."""
     try:
         data = cast(dict[str, Any], answer)
         offset = data["utc_offset_seconds"]
@@ -103,20 +107,23 @@ def parse_forecast(answer: Any) -> dict[str, Any]:
         columns = [daily[key] for key in keys]
         if len({len(column) for column in columns}) != 1:
             raise WeatherError("Open-Meteo: списки дней разной длины.")
-        return {
-            "current": {
-                "time": now["time"],
-                "temperature": now["temperature_2m"],
-                "apparent": now["apparent_temperature"],
-                "code": now["weather_code"],
-                "wind": now["wind_speed_10m"],
-                "pressure": now["pressure_msl"],
-            },
-            "days": [
-                {"date": d, "code": c, "t_max": hi, "t_min": lo, "precip_prob": p}
-                for d, c, hi, lo, p in zip(*columns, strict=True)
-            ],
-            "utc_offset_seconds": offset,
+        current: dict[str, Any] = {
+            "time": now["time"],
+            "temperature": now["temperature_2m"],
+            "apparent": now["apparent_temperature"],
+            "code": now["weather_code"],
+            "wind": now["wind_speed_10m"],
+            "pressure": now["pressure_msl"],
         }
+        days: list[dict[str, Any]] = [
+            {"date": d, "code": c, "t_max": hi, "t_min": lo, "precip_prob": p}
+            for d, c, hi, lo, p in zip(*columns, strict=True)
+        ]
+        numbers: list[Any] = [v for k, v in current.items() if k != "time"]
+        for day in days:
+            numbers += [day["code"], day["t_max"], day["t_min"]]
+        if not all(_is_number(v) for v in numbers):
+            raise WeatherError("Open-Meteo: в ответе не число.")
+        return {"current": current, "days": days, "utc_offset_seconds": offset}
     except (KeyError, TypeError) as e:
         raise WeatherError(f"Open-Meteo: ответ не разобрать ({e!r}).") from None

@@ -906,6 +906,11 @@ def test_start_topic() -> None:
         assert needle in text, needle
 
 
+def test_start_topic_names_weather_in_sync_result() -> None:
+    lines = [ln for ln in topic("start.md").splitlines() if ln.startswith("- Что получу")]
+    assert any("погод" in ln and "нагрузк" in ln for ln in lines)
+
+
 def test_training_topic() -> None:
     text = topic("training.md")
     for needle in ("coach approve", "coach push", "coach cancel", "coach link", "CTL", "ATL"):

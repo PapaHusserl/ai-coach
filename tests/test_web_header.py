@@ -140,6 +140,36 @@ def test_header_metrics_without_day_row_is_none(conn: sqlite3.Connection) -> Non
     assert header_view(conn, DAY, NOW)["metrics"] is None
 
 
+def test_header_sync_ignores_failed_weather_row(conn: sqlite3.Connection) -> None:
+    add_sync_log(
+        conn,
+        {
+            "started_at": "2026-11-03T08:00:00",
+            "kind": "workload",
+            "status": "ok",
+            "finished_at": "2026-11-03T08:00:45",
+        },
+    )
+    add_sync_log(
+        conn,
+        {
+            "started_at": "2026-11-03T08:00:46",
+            "kind": "weather",
+            "status": "error",
+            "finished_at": "2026-11-03T08:00:47",
+            "message": "погода: нет связи",
+        },
+    )
+    sync = header_view(conn, DAY, NOW)["sync"]
+    assert (sync["status"], sync["error"]) == ("ok", None)
+
+
+def test_header_sync_only_weather_rows_means_no_sync(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-11-03T08:00:46", "kind": "weather", "status": "error"})
+    sync = header_view(conn, DAY, NOW)["sync"]
+    assert (sync["status"], sync["finished_at"]) == (None, None)
+
+
 def test_header_sync_is_last_log_not_by_day(conn: sqlite3.Connection) -> None:
     add_sync_log(
         conn,

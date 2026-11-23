@@ -256,8 +256,9 @@ def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
 
 
 def last_sync_log(conn: sqlite3.Connection) -> dict[str, Any] | None:
-    """Последняя запись sync_log (по id)."""
-    return fetch_one(conn, "SELECT * FROM sync_log ORDER BY id DESC LIMIT 1", ())
+    """Последняя запись sync_log (по id), кроме погоды (kind='weather')."""
+    sql = "SELECT * FROM sync_log WHERE kind != 'weather' ORDER BY id DESC LIMIT 1"
+    return fetch_one(conn, sql, ())
 
 
 def sync_runs_on(conn: sqlite3.Connection, day: str) -> int:

@@ -55,7 +55,8 @@ function range(day) {
 }
 
 function dayText(day) {
-	const parts = [range(day), weatherWord(day.code), `осадки ${day.precip_prob}%`];
+	const rain = typeof day.precip_prob === "number" ? `осадки ${day.precip_prob}%` : null;
+	const parts = [range(day), weatherWord(day.code), rain];
 	return parts.filter(Boolean).join(", ");
 }
 

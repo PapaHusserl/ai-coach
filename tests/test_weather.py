@@ -96,6 +96,24 @@ def test_parse_forecast_not_a_dict_is_error(bad: Any) -> None:
         parse_forecast(bad)
 
 
+@pytest.mark.parametrize("key", ["temperature_2m", "apparent_temperature", "wind_speed_10m"])
+@pytest.mark.parametrize("bad", [None, "3.7"])
+def test_parse_forecast_current_not_a_number_is_error(key: str, bad: Any) -> None:
+    data = answer()
+    data["current"][key] = bad
+    with pytest.raises(WeatherError):
+        parse_forecast(data)
+
+
+@pytest.mark.parametrize("key", ["weather_code", "temperature_2m_max", "temperature_2m_min"])
+@pytest.mark.parametrize("bad", [None, "5.6"])
+def test_parse_forecast_day_not_a_number_is_error(key: str, bad: Any) -> None:
+    data = answer()
+    data["daily"][key][0] = bad
+    with pytest.raises(WeatherError):
+        parse_forecast(data)
+
+
 def test_parse_forecast_lists_of_different_length_is_error() -> None:
     data = copy.deepcopy(answer())
     data["daily"]["temperature_2m_min"] = data["daily"]["temperature_2m_min"][:-1]

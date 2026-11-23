@@ -155,6 +155,18 @@ test("weatherLines: missing place без why → место не определ�
 	assert.deepEqual(weatherLines({ missing: "place" }), ["погода: место не определено"]);
 });
 
+test("weatherLines: у дня без precip_prob нет части «осадки» (Р53 = 1)", async () => {
+	const { weatherLines } = await model();
+	const view = { ...fresh, today: { ...TODAY, precip_prob: null } };
+	assert.deepEqual(weatherLines(view)[1], "сегодня +2…+6°, ливень · завтра 0…+4°, пасмурно, осадки 28%");
+});
+
+test("weatherLines: будущий день без precip_prob — без «осадки»", async () => {
+	const { weatherLines } = await model();
+	const view = { day: { ...DAY, precip_prob: null }, fetched_at: FETCHED, stale: false };
+	assert.deepEqual(weatherLines(view), ["прогноз: 0…+4°, пасмурно"]);
+});
+
 test("weatherLines: missing place, unavailable → место не определено", async () => {
 	const { weatherLines } = await model();
 	assert.deepEqual(weatherLines({ missing: "place", why: "unavailable" }), [
