@@ -170,3 +170,77 @@ def test_weather_word(code: int, word: str) -> None:
 
 def test_weather_word_unknown_code_is_none() -> None:
     assert weather_word(1234) is None
+
+
+def test_forecast_url_query_is_exact() -> None:
+    import urllib.parse
+
+    from ai_coach.weather import CURRENT, DAILY
+
+    url = forecast_url(Place(52.52, 13.41))
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+    assert query == {
+        "latitude": "52.52",
+        "longitude": "13.41",
+        "current": CURRENT,
+        "daily": DAILY,
+        "wind_speed_unit": "ms",
+        "timezone": "auto",
+        "forecast_days": "7",
+    }
+
+
+def test_forecast_url_keeps_commas_unescaped() -> None:
+    assert "%2C" not in forecast_url(Place(52.52, 13.41))
+
+
+def test_fetch_forecast_passes_url_and_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def fake(*args: Any, **kwargs: Any) -> FakeResponse:
+        seen.append((args, kwargs))
+        return FakeResponse(FIXTURE.read_bytes())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    place = Place(52.52, 13.41)
+    fetch_forecast(place)
+    assert seen == [((forecast_url(place),), {"timeout": 5})]
+
+
+def test_fetch_forecast_error_message_has_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("нет сети")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(WeatherError, match=r"^Open-Meteo не ответил: .*нет сети"):
+        fetch_forecast(Place(52.52, 13.41))
+
+
+def test_parse_forecast_offset_error_message() -> None:
+    data = answer()
+    data["utc_offset_seconds"] = "3600"
+    with pytest.raises(WeatherError, match=r"^Open-Meteo: utc_offset_seconds не целое\.$"):
+        parse_forecast(data)
+
+
+def test_parse_forecast_lengths_error_message() -> None:
+    data = answer()
+    data["daily"]["temperature_2m_min"] = data["daily"]["temperature_2m_min"][:-1]
+    with pytest.raises(WeatherError, match=r"^Open-Meteo: списки дней разной длины\.$"):
+        parse_forecast(data)
+
+
+def test_parse_forecast_not_number_error_message() -> None:
+    data = answer()
+    data["current"]["temperature_2m"] = None
+    with pytest.raises(WeatherError, match=r"^Open-Meteo: в ответе не число\.$"):
+        parse_forecast(data)
+
+
+def test_parse_forecast_missing_key_error_message() -> None:
+    data = answer()
+    del data["daily"]
+    with pytest.raises(
+        WeatherError, match=r"^Open-Meteo: ответ не разобрать \(KeyError\('daily'\)\)\.$"
+    ):
+        parse_forecast(data)

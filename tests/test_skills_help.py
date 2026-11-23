@@ -911,6 +911,36 @@ def test_start_topic_names_weather_in_sync_result() -> None:
     assert any("погод" in ln and "нагрузк" in ln for ln in lines)
 
 
+def test_weather_topic_has_needles() -> None:
+    text = topic("weather.md")
+    for needle in (
+        "погода",
+        "Open-Meteo",
+        "get_weather",
+        "геолокаци",
+        "history",
+        "observed_at",
+        "[weather]",
+        "терминал",
+    ):
+        assert needle in text, needle
+
+
+def test_weather_topic_place_unknown_line_names_ten_seconds() -> None:
+    lines = [ln for ln in topic("weather.md").splitlines() if "место не определено" in ln]
+    assert any("10 секунд" in ln for ln in lines)
+
+
+def test_weather_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "weather.md").read_bytes()) >= 200
+
+
+def test_help_index_names_weather_tool_and_topic() -> None:
+    text = HELP.read_text()
+    assert "get_weather" in text
+    assert "weather.md" in text
+
+
 def test_training_topic() -> None:
     text = topic("training.md")
     for needle in ("coach approve", "coach push", "coach cancel", "coach link", "CTL", "ATL"):

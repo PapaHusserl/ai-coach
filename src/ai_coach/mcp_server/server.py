@@ -23,6 +23,7 @@ from ai_coach.mcp_server import (
 )
 from ai_coach.mcp_server import illness as illness_tool
 from ai_coach.mcp_server import overload as overload_tool
+from ai_coach.mcp_server import weather as weather_tool
 from ai_coach.mcp_server.tools import MAX_CHARS, MAX_ROWS
 from ai_coach.nutrition.groups import FOOD_GROUPS, GROUP_MAX_DAYS, GROUP_MIN_DAYS
 from ai_coach.store.db import open_db
@@ -45,6 +46,8 @@ INSTRUCTIONS = (
     "(часы по категориям) и события Claude Code берутся из базы, их кладёт coach sync или "
     "coach screen; к календарю и ActivityWatch MCP не ходит; названия событий и каталогов "
     "Claude — только get_workload(events=true) на один день, названий приложений и окон нет. "
+    "Погода (get_weather): из базы, её кладёт coach sync; MCP к сервису погоды и геолокации "
+    "не ходит. "
     "Недельный обзор (get_weekly_review): цифры по неделям Пн-Вс и дельты, без выводов; "
     "в сводке week_review_due - пора проводить обзор, после обзора тренер "
     "отмечает его командой coach review done (CLI, не MCP). "
@@ -124,6 +127,17 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         + "events=true - только на один день "
         "(date_from = date_to): ещё и events с названиями и claude_repos_names (каталоги "
         "Claude Code дня). Пишет coach sync (и coach screen, coach claude).",
+    ),
+    "get_weather": (
+        weather_tool.weather,
+        "Погода из базы (date_from, date_to - YYYY-MM-DD, до 92 дней): now - последнее "
+        "наблюдение (observed_at, temperature, apparent, code, word, wind м/с, pressure гПа), "
+        "всегда последнее, даже вне периода, null - погоды в базе нет; rows - дни периода "
+        "(date, code, word, t_max, t_min, precip_prob, fetched_at); history - наблюдения "
+        "периода (observed_at, temperature, pressure): одна точка на синк, неравномерно, "
+        "не почасовой ряд. Не больше 60 дней и 60 наблюдений, остаются самые новые: "
+        "truncated у дней, history.truncated у наблюдений. Погода на момент последнего "
+        "coach sync, обновить - coach sync.",
     ),
     "get_overload": (
         overload_tool.overload,

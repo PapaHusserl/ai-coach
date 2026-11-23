@@ -99,6 +99,12 @@ def test_success_logs_weather_ok(conn: sqlite3.Connection) -> None:
     assert weather_log(conn) == [("weather", "ok")]
 
 
+def test_success_log_message_is_the_summary(conn: sqlite3.Connection) -> None:
+    summary = sync(conn)
+    row = conn.execute("SELECT message FROM sync_log WHERE kind = 'weather'").fetchone()
+    assert row["message"] == summary
+
+
 def test_summary_without_mark_for_macos_place(conn: sqlite3.Connection) -> None:
     assert sync(conn) == "погода: записана, +4°"
 
@@ -140,6 +146,20 @@ def test_place_failure_without_spare_gives_reason_text(
     conn: sqlite3.Connection, reason: str, text: str
 ) -> None:
     assert sync(conn, locate=refuse(reason)) == text
+
+
+def test_broken_config_and_place_failure_gives_reason_and_logs_error(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach.sync import weather_sync
+    from ai_coach.workload.config import WorkloadConfigError
+
+    def broken() -> None:
+        raise WorkloadConfigError("битый конфиг")
+
+    monkeypatch.setattr(weather_sync, "load_config", broken)
+    assert sync(conn, locate=refuse("denied")) == "погода: нет доступа к геолокации"
+    assert weather_log(conn) == [("weather", "error")]
 
 
 def test_service_failure_gives_no_connection_text(conn: sqlite3.Connection) -> None:

@@ -411,6 +411,7 @@ def test_weather_limits_are_inclusive(tmp_path: Path) -> None:
         ('[weather]\nlatitude = "52.5"\nlongitude = 13.4\n', "weather.latitude"),
         ("[weather]\nlatitude = 52.5\nlongitude = true\n", "weather.longitude"),
         ("[weather]\nlatitude = 120.0\nlongitude = 13.4\n", "weather.latitude"),
+        ("[weather]\nlatitude = 90.5\nlongitude = 13.4\n", "weather.latitude"),
         ("[weather]\nlatitude = 52.5\nlongitude = -180.5\n", "weather.longitude"),
         ("[weather]\nlatitude = nan\nlongitude = 13.4\n", "weather.latitude"),
         ("[weather]\nlatitude = 52.5\nlongitude = nan\n", "weather.longitude"),

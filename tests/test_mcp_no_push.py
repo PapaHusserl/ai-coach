@@ -70,6 +70,7 @@ EXPECTED_TOOLS = {
     "get_nutrient_norms",
     "get_workout_link",
     "get_workload",
+    "get_weather",
     "get_overload",
     "get_practices",
     "get_habits",

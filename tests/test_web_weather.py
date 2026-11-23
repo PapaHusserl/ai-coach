@@ -231,6 +231,14 @@ def test_weather_is_cached_for_14_minutes(
     assert len(fakes.fetched) == 1
 
 
+def test_cached_weather_is_not_stale(
+    wv: ModuleType, conn: sqlite3.Connection, fakes: Fakes
+) -> None:
+    view_at(wv, conn, TODAY, NOW)
+    view = view_at(wv, conn, TODAY, NOW + timedelta(minutes=5))
+    assert view["stale"] is False
+
+
 def test_weather_is_fetched_again_after_16_minutes(
     wv: ModuleType, conn: sqlite3.Connection, fakes: Fakes
 ) -> None:

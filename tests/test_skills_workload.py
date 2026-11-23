@@ -577,6 +577,21 @@ def test_coach_step_3_keeps_past_entries_and_records_link() -> None:
     assert "cat .claude/agents/coach/records.md" in step
 
 
+def test_coach_step_3_names_group_backfill() -> None:
+    step = next(ln for ln in coach_text().splitlines() if ln.startswith("3. Спроси"))
+    assert "дозапись групп" in step
+
+
+def test_coach_records_file_holds_group_backfill_pointer() -> None:
+    text = (ROOT / "agents" / "coach" / "records.md").read_text(encoding="utf-8")
+    assert "cat .claude/skills/coach-food/groups.md" in text
+    assert "Дозапись старым записям" in text
+
+
+def test_coach_md_has_no_groups_file_line() -> None:
+    assert "coach-food/groups.md" not in coach_text()
+
+
 def test_coach_records_file_starts_with_past_entry_rule() -> None:
     text = (ROOT / "agents" / "coach" / "records.md").read_text(encoding="utf-8")
     assert "--at <YYYY-MM-DD>" in text
