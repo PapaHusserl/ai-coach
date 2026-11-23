@@ -74,3 +74,79 @@ def test_list_weather_days_period_order_and_no_place(conn: sqlite3.Connection) -
     rows = list_weather_days(conn, "2026-11-22", "2026-11-23")
     assert [r["date"] for r in rows] == ["2026-11-22", "2026-11-23"]
     assert not HIDDEN & set(rows[0])
+
+
+def put_hour(conn: sqlite3.Connection, time: str, temperature: float = 2.0) -> None:
+    conn.execute(
+        "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, humidity, wind, "
+        "fetched_at, lat, lon, place_source, source) "
+        "VALUES (?, ?, 1018.4, 1008.4, 80, 3.0, '2026-11-22T14:10:00', 52.52, 13.41, 'macos', "
+        "'forecast')",
+        (time, temperature),
+    )
+    conn.commit()
+
+
+def test_list_weather_hours_takes_period_in_time_order(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import list_weather_hours
+
+    for time in (
+        "2026-11-23T00:00",
+        "2026-11-22T23:00",
+        "2026-11-22T00:00",
+        "2026-11-22T12:00",
+        "2026-11-21T23:00",
+    ):
+        put_hour(conn, time)
+    rows = list_weather_hours(conn, "2026-11-22", "2026-11-22")
+    assert [r["time"] for r in rows] == ["2026-11-22T00:00", "2026-11-22T12:00", "2026-11-22T23:00"]
+
+
+def test_list_weather_hours_rows_have_no_place_and_keep_numbers(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import list_weather_hours
+
+    put_hour(conn, "2026-11-22T12:00", temperature=2.5)
+    [row] = list_weather_hours(conn, "2026-11-22", "2026-11-22")
+    assert not HIDDEN & set(row)
+    assert (row["temperature"], row["pressure"]) == (2.5, 1018.4)
+
+
+def hour_row(time: str, temperature: float) -> dict[str, object]:
+    return {
+        "time": time,
+        "temperature": temperature,
+        "pressure": 1018.4,
+        "pressure_surface": 1008.4,
+        "humidity": 80,
+        "wind": 3.0,
+        "fetched_at": "2026-11-22T14:10:00",
+        "lat": 52.52,
+        "lon": 13.41,
+        "place_source": "macos",
+        "source": "forecast",
+    }
+
+
+def test_upsert_weather_hours_two_rows_are_two_records(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_weather_hours
+
+    upsert_weather_hours(
+        conn, [hour_row("2026-11-22T12:00", 1.0), hour_row("2026-11-22T13:00", 2.0)]
+    )
+    assert conn.execute("SELECT COUNT(*) FROM weather_hours").fetchone()[0] == 2
+
+
+def test_upsert_weather_hours_same_time_replaces_temperature(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_weather_hours
+
+    upsert_weather_hours(conn, [hour_row("2026-11-22T12:00", 1.0)])
+    upsert_weather_hours(conn, [hour_row("2026-11-22T12:00", 7.5)])
+    rows = conn.execute("SELECT temperature FROM weather_hours").fetchall()
+    assert [r["temperature"] for r in rows] == [7.5]
+
+
+def test_list_weather_hours_empty_period_is_empty(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import list_weather_hours
+
+    put_hour(conn, "2026-11-22T12:00")
+    assert list_weather_hours(conn, "2026-11-24", "2026-11-25") == []

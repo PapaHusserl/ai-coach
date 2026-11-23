@@ -15,6 +15,7 @@ URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT = 5
 CURRENT = "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,pressure_msl"
 DAILY = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+HOURLY = "temperature_2m,pressure_msl,surface_pressure,relative_humidity_2m,wind_speed_10m"
 
 # Слова по коду WMO; та же таблица в web/static/weather-model.js (сверяет тест).
 WORDS = {
@@ -68,6 +69,8 @@ def forecast_url(place: Place) -> str:
             "wind_speed_unit": "ms",
             "timezone": "auto",
             "forecast_days": 7,
+            "past_days": 1,
+            "hourly": HOURLY,
         },
         safe=",",
     )
@@ -127,3 +130,38 @@ def parse_forecast(answer: Any) -> dict[str, Any]:
         return {"current": current, "days": days, "utc_offset_seconds": offset}
     except (KeyError, TypeError) as e:
         raise WeatherError(f"Open-Meteo: ответ не разобрать ({e!r}).") from None
+
+
+# Ряд сервиса -> ключ часа; температура обязательна, остальные могут быть null.
+HOUR_SERIES = {
+    "temperature_2m": "temperature",
+    "pressure_msl": "pressure",
+    "surface_pressure": "pressure_surface",
+    "relative_humidity_2m": "humidity",
+    "wind_speed_10m": "wind",
+}
+
+
+def parse_hourly(answer: Any) -> list[dict[str, Any]]:
+    """Часы из блока hourly (прогноз и архив): список {"time", "temperature", "pressure",
+    "pressure_surface", "humidity", "wind"}. Нет блока или ряда, ряды разной длины, время не
+    строка, температура не число, в остальных рядах не число и не null - WeatherError."""
+    try:
+        hourly = answer["hourly"]
+        times = hourly["time"]
+        columns = [hourly[name] for name in HOUR_SERIES]
+        if any(len(column) != len(times) for column in columns):
+            raise WeatherError("Open-Meteo: ряды часов разной длины.")
+        hours = [
+            {"time": t, **dict(zip(HOUR_SERIES.values(), values, strict=True))}
+            for t, *values in zip(times, *columns, strict=True)
+        ]
+    except (KeyError, TypeError) as e:
+        raise WeatherError(f"Open-Meteo: ответ не разобрать ({e!r}).") from None
+    for hour in hours:
+        rest = [v for k, v in hour.items() if k not in ("time", "temperature")]
+        if not isinstance(hour["time"], str) or not _is_number(hour["temperature"]):
+            raise WeatherError("Open-Meteo: час без времени или температуры.")
+        if not all(v is None or _is_number(v) for v in rest):
+            raise WeatherError("Open-Meteo: в ответе не число.")
+    return hours

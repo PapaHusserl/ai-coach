@@ -18,6 +18,7 @@ from ai_coach.weather import (
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "weather" / "open_meteo.json"
+HOURLY = "temperature_2m,pressure_msl,surface_pressure,relative_humidity_2m,wind_speed_10m"
 
 
 def answer() -> dict[str, Any]:
@@ -187,6 +188,8 @@ def test_forecast_url_query_is_exact() -> None:
         "wind_speed_unit": "ms",
         "timezone": "auto",
         "forecast_days": "7",
+        "past_days": "1",
+        "hourly": HOURLY,
     }
 
 
@@ -244,3 +247,115 @@ def test_parse_forecast_missing_key_error_message() -> None:
         WeatherError, match=r"^Open-Meteo: ответ не разобрать \(KeyError\('daily'\)\)\.$"
     ):
         parse_forecast(data)
+
+
+def test_forecast_url_hourly_is_five_series_in_one_string() -> None:
+    assert f"hourly={HOURLY}&" in forecast_url(Place(52.52, 13.41)) + "&"
+
+
+def test_forecast_url_asks_one_past_day() -> None:
+    assert "past_days=1" in forecast_url(Place(52.52, 13.41))
+
+
+def test_parse_hourly_gives_192_hours_in_time_order() -> None:
+    from ai_coach.weather import parse_hourly
+
+    hours = parse_hourly(answer())
+    assert len(hours) == 192
+    assert hours[0]["time"] == "2026-11-21T00:00"
+    assert hours[-1]["time"] == "2026-11-28T23:00"
+
+
+def test_parse_hourly_hour_has_six_values() -> None:
+    from ai_coach.weather import parse_hourly
+
+    hour = parse_hourly(answer())[10]
+    assert hour == {
+        "time": "2026-11-21T10:00",
+        "temperature": 2.8,
+        "pressure": 1019.0,
+        "pressure_surface": 1009.0,
+        "humidity": 80,
+        "wind": 2.9,
+    }
+
+
+def test_parse_hourly_pressure_is_sea_level_and_surface_is_not() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    data["hourly"]["pressure_msl"][0] = 1111.0
+    data["hourly"]["surface_pressure"][0] = 999.0
+    hour = parse_hourly(data)[0]
+    assert (hour["pressure"], hour["pressure_surface"]) == (1111.0, 999.0)
+
+
+@pytest.mark.parametrize(
+    ("series", "key"),
+    [
+        ("pressure_msl", "pressure"),
+        ("surface_pressure", "pressure_surface"),
+        ("relative_humidity_2m", "humidity"),
+        ("wind_speed_10m", "wind"),
+    ],
+)
+def test_parse_hourly_null_stays_none_and_other_values_stay(series: str, key: str) -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    data["hourly"][series][10] = None
+    hour = parse_hourly(data)[10]
+    assert hour[key] is None
+    assert hour["time"] == "2026-11-21T10:00"
+    assert hour["temperature"] == 2.8
+
+
+def test_parse_hourly_without_hourly_is_error() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    del data["hourly"]
+    with pytest.raises(WeatherError):
+        parse_hourly(data)
+
+
+def test_parse_forecast_without_hourly_parses_as_before() -> None:
+    data = answer()
+    del data["hourly"]
+    assert set(parse_forecast(data)) == {"current", "days", "utc_offset_seconds"}
+
+
+def test_parse_hourly_null_temperature_is_error() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    data["hourly"]["temperature_2m"][10] = None
+    with pytest.raises(WeatherError):
+        parse_hourly(data)
+
+
+def test_parse_hourly_string_in_pressure_is_error() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    data["hourly"]["pressure_msl"][10] = "1019.0"
+    with pytest.raises(WeatherError):
+        parse_hourly(data)
+
+
+def test_parse_hourly_missing_series_is_error() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    del data["hourly"]["wind_speed_10m"]
+    with pytest.raises(WeatherError):
+        parse_hourly(data)
+
+
+def test_parse_hourly_series_shorter_than_time_is_error() -> None:
+    from ai_coach.weather import parse_hourly
+
+    data = answer()
+    data["hourly"]["pressure_msl"] = data["hourly"]["pressure_msl"][:-1]
+    with pytest.raises(WeatherError):
+        parse_hourly(data)

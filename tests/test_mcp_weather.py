@@ -2,9 +2,10 @@
 
 import json
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
+from fake_clock import freeze
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, tool_names
 
@@ -12,6 +13,13 @@ from ai_coach.mcp_server.server import INSTRUCTIONS, TOOLS
 from ai_coach.mcp_server.tools import MAX_CHARS
 
 DAY = "2026-11-22"
+
+
+@pytest.fixture(autouse=True)
+def today(monkeypatch: pytest.MonkeyPatch) -> None:
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+
+
 HIDDEN_KEYS = ("lat", "lon", "place_source", "utc_offset_seconds")
 # Значения, которых нет ни в одном числе ответа: координаты и смещение пояса не должны просочиться.
 LAT, LON, OFFSET = 52.52, 13.41, 12345
@@ -57,9 +65,27 @@ def test_tool_exists(conn: sqlite3.Connection) -> None:
     assert "get_weather" in tool_names(conn)
 
 
-def test_answer_has_now_rows_truncated_and_history(conn: sqlite3.Connection) -> None:
+def put_hours(conn: sqlite3.Connection, first: str, count: int) -> None:
+    start = datetime.fromisoformat(first)
+    for i in range(count):
+        conn.execute(
+            "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, humidity, "
+            "wind, fetched_at, lat, lon, place_source, source) "
+            "VALUES (?, ?, ?, 1008.4, 80, 3.0, '2026-11-22T14:10:00', ?, ?, 'macos', 'forecast')",
+            (
+                (start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M"),
+                float(i),
+                1000.0 + i,
+                LAT,
+                LON,
+            ),
+        )
+    conn.commit()
+
+
+def test_answer_has_now_rows_truncated_history_and_hourly(conn: sqlite3.Connection) -> None:
     answer = call(conn, "get_weather", date_from=DAY, date_to=DAY)
-    assert set(answer) == {"now", "rows", "truncated", "history"}
+    assert set(answer) == {"now", "rows", "truncated", "history", "hourly"}
 
 
 def test_now_is_last_observation_even_outside_period(conn: sqlite3.Connection) -> None:
@@ -219,6 +245,100 @@ def test_description_says_history_is_a_point_per_sync() -> None:
     text = TOOLS["get_weather"][1]
     assert "history" in text
     assert "на синк" in text
+
+
+def test_hourly_192_hours_give_60_rows_every_third_hour(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 192)
+    hourly = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]
+    wide = call(conn, "get_weather", date_from="2026-11-21", date_to="2026-11-28")["hourly"]
+    assert wide == hourly
+    assert len(hourly["rows"]) == 60
+    assert hourly["rows"][0]["time"] == "2026-11-21T00:00"
+    assert hourly["rows"][1]["time"] == "2026-11-21T03:00"
+    assert hourly["rows"][-1]["time"] == "2026-11-28T09:00"
+    assert hourly["truncated"] is True
+
+
+def test_hourly_row_has_only_time_temperature_and_pressure(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 24)
+    hourly = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]
+    assert set(hourly["rows"][0]) == {"time", "temperature", "pressure"}
+    assert hourly["rows"][1] == {"time": "2026-11-21T03:00", "temperature": 3.0, "pressure": 1003.0}
+
+
+def test_hourly_short_series_is_not_truncated(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 24)
+    hourly = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]
+    assert len(hourly["rows"]) == 8
+    assert hourly["truncated"] is False
+
+
+def test_hourly_does_not_change_history(conn: sqlite3.Connection) -> None:
+    put_now(conn, "2026-11-22T08:30")
+    put_hours(conn, "2026-11-21T00:00", 24)
+    history = call(conn, "get_weather", date_from=DAY, date_to=DAY)["history"]
+    assert [r["observed_at"] for r in history["rows"]] == ["2026-11-22T08:30"]
+
+
+def test_empty_hours_give_empty_hourly(conn: sqlite3.Connection) -> None:
+    answer = call(conn, "get_weather", date_from=DAY, date_to=DAY)
+    assert answer["hourly"] == {"rows": [], "truncated": False}
+
+
+def test_hourly_leaks_no_place_keys_or_values(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-22T00:00", 24)
+    text = call_text(conn, "get_weather", date_from=DAY, date_to=DAY)
+    for key in (*HIDDEN_KEYS, "pressure_surface", "humidity"):
+        assert key not in text
+    for value in (str(LAT), str(LON), "macos"):
+        assert value not in text
+
+
+def test_three_full_lists_are_shorter_than_max_chars(conn: sqlite3.Connection) -> None:
+    put_many_days(conn, "2026-09-01", 60)
+    put_many_now(conn, "2026-10-15", 60)
+    put_hours(conn, "2026-11-21T00:00", 192)
+    answer = call(conn, "get_weather", date_from="2026-09-01", date_to="2026-10-30")
+    assert len(answer["hourly"]["rows"]) == 60
+    assert len(json.dumps(answer, ensure_ascii=False)) < MAX_CHARS
+
+
+def test_hourly_starts_yesterday_even_when_archive_hours_are_older(
+    conn: sqlite3.Connection,
+) -> None:
+    put_hours(conn, "2026-11-19T00:00", 240)
+    rows = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]["rows"]
+    assert rows[0]["time"] == "2026-11-21T00:00"
+    assert not [r for r in rows if r["time"] < "2026-11-21"]
+
+
+def test_hourly_without_hours_since_yesterday_is_empty(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-19T00:00", 48)
+    hourly = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]
+    assert hourly == {"rows": [], "truncated": False}
+
+
+def test_hourly_step_follows_hour_of_day_not_row_number(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 24)
+    conn.execute("DELETE FROM weather_hours WHERE time = '2026-11-21T01:00'")
+    conn.commit()
+    rows = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]["rows"]
+    assert [r["time"][-5:] for r in rows[:3]] == ["00:00", "03:00", "06:00"]
+
+
+def test_hourly_row_with_null_pressure_is_kept(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 24)
+    conn.execute("UPDATE weather_hours SET pressure = NULL WHERE time = '2026-11-21T03:00'")
+    conn.commit()
+    rows = call(conn, "get_weather", date_from=DAY, date_to=DAY)["hourly"]["rows"]
+    assert rows[1]["time"] == "2026-11-21T03:00"
+    assert rows[1]["pressure"] is None
+
+
+def test_description_names_hourly_and_three_hour_step() -> None:
+    text = TOOLS["get_weather"][1]
+    assert "hourly" in text
+    assert "шаг 3 ч" in text
 
 
 def test_instructions_say_weather_comes_from_sync_not_from_service() -> None:

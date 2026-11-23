@@ -135,9 +135,11 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "всегда последнее, даже вне периода, null - погоды в базе нет; rows - дни периода "
         "(date, code, word, t_max, t_min, precip_prob, fetched_at); history - наблюдения "
         "периода (observed_at, temperature, pressure): одна точка на синк, неравномерно, "
-        "не почасовой ряд. Не больше 60 дней и 60 наблюдений, остаются самые новые: "
-        "truncated у дней, history.truncated у наблюдений. Погода на момент последнего "
-        "coach sync, обновить - coach sync.",
+        "не почасовой ряд; hourly - прогноз по часам, шаг 3 ч (time, temperature, pressure), "
+        "со вчера на 7,5 суток, от периода не зависит. Не больше 60 дней и 60 наблюдений, "
+        "остаются самые новые: truncated у дней, history.truncated у наблюдений; у hourly "
+        "первые 60 строк, hourly.truncated. Погода на момент последнего coach sync, "
+        "обновить - coach sync.",
     ),
     "get_overload": (
         overload_tool.overload,

@@ -1,6 +1,6 @@
-"""Синхронизация погоды -> база: место, сервис, обе таблицы и sync_log kind='weather'.
+"""Синхронизация погоды -> база: место, сервис, три таблицы и sync_log kind='weather'.
 
-Место и сервис читаются до записи; обе таблицы и строка sync_log пишутся одной транзакцией.
+Место и сервис читаются до записи; три таблицы и строка sync_log пишутся одной транзакцией.
 Сбой не бросает исключение: строка итога и status='error'. kind='weather', а не 'sync':
 иначе ломается first_run_today.
 """
@@ -14,7 +14,7 @@ from typing import Any
 from ai_coach import location, weather
 from ai_coach.location import LocationError, Place
 from ai_coach.store.journal import add_sync_log
-from ai_coach.store.weather import add_weather_now, upsert_weather_day
+from ai_coach.store.weather import add_weather_now, upsert_weather_day, upsert_weather_hours
 from ai_coach.weather import WeatherError
 from ai_coach.workload.config import WorkloadConfigError, load_config
 
@@ -68,13 +68,16 @@ def sync_weather(
         reason = "нет доступа к геолокации" if e.args[0] in NO_ACCESS else "место не определено"
         return _fail(conn, started, f"погода: {reason}")
     try:
-        data = weather.parse_forecast((fetch or weather.fetch_forecast)(place))
+        raw = (fetch or weather.fetch_forecast)(place)
+        data = weather.parse_forecast(raw)
+        hours = weather.parse_hourly(raw)
     except WeatherError:
         return _fail(conn, started, "погода: нет связи")
     current = data["current"]
     mark = " (место из конфига)" if source == "config" else ""
     message = f"погода: записана, {degrees(current['temperature'])}{mark}"
     spot = {"lat": place.lat, "lon": place.lon}
+    hour_extra = {"fetched_at": started, **spot, "place_source": source, "source": "forecast"}
     with conn:
         add_weather_now(
             conn,
@@ -93,5 +96,6 @@ def sync_weather(
         )
         for day in data["days"]:
             upsert_weather_day(conn, {**day, "fetched_at": started, **spot})
+        upsert_weather_hours(conn, [{**hour, **hour_extra} for hour in hours])
         _log(conn, started, message, "ok")
     return message

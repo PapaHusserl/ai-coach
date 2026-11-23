@@ -920,6 +920,7 @@ def test_weather_topic_has_needles() -> None:
         "геолокаци",
         "history",
         "observed_at",
+        "hourly",
         "[weather]",
         "терминал",
     ):

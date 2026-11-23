@@ -28,6 +28,9 @@ def answer(shift_days: int = 0) -> dict[str, Any]:
         daily[:] = [(date.fromisoformat(d) - timedelta(days=shift_days)).isoformat() for d in daily]
         stamp = datetime.fromisoformat(data["current"]["time"]) - timedelta(days=shift_days)
         data["current"]["time"] = stamp.strftime("%Y-%m-%dT%H:%M")
+        hours = data["hourly"]["time"]
+        shifted = (datetime.fromisoformat(h) - timedelta(days=shift_days) for h in hours)
+        hours[:] = [h.strftime("%Y-%m-%dT%H:%M") for h in shifted]
     return data
 
 
@@ -290,3 +293,98 @@ def test_weather_does_not_count_as_sync_run(conn: sqlite3.Connection) -> None:
     sync(conn, locate=refuse("denied"))
     assert sync_runs_on(conn, NOW.date().isoformat()) == 0
     assert sync_runs_on(conn, date.today().isoformat()) == 0
+
+
+def test_writes_192_hours_with_place_and_forecast_source(conn: sqlite3.Connection) -> None:
+    sync(conn)
+    assert count(conn, "weather_hours") == 192
+    sql = "SELECT DISTINCT lat, lon, source, place_source FROM weather_hours"
+    assert [tuple(r) for r in conn.execute(sql)] == [(52.52, 13.41, "forecast", "macos")]
+
+
+def test_hours_get_config_place_source_when_place_is_spare(
+    conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_spare(tmp_path, monkeypatch)
+    sync(conn, locate=refuse("denied"))
+    sql = "SELECT DISTINCT lat, lon, place_source FROM weather_hours"
+    assert [tuple(r) for r in conn.execute(sql)] == [(52.52, 13.41, "config")]
+
+
+def test_hour_numbers_come_from_the_right_series(conn: sqlite3.Connection) -> None:
+    sync(conn)
+    row = conn.execute("SELECT * FROM weather_hours WHERE time = '2026-11-21T10:00'").fetchone()
+    assert (row["temperature"], row["pressure"], row["pressure_surface"]) == (2.8, 1019.0, 1009.0)
+    assert (row["humidity"], row["wind"]) == (80, 2.9)
+
+
+def test_second_sync_replaces_hour_numbers_and_keeps_192(conn: sqlite3.Connection) -> None:
+    sync(conn)
+    changed = answer()
+    changed["hourly"]["temperature_2m"][10] = 9.9
+    changed["hourly"]["pressure_msl"][10] = 1000.5
+    sync(conn, now=NOW + timedelta(minutes=20), fetch=lambda place: changed)
+    sql = "SELECT temperature, pressure, fetched_at FROM weather_hours WHERE time = ?"
+    row = conn.execute(sql, ("2026-11-21T10:00",)).fetchone()
+    assert (row["temperature"], row["pressure"]) == (9.9, 1000.5)
+    assert row["fetched_at"] == "2026-11-22T14:30:00"
+    assert count(conn, "weather_hours") == 192
+
+
+def test_next_day_sync_adds_24_hours_and_keeps_yesterday(conn: sqlite3.Connection) -> None:
+    sync(conn)
+    sql = "SELECT * FROM weather_hours WHERE time = '2026-11-21T10:00'"
+    before = dict(conn.execute(sql).fetchone())
+    later = NOW + timedelta(days=1)
+    sync(conn, now=later, fetch=lambda place: answer(shift_days=-1))
+    assert count(conn, "weather_hours") == 216
+    assert dict(conn.execute(sql).fetchone()) == before
+
+
+@pytest.mark.parametrize(
+    ("series", "column"),
+    [
+        ("surface_pressure", "pressure_surface"),
+        ("relative_humidity_2m", "humidity"),
+        ("wind_speed_10m", "wind"),
+        ("pressure_msl", "pressure"),
+    ],
+)
+def test_null_in_hour_is_null_column_and_the_rest_is_written(
+    conn: sqlite3.Connection, series: str, column: str
+) -> None:
+    data = answer()
+    data["hourly"][series][10] = None
+    assert sync(conn, fetch=lambda place: data) == "погода: записана, +4°"
+    row = conn.execute("SELECT * FROM weather_hours WHERE time = '2026-11-21T10:00'").fetchone()
+    assert row[column] is None
+    assert row["temperature"] == 2.8
+    assert count(conn, "weather_hours") == 192
+    assert weather_log(conn) == [("weather", "ok")]
+
+
+def test_answer_without_hourly_is_no_connection_and_touches_no_table(
+    conn: sqlite3.Connection,
+) -> None:
+    data = answer()
+    del data["hourly"]
+    assert sync(conn, fetch=lambda place: data) == "погода: нет связи"
+    tables = ("weather_now", "weather_days", "weather_hours")
+    assert [count(conn, t) for t in tables] == [0, 0, 0]
+    assert weather_log(conn) == [("weather", "error")]
+
+
+def test_null_hour_temperature_is_no_connection_and_touches_no_table(
+    conn: sqlite3.Connection,
+) -> None:
+    data = answer()
+    data["hourly"]["temperature_2m"][10] = None
+    assert sync(conn, fetch=lambda place: data) == "погода: нет связи"
+    tables = ("weather_now", "weather_days", "weather_hours")
+    assert [count(conn, t) for t in tables] == [0, 0, 0]
+    assert weather_log(conn) == [("weather", "error")]
+
+
+def test_place_failure_leaves_hours_untouched(conn: sqlite3.Connection) -> None:
+    sync(conn, locate=refuse("denied"))
+    assert count(conn, "weather_hours") == 0
