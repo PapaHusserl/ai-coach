@@ -951,3 +951,111 @@ def test_illness_side_file_points_red_flags_to_8b_and_not_to_care() -> None:
     text = illness_side()
     assert "красные флаги - п. 8б" in text
     assert "care.md" not in text
+
+
+def test_coach_md_reads_weather_signals_next_to_illness_signals() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
+    assert "weather.signals" in text
+    assert text.index("illness.signals") < text.index("weather.signals")
+
+
+def test_morning_skill_morning_line_names_weather_signal_words() -> None:
+    text = (ROOT / "skills" / "coach-morning" / "SKILL.md").read_text()
+    line = next(ln for ln in text.splitlines() if "weather.signals" in ln)
+    for needle in ("`at`", "порог", "возможно ухудшение самочувствия", "Как сейчас?", "план"):
+        assert needle in line, needle
+
+
+def test_precursors_weather_paragraph_has_pressure_phrase_and_asks() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    for needle in (
+        "weather.signals",
+        "Давление к 19:00 упадёт на 7 гПа (порог 5)",
+        "возможно ухудшение самочувствия",
+        "Как сейчас?",
+        "план не трогай",
+    ):
+        assert needle in text, needle
+
+
+def test_precursors_weather_paragraph_has_temperature_phrases() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    assert "Температура к 15:00 вырастет на 8° (порог 7)" in text
+    assert "упадёт на 8°" in text
+
+
+def test_precursors_weather_paragraph_has_one_phrase_for_two_signals() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    sample = (
+        "Давление к 19:00 упадёт на 7 гПа (порог 5), температура к 15:00 вырастет на 8° "
+        "(порог 7) - возможно ухудшение самочувствия. Как сейчас?"
+    )
+    assert sample in text
+
+
+def test_precursors_weather_paragraph_names_row_keys_and_tomorrow() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    for needle in ("`at`", "`next_day`", "завтра к"):
+        assert needle in text, needle
+
+
+def test_precursors_weather_paragraph_is_silent_after_a_bad_day() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    assert "после плохого дня" in text
+
+
+def test_precursors_weather_paragraph_has_no_old_words() -> None:
+    text = paragraph(PRECURSORS.read_text(), "Погода")
+    assert "ориентир" not in text
+    assert "за сутки" not in text
+
+
+def test_precursors_file_stays_within_side_limit() -> None:
+    assert len(PRECURSORS.read_bytes()) <= 4096
+
+
+def test_wellbeing_line_17_names_weather_next_to_precursors() -> None:
+    line = WELLBEING.read_text().splitlines()[16]
+    assert "погод" in line.lower()
+    assert "coach-wellbeing/precursors.md" in line
+
+
+def test_morning_recovery_names_weather_key() -> None:
+    text = (ROOT / "skills" / "coach-morning" / "recovery.md").read_text()
+    assert "`weather`" in text
+
+
+PRECURSORS_CAT = "cat .claude/agents/coach-wellbeing/precursors.md"
+
+
+def test_morning_skill_weather_line_has_time_next_day_and_full_cat() -> None:
+    text = (ROOT / "skills" / "coach-morning" / "SKILL.md").read_text()
+    line = next(ln for ln in text.splitlines() if "weather.signals" in ln)
+    for needle in ("до 12:00", "`next_day`", "завтра к", PRECURSORS_CAT):
+        assert needle in line, needle
+
+
+def test_morning_skill_weather_line_comes_after_plan_for_today_line() -> None:
+    lines = (ROOT / "skills" / "coach-morning" / "SKILL.md").read_text().splitlines()
+    plan = next(i for i, ln in enumerate(lines) if "план на сегодня - что стоит" in ln)
+    weather = next(i for i, ln in enumerate(lines) if "weather.signals" in ln)
+    assert plan < weather
+
+
+def test_morning_recovery_weather_pointer_is_full_cat() -> None:
+    line = next(
+        ln
+        for ln in (ROOT / "skills" / "coach-morning" / "recovery.md").read_text().splitlines()
+        if ln.startswith("- Восстановление")
+    )
+    assert "`weather`" in line
+    assert PRECURSORS_CAT in line
+
+
+def test_weather_topic_threshold_words_are_not_tied_to_marks_or_backlog() -> None:
+    text = (ROOT / "agents" / "coach-help" / "weather.md").read_text()
+    assert "Пороги ты выбрал сам по своему ряду погоды" in text
+    assert "под плохие дни они не подогнаны" in text
+    assert "Личная подстройка - позже" in text
+    assert "отметок" not in text
+    assert "BACKLOG 147" not in text

@@ -937,6 +937,23 @@ def test_weather_topic_keeps_reserve_below_limit() -> None:
     assert HELP_TOPIC_LIMIT - len((TOPICS / "weather.md").read_bytes()) >= 200
 
 
+def test_weather_topic_signal_paragraph_has_needles() -> None:
+    text = topic("weather.md")
+    for needle in ("сигнал", "план не", "порог", "не проверен", "прогрев", "4 гПа"):
+        assert needle in text, needle
+    assert re.search(r"10\s?°", text)
+
+
+def test_pult_topic_state_section_names_weather_signal_lines() -> None:
+    text = topic("pult.md")
+    assert "перепад давления" in text
+    assert "перепад температуры" in text
+
+
+def test_pult_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "pult.md").read_bytes()) >= 200
+
+
 def test_help_index_names_weather_tool_and_topic() -> None:
     text = HELP.read_text()
     assert "get_weather" in text
