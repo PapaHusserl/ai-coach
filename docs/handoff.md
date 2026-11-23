@@ -41,4 +41,4 @@
 ## Ссылки
 
 - Документ шага: [plan-p7.md](plan-p7.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет — закрытие «П7». Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 0ae2cf2 «П7 закрыт»; факт по metrics.py на коммите: 18,14 $ (сессия с 15:13 UTC). Правила: AGENTS.md, docs/RULES.md.
