@@ -388,3 +388,353 @@ def test_null_hour_temperature_is_no_connection_and_touches_no_table(
 def test_place_failure_leaves_hours_untouched(conn: sqlite3.Connection) -> None:
     sync(conn, locate=refuse("denied"))
     assert count(conn, "weather_hours") == 0
+
+
+# --- архив, «тихое назад» (партия 7) ---
+
+ARCHIVE = Path(__file__).parent / "fixtures" / "weather" / "archive.json"
+ARCHIVE_LINE_46 = "погода, архив: дозагружено 46 дней"
+Call = tuple[Place, str, str]
+
+
+def archive_answer(start: str, end: str) -> dict[str, Any]:
+    """Настоящий ответ архива, урезанный до дней start..end."""
+    data = json.loads(ARCHIVE.read_text(encoding="utf-8"))
+    hourly = data["hourly"]
+    keep = [i for i, t in enumerate(hourly["time"]) if start <= t[:10] <= end]
+    data["hourly"] = {key: [series[i] for i in keep] for key, series in hourly.items()}
+    return data
+
+
+def archive_reader(calls: list[Call]) -> Callable[[Place, str, str], dict[str, Any]]:
+    def read(place: Place, start: str, end: str) -> dict[str, Any]:
+        calls.append((place, start, end))
+        return archive_answer(start, end)
+
+    return read
+
+
+def broken_archive(place: Place, start: str, end: str) -> dict[str, Any]:
+    raise WeatherError("архив не ответил")
+
+
+def use_archive(
+    monkeypatch: pytest.MonkeyPatch, reader: Callable[[Place, str, str], dict[str, Any]]
+) -> None:
+    from ai_coach import weather
+
+    monkeypatch.setattr(weather, "fetch_archive", reader)
+
+
+def mark_day(conn: sqlite3.Connection, day: str) -> None:
+    from ai_coach.store.journal import add_wellbeing
+
+    add_wellbeing(conn, {"date": day, "logged_at": f"{day} 09:00:00", "score": 3, "text": ""})
+
+
+def archive_log(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    sql = "SELECT kind, status FROM sync_log WHERE kind = 'weather_archive' ORDER BY id"
+    return [(r["kind"], r["status"]) for r in conn.execute(sql)]
+
+
+def backfill(
+    conn: sqlite3.Connection,
+    reader: Callable[[Place, str, str], dict[str, Any]],
+    source: str = "macos",
+) -> str | None:
+    from ai_coach.sync.weather_sync import backfill_weather
+
+    return backfill_weather(conn, PLACE, source, NOW, fetch=reader)
+
+
+def put_forecast_hours(
+    conn: sqlite3.Connection, days: list[str], fetched_at: str = "2026-11-22T08:00:00"
+) -> None:
+    for day in days:
+        for hour in range(24):
+            conn.execute(
+                "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, "
+                "humidity, wind, fetched_at, lat, lon, place_source, source) VALUES "
+                "(?, 1.0, 1000.0, 990.0, 80, 3.0, ?, 52.52, 13.41, 'macos', 'forecast')",
+                (f"{day}T{hour:02d}:00", fetched_at),
+            )
+    conn.commit()
+
+
+def test_missing_days_gives_days_without_hours_up_to_yesterday() -> None:
+    from ai_coach.sync.weather_sync import missing_days
+
+    have = {"2026-10-10", "2026-10-11", "2026-10-13"}
+    assert list(missing_days(have, "2026-10-10", "2026-10-14")) == ["2026-10-12", "2026-10-14"]
+
+
+def test_missing_days_without_first_mark_is_empty() -> None:
+    from ai_coach.sync.weather_sync import missing_days
+
+    assert not list(missing_days({"2026-10-10"}, None, "2026-10-14"))
+
+
+def test_missing_days_all_present_is_empty() -> None:
+    from ai_coach.sync.weather_sync import missing_days
+
+    have = {"2026-10-10", "2026-10-11", "2026-10-12"}
+    assert not list(missing_days(have, "2026-10-10", "2026-10-12"))
+
+
+def test_missing_days_first_mark_later_than_yesterday_is_empty() -> None:
+    from ai_coach.sync.weather_sync import missing_days
+
+    assert not list(missing_days(set(), "2026-10-15", "2026-10-14"))
+
+
+def test_backfill_asks_archive_once_from_first_mark_to_yesterday(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-10-07")
+    calls: list[Call] = []
+    backfill(conn, archive_reader(calls))
+    assert calls == [(PLACE, "2026-10-07", "2026-11-21")]
+
+
+def test_backfill_writes_hours_of_every_day_of_the_range(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-10-07")
+    backfill(conn, archive_reader([]))
+    sql = "SELECT COUNT(DISTINCT substr(time, 1, 10)) FROM weather_hours"
+    assert conn.execute(sql).fetchone()[0] == 46
+    assert count(conn, "weather_hours") == 46 * 24
+
+
+def test_backfill_rows_have_archive_source_and_the_place_of_this_sync(
+    conn: sqlite3.Connection,
+) -> None:
+    mark_day(conn, "2026-10-07")
+    backfill(conn, archive_reader([]), source="config")
+    sql = "SELECT DISTINCT lat, lon, place_source, source FROM weather_hours"
+    assert [tuple(r) for r in conn.execute(sql)] == [(52.52, 13.41, "config", "archive")]
+
+
+def test_backfill_logs_weather_archive_ok(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-10-07")
+    backfill(conn, archive_reader([]))
+    assert archive_log(conn) == [("weather_archive", "ok")]
+
+
+def test_backfill_returns_the_summary_line_with_day_count(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-10-07")
+    assert backfill(conn, archive_reader([])) == ARCHIVE_LINE_46
+
+
+def test_backfill_without_marks_asks_nothing_and_returns_none(conn: sqlite3.Connection) -> None:
+    calls: list[Call] = []
+    assert backfill(conn, archive_reader(calls)) is None
+    assert calls == []
+    assert archive_log(conn) == []
+
+
+def test_backfill_hole_asks_one_range_from_first_to_last_missing_day(
+    conn: sqlite3.Connection,
+) -> None:
+    mark_day(conn, "2026-11-15")
+    put_forecast_hours(conn, ["2026-11-15", "2026-11-16", "2026-11-18", "2026-11-20", "2026-11-21"])
+    calls: list[Call] = []
+    backfill(conn, archive_reader(calls))
+    assert calls == [(PLACE, "2026-11-17", "2026-11-19")]
+
+
+def test_backfill_hole_fills_missing_days(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-11-15")
+    put_forecast_hours(conn, ["2026-11-15", "2026-11-16", "2026-11-18", "2026-11-20", "2026-11-21"])
+    backfill(conn, archive_reader([]))
+    sql = "SELECT DISTINCT substr(time, 1, 10) FROM weather_hours WHERE source = 'archive'"
+    assert sorted(r[0] for r in conn.execute(sql)) == ["2026-11-17", "2026-11-19"]
+
+
+def test_backfill_hole_keeps_hours_of_days_that_were_there(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-11-15")
+    put_forecast_hours(conn, ["2026-11-15", "2026-11-16", "2026-11-18", "2026-11-20", "2026-11-21"])
+    backfill(conn, archive_reader([]))
+    sql = "SELECT DISTINCT fetched_at, source FROM weather_hours WHERE time LIKE '2026-11-18%'"
+    assert [tuple(r) for r in conn.execute(sql)] == [("2026-11-22T08:00:00", "forecast")]
+
+
+def stale_forecast_setup(conn: sqlite3.Connection) -> None:
+    """День 18-го - прогноз недельной давности; 17, 19, 20, 21 - свежие часы."""
+    mark_day(conn, "2026-11-17")
+    put_forecast_hours(conn, ["2026-11-17", "2026-11-19", "2026-11-20", "2026-11-21"])
+    put_forecast_hours(conn, ["2026-11-18"], fetched_at="2026-11-15T08:00:00")
+
+
+def test_days_with_hours_does_not_give_day_with_stale_forecast(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import days_with_hours
+
+    stale_forecast_setup(conn)
+    assert days_with_hours(conn, "2026-11-17", "2026-11-19") == {"2026-11-17", "2026-11-19"}
+
+
+def test_backfill_asks_archive_for_day_with_stale_forecast(conn: sqlite3.Connection) -> None:
+    stale_forecast_setup(conn)
+    calls: list[Call] = []
+    backfill(conn, archive_reader(calls))
+    assert calls == [(PLACE, "2026-11-18", "2026-11-18")]
+
+
+def test_backfill_overwrites_stale_forecast_hours_with_archive(conn: sqlite3.Connection) -> None:
+    stale_forecast_setup(conn)
+    backfill(conn, archive_reader([]))
+    sql = "SELECT DISTINCT source, fetched_at FROM weather_hours WHERE time LIKE '2026-11-18%'"
+    assert [tuple(r) for r in conn.execute(sql)] == [("archive", "2026-11-22T14:10:00")]
+
+
+@pytest.mark.parametrize("day", ["2026-11-17", "2026-11-19"])
+def test_backfill_keeps_fresh_hours_next_to_stale_day(conn: sqlite3.Connection, day: str) -> None:
+    stale_forecast_setup(conn)
+    backfill(conn, archive_reader([]))
+    sql = "SELECT DISTINCT source, fetched_at FROM weather_hours WHERE time LIKE ?"
+    assert [tuple(r) for r in conn.execute(sql, (f"{day}%",))] == [
+        ("forecast", "2026-11-22T08:00:00")
+    ]
+
+
+def test_backfill_empty_hourly_rows_is_failure_line_and_error_row(conn: sqlite3.Connection) -> None:
+    mark_day(conn, "2026-10-07")
+
+    def empty(place: Place, start: str, end: str) -> dict[str, Any]:
+        data = archive_answer(start, end)
+        data["hourly"] = {key: [] for key in data["hourly"]}
+        return data
+
+    assert backfill(conn, empty) == "погода, архив: нет связи"
+    assert archive_log(conn) == [("weather_archive", "error")]
+    assert count(conn, "weather_hours") == 0
+
+
+@pytest.mark.parametrize(("days", "word"), [(1, "день"), (2, "дня"), (5, "дней"), (21, "день")])
+def test_backfill_line_declines_the_word_after_the_number(
+    conn: sqlite3.Connection, days: int, word: str
+) -> None:
+    first = date(2026, 11, 22) - timedelta(days=days)
+    mark_day(conn, first.isoformat())
+    assert backfill(conn, archive_reader([])) == f"погода, архив: дозагружено {days} {word}"
+
+
+def test_sync_adds_archive_line_as_second_line(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, archive_reader([]))
+    assert sync(conn) == "погода: записана, +4°\nпогода, архив: дозагружено 8 дней"
+
+
+def test_sync_asks_archive_for_the_place_of_this_sync(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    sync(conn)
+    assert calls == [(PLACE, "2026-11-13", "2026-11-20")]
+
+
+def test_sync_archive_rows_follow_the_main_write_with_forecast_rows_kept(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, archive_reader([]))
+    sync(conn)
+    sql = "SELECT source, COUNT(*) FROM weather_hours GROUP BY source"
+    assert {r[0]: r[1] for r in conn.execute(sql)} == {"forecast": 192, "archive": 8 * 24}
+
+
+def test_second_sync_without_holes_does_not_ask_archive(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, archive_reader([]))
+    sync(conn)
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    result = sync(conn, now=NOW + timedelta(minutes=20))
+    assert calls == []
+    assert result == "погода: записана, +4°"
+    assert archive_log(conn) == [("weather_archive", "ok")]
+
+
+def test_sync_without_marks_has_one_line_and_no_archive_row(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    assert sync(conn) == "погода: записана, +4°"
+    assert calls == []
+    assert archive_log(conn) == []
+
+
+def test_archive_failure_gives_no_connection_line(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, broken_archive)
+    assert sync(conn) == "погода: записана, +4°\nпогода, архив: нет связи"
+
+
+def test_archive_failure_keeps_the_main_write(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, broken_archive)
+    sync(conn)
+    assert (count(conn, "weather_now"), count(conn, "weather_days")) == (1, 7)
+    assert count(conn, "weather_hours") == 192
+
+
+def test_archive_failure_logs_weather_ok_and_weather_archive_error(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, broken_archive)
+    sync(conn)
+    assert weather_log(conn) == [("weather", "ok")]
+    assert archive_log(conn) == [("weather_archive", "error")]
+
+
+def test_next_sync_after_archive_failure_tries_again(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, broken_archive)
+    sync(conn)
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    result = sync(conn, now=NOW + timedelta(minutes=20))
+    assert calls == [(PLACE, "2026-11-13", "2026-11-20")]
+    assert result.endswith("погода, архив: дозагружено 8 дней")
+
+
+def test_main_service_failure_does_not_ask_archive(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    assert sync(conn, fetch=no_network) == "погода: нет связи"
+    assert calls == []
+    assert archive_log(conn) == []
+
+
+def test_place_failure_does_not_ask_archive(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    calls: list[Call] = []
+    use_archive(monkeypatch, archive_reader(calls))
+    assert sync(conn, locate=refuse("denied")) == "погода: нет доступа к геолокации"
+    assert calls == []
+    assert archive_log(conn) == []
+
+
+def test_archive_does_not_count_as_sync_run(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mark_day(conn, "2026-11-13")
+    use_archive(monkeypatch, archive_reader([]))
+    sync(conn)
+    assert sync_runs_on(conn, NOW.date().isoformat()) == 0
+    assert sync_runs_on(conn, date.today().isoformat()) == 0

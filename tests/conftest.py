@@ -46,6 +46,7 @@ def no_real_place_and_weather(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(location, "read_place", refuse_place)
     monkeypatch.setattr(weather, "fetch_forecast", refuse_forecast)
+    monkeypatch.setattr(weather, "fetch_archive", refuse_forecast)
 
 
 @pytest.fixture

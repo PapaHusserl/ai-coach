@@ -275,3 +275,27 @@ def test_unmark_covid_keeps_other_days(conn: sqlite3.Connection) -> None:
     mark_covid(conn, "2026-11-20", "2026-11-20 12:00:00")
     unmark_covid(conn, "2026-11-20")
     assert list_covid_marks(conn, "2026-11-01", "2026-11-30") == ["2026-11-18"]
+
+
+def test_first_wellbeing_day_is_the_earliest_date(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import add_wellbeing, first_wellbeing_day
+
+    for day in ("2026-10-09", "2026-10-07", "2026-10-08"):
+        add_wellbeing(conn, {"date": day, "logged_at": f"{day} 09:00:00", "score": 3, "text": ""})
+    assert first_wellbeing_day(conn) == "2026-10-07"
+
+
+def test_first_wellbeing_day_without_marks_is_none(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import first_wellbeing_day
+
+    assert first_wellbeing_day(conn) is None
+
+
+def test_last_sync_log_skips_weather_archive_row(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:00", "kind": "sync", "status": "ok"})
+    add_sync_log(
+        conn, {"started_at": "2026-11-22T10:00:01", "kind": "weather_archive", "status": "ok"}
+    )
+    last = last_sync_log(conn)
+    assert last is not None
+    assert last["kind"] == "sync"

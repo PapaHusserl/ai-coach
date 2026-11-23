@@ -229,3 +229,59 @@ def test_sync_thread_is_daemon(db: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     syncer.start(db)
     wait_idle()
     assert [k.get("daemon") for k in kwargs_seen] == [True]
+
+
+def mark_first_day(db: Path) -> str:
+    """Отметка раньше любого дня фикстуры прогноза: тест не зависит от даты запуска."""
+    from ai_coach.store.journal import add_wellbeing
+
+    day = "2026-10-07"
+    conn = open_db(db)
+    try:
+        with conn:
+            values = {"date": day, "logged_at": f"{day} 09:00:00", "score": 3, "text": ""}
+            add_wellbeing(conn, values)
+    finally:
+        conn.close()
+    return day
+
+
+def test_run_backfills_archive_with_the_same_call(
+    db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach import weather
+
+    with_weather(monkeypatch)
+    day = mark_first_day(db)
+    asked: list[str] = []
+
+    def reader(place: object, start: str, end: str) -> dict[str, object]:
+        asked.append(start)
+        return {}
+
+    monkeypatch.setattr(weather, "fetch_archive", reader)
+    syncer.start(db)
+    wait_idle()
+    assert asked == [day] == ["2026-10-07"]
+    assert "weather_archive" in kinds(db)
+
+
+def test_archive_failure_is_not_in_status_error(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ai_coach import weather
+
+    with_weather(monkeypatch)
+    mark_first_day(db)
+
+    def broken(*a: object, **k: object) -> None:
+        raise weather.WeatherError("архив не ответил")
+
+    monkeypatch.setattr(weather, "fetch_archive", broken)
+    syncer.start(db)
+    wait_idle()
+    conn = open_db(db)
+    try:
+        row = conn.execute("SELECT status FROM sync_log WHERE kind = 'weather_archive'").fetchone()
+    finally:
+        conn.close()
+    assert row["status"] == "error"
+    assert syncer.status()["error"] is None

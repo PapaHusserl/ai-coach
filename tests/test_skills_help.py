@@ -921,6 +921,7 @@ def test_weather_topic_has_needles() -> None:
         "history",
         "observed_at",
         "hourly",
+        "архив",
         "[weather]",
         "терминал",
     ):

@@ -2,6 +2,8 @@
 
 import sqlite3
 
+import pytest
+
 HIDDEN = {"lat", "lon", "place_source", "utc_offset_seconds"}
 
 
@@ -150,3 +152,33 @@ def test_list_weather_hours_empty_period_is_empty(conn: sqlite3.Connection) -> N
 
     put_hour(conn, "2026-11-22T12:00")
     assert list_weather_hours(conn, "2026-11-24", "2026-11-25") == []
+
+
+def test_days_with_hours_gives_each_day_once_inside_period(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import days_with_hours
+
+    for time in (
+        "2026-11-18T23:00",
+        "2026-11-19T00:00",
+        "2026-11-19T12:00",
+        "2026-11-21T05:00",
+        "2026-11-22T00:00",
+    ):
+        put_hour(conn, time)
+    assert sorted(days_with_hours(conn, "2026-11-19", "2026-11-21")) == ["2026-11-19", "2026-11-21"]
+
+
+@pytest.mark.parametrize("fetched_at", ["2026-11-22T14:10:00", "2026-11-20T08:00:00"])
+def test_days_with_hours_skips_hour_fetched_not_later_than_its_day(
+    conn: sqlite3.Connection, fetched_at: str
+) -> None:
+    from ai_coach.store.weather import days_with_hours, upsert_weather_hours
+
+    upsert_weather_hours(conn, [{**hour_row("2026-11-22T12:00", 1.0), "fetched_at": fetched_at}])
+    assert not days_with_hours(conn, "2026-11-01", "2026-11-30")
+
+
+def test_days_with_hours_empty_table_is_empty(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import days_with_hours
+
+    assert not list(days_with_hours(conn, "2026-11-01", "2026-11-30"))

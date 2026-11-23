@@ -12,6 +12,7 @@ from typing import Any, cast
 from ai_coach.location import Place
 
 URL = "https://api.open-meteo.com/v1/forecast"
+ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 TIMEOUT = 5
 CURRENT = "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,pressure_msl"
 DAILY = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
@@ -77,13 +78,39 @@ def forecast_url(place: Place) -> str:
     return f"{URL}?{query}"
 
 
-def fetch_forecast(place: Place) -> dict[str, Any]:
-    """Ответ сервиса как есть; сеть, таймаут, не JSON - WeatherError."""
+def archive_url(place: Place, start: str, end: str) -> str:
+    """Адрес архива за start..end (даты ISO, включительно); часы те же, что у прогноза."""
+    query = urllib.parse.urlencode(
+        {
+            "latitude": f"{place.lat:.2f}",
+            "longitude": f"{place.lon:.2f}",
+            "start_date": start,
+            "end_date": end,
+            "hourly": HOURLY,
+            "wind_speed_unit": "ms",
+            "timezone": "auto",
+        },
+        safe=",",
+    )
+    return f"{ARCHIVE_URL}?{query}"
+
+
+def _read(url: str) -> dict[str, Any]:
     try:
-        with urllib.request.urlopen(forecast_url(place), timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
             return json.loads(response.read())
     except (OSError, ValueError) as e:
         raise WeatherError(f"Open-Meteo не ответил: {e}") from None
+
+
+def fetch_forecast(place: Place) -> dict[str, Any]:
+    """Ответ сервиса как есть; сеть, таймаут, не JSON - WeatherError."""
+    return _read(forecast_url(place))
+
+
+def fetch_archive(place: Place, start: str, end: str) -> dict[str, Any]:
+    """Ответ архива как есть; сеть, таймаут, не JSON - WeatherError."""
+    return _read(archive_url(place, start, end))
 
 
 def _is_number(value: Any) -> bool:

@@ -3,22 +3,32 @@
 Место и сервис читаются до записи; три таблицы и строка sync_log пишутся одной транзакцией.
 Сбой не бросает исключение: строка итога и status='error'. kind='weather', а не 'sync':
 иначе ломается first_run_today.
+
+После удачной записи backfill_weather («тихое назад») дозагружает из архива дни от первой
+отметки самочувствия до вчера, которых нет в weather_hours, по месту этого же синка; своя
+транзакция и строка kind='weather_archive'; сбой архива основную запись не откатывает.
 """
 
 import math
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from ai_coach import location, weather
 from ai_coach.location import LocationError, Place
-from ai_coach.store.journal import add_sync_log
-from ai_coach.store.weather import add_weather_now, upsert_weather_day, upsert_weather_hours
+from ai_coach.store.journal import add_sync_log, first_wellbeing_day
+from ai_coach.store.weather import (
+    add_weather_now,
+    days_with_hours,
+    upsert_weather_day,
+    upsert_weather_hours,
+)
 from ai_coach.weather import WeatherError
 from ai_coach.workload.config import WorkloadConfigError, load_config
 
 KIND = "weather"
+ARCHIVE_KIND = "weather_archive"
 NO_ACCESS = ("denied", "off")
 
 
@@ -30,13 +40,15 @@ def degrees(value: float) -> str:
     return f"{'+' if whole > 0 else '−'}{abs(whole)}°"
 
 
-def _log(conn: sqlite3.Connection, started: str, message: str, status: str) -> None:
+def _log(
+    conn: sqlite3.Connection, started: str, message: str, status: str, kind: str = KIND
+) -> None:
     add_sync_log(
         conn,
         {
             "started_at": started,
             "finished_at": datetime.now().isoformat(timespec="seconds"),
-            "kind": KIND,
+            "kind": kind,
             "status": status,
             "message": message,
         },
@@ -46,6 +58,65 @@ def _log(conn: sqlite3.Connection, started: str, message: str, status: str) -> N
 def _fail(conn: sqlite3.Connection, started: str, message: str) -> str:
     with conn:
         _log(conn, started, message, "error")
+    return message
+
+
+def missing_days(have: set[str], first: str | None, last: str) -> list[str]:
+    """Даты first..last (ISO) по возрастанию, которых нет в have; first нет или позже last - []."""
+    if first is None or first > last:
+        return []
+    day, end = date.fromisoformat(first), date.fromisoformat(last)
+    days = [day + timedelta(days=i) for i in range((end - day).days + 1)]
+    return [d.isoformat() for d in days if d.isoformat() not in have]
+
+
+def _days_word(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return "день"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return "дня"
+    return "дней"
+
+
+def backfill_weather(
+    conn: sqlite3.Connection,
+    place: Place,
+    source: str,
+    now: datetime,
+    fetch: Callable[[Place, str, str], dict[str, Any]] | None = None,
+) -> str | None:
+    """Дозагружает из архива дни от первой отметки самочувствия до вчера, которых нет в
+    weather_hours; одним запросом на диапазон недостающих. Возвращает строку итога или None
+    (недостающих дней нет). Сбой - строка «нет связи» и status='error', исключений наружу нет."""
+    yesterday = (now.date() - timedelta(days=1)).isoformat()
+    first = first_wellbeing_day(conn)
+    missing = missing_days(days_with_hours(conn, first or yesterday, yesterday), first, yesterday)
+    if not missing:
+        return None
+    started = now.isoformat(timespec="seconds")
+    try:
+        raw = (fetch or weather.fetch_archive)(place, missing[0], missing[-1])
+        extra = {
+            "fetched_at": started,
+            "lat": place.lat,
+            "lon": place.lon,
+            "place_source": source,
+            "source": "archive",
+        }
+        hours = weather.parse_hourly(raw)
+        rows = [{**h, **extra} for h in hours if str(h["time"])[:10] in missing]
+        if not rows:
+            raise WeatherError("Open-Meteo: в ответе нет часов недостающих дней.")
+    except WeatherError:
+        message = "погода, архив: нет связи"
+        with conn:
+            _log(conn, started, message, "error", ARCHIVE_KIND)
+        return message
+    days = len({str(row["time"])[:10] for row in rows})
+    message = f"погода, архив: дозагружено {days} {_days_word(days)}"
+    with conn:
+        upsert_weather_hours(conn, rows)
+        _log(conn, started, message, "ok", ARCHIVE_KIND)
     return message
 
 
@@ -98,4 +169,5 @@ def sync_weather(
             upsert_weather_day(conn, {**day, "fetched_at": started, **spot})
         upsert_weather_hours(conn, [{**hour, **hour_extra} for hour in hours])
         _log(conn, started, message, "ok")
-    return message
+    archive = backfill_weather(conn, place, source, now)
+    return message if archive is None else f"{message}\n{archive}"

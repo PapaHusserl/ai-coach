@@ -169,6 +169,12 @@ def list_wellbeing(conn: sqlite3.Connection, start: str, end: str) -> list[dict[
     return fetch_all(conn, sql, (start, end))
 
 
+def first_wellbeing_day(conn: sqlite3.Connection) -> str | None:
+    """Дата первой отметки самочувствия; отметок нет - None."""
+    row = fetch_one(conn, "SELECT MIN(date) AS day FROM wellbeing_log", ())
+    return row["day"] if row else None
+
+
 def add_focus(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
     """values: date, logged_at, focus, fatigue, effort (1-5), text (может быть пуст).
     Только добавление."""
@@ -256,8 +262,11 @@ def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
 
 
 def last_sync_log(conn: sqlite3.Connection) -> dict[str, Any] | None:
-    """Последняя запись sync_log (по id), кроме погоды (kind='weather')."""
-    sql = "SELECT * FROM sync_log WHERE kind != 'weather' ORDER BY id DESC LIMIT 1"
+    """Последняя запись sync_log (по id), кроме погоды (kind='weather', 'weather_archive')."""
+    sql = (
+        "SELECT * FROM sync_log WHERE kind NOT IN ('weather', 'weather_archive') "
+        "ORDER BY id DESC LIMIT 1"
+    )
     return fetch_one(conn, sql, ())
 
 

@@ -40,6 +40,16 @@ def list_weather_hours(conn: sqlite3.Connection, start: str, end: str) -> list[d
     return fetch_all(conn, sql, (start, end))
 
 
+def days_with_hours(conn: sqlite3.Connection, start: str, end: str) -> set[str]:
+    """Даты start..end, где есть час с fetched_at позже даты time (старый прогноз не в счёт)."""
+    sql = (
+        "SELECT DISTINCT substr(time, 1, 10) AS day FROM weather_hours "
+        "WHERE substr(time, 1, 10) BETWEEN ? AND ? "
+        "AND substr(fetched_at, 1, 10) > substr(time, 1, 10)"
+    )
+    return {row["day"] for row in fetch_all(conn, sql, (start, end))}
+
+
 def last_weather_now(conn: sqlite3.Connection) -> dict[str, Any] | None:
     """Последнее наблюдение по времени observed_at."""
     sql = f"SELECT {NOW_COLUMNS} FROM weather_now ORDER BY observed_at DESC LIMIT 1"

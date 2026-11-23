@@ -335,6 +335,45 @@ def test_hourly_row_with_null_pressure_is_kept(conn: sqlite3.Connection) -> None
     assert rows[1]["pressure"] is None
 
 
+def backfill_old_days(conn: sqlite3.Connection) -> None:
+    """Дозагрузка архивом дней до вчера (Р24 = 1: тренеру она ничего не меняет)."""
+    import json
+    from pathlib import Path
+
+    from ai_coach.location import Place
+    from ai_coach.sync.weather_sync import backfill_weather
+
+    path = Path(__file__).parent / "fixtures" / "weather" / "archive.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    now = datetime(2026, 11, 22, 14, 10)
+    backfill_weather(conn, Place(52.52, 13.41), "macos", now, lambda *a: raw)
+
+
+def mark_first_day(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import add_wellbeing
+
+    values = {"date": "2026-10-07", "logged_at": "2026-10-07 09:00:00", "score": 3, "text": ""}
+    add_wellbeing(conn, values)
+
+
+def test_get_weather_is_the_same_after_archive_backfill(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 192)
+    put_now(conn, "2026-11-22T14:00")
+    put_day(conn, DAY)
+    mark_first_day(conn)
+    before = call(conn, "get_weather", date_from="2026-10-07", date_to="2026-11-28")
+    backfill_old_days(conn)
+    assert call(conn, "get_weather", date_from="2026-10-07", date_to="2026-11-28") == before
+
+
+def test_morning_snapshot_is_the_same_after_archive_backfill(conn: sqlite3.Connection) -> None:
+    put_hours(conn, "2026-11-21T00:00", 192)
+    mark_first_day(conn)
+    before = call(conn, "get_morning_snapshot", date=DAY)
+    backfill_old_days(conn)
+    assert call(conn, "get_morning_snapshot", date=DAY) == before
+
+
 def test_description_names_hourly_and_three_hour_step() -> None:
     text = TOOLS["get_weather"][1]
     assert "hourly" in text
