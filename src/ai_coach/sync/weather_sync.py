@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from ai_coach import location, weather
+from ai_coach import kp, location, weather
 from ai_coach.load.weather_signal import weather_report
 from ai_coach.location import LocationError, Place
 from ai_coach.store.journal import add_sync_log, first_wellbeing_day
@@ -23,6 +23,7 @@ from ai_coach.store.weather import (
     add_weather_now,
     add_weather_signal,
     days_with_hours,
+    upsert_kp,
     upsert_weather_day,
     upsert_weather_hours,
 )
@@ -31,6 +32,7 @@ from ai_coach.workload.config import WorkloadConfigError, load_config
 
 KIND = "weather"
 ARCHIVE_KIND = "weather_archive"
+KP_KIND = "kp"
 NO_ACCESS = ("denied", "off")
 
 
@@ -138,6 +140,26 @@ def _write_signals(conn: sqlite3.Connection, now: datetime) -> None:
                 "created_at": now.isoformat(timespec="seconds"),
             },
         )
+
+
+def sync_kp(
+    conn: sqlite3.Connection,
+    now: datetime | None = None,
+    fetch: Callable[[], Any] | None = None,
+) -> None:
+    """Записывает индекс Kp (NOAA SWPC) и строку sync_log kind='kp' одной транзакцией. От места и
+    погоды не зависит; сбой - status='error', таблица не тронута; в вывод ничего не идёт."""
+    now = now or datetime.now()
+    started = now.isoformat(timespec="seconds")
+    try:
+        rows = kp.parse_kp((fetch or kp.fetch_kp)())
+    except WeatherError as e:
+        with conn:
+            _log(conn, started, str(e), "error", KP_KIND)
+        return
+    with conn:
+        upsert_kp(conn, [{**row, "fetched_at": started} for row in rows])
+        _log(conn, started, f"Kp: записано {len(rows)}", "ok", KP_KIND)
 
 
 def sync_weather(

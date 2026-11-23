@@ -217,6 +217,59 @@ def test_weather_runs_even_after_garmin_error(db: Path, monkeypatch: pytest.Monk
     assert syncer.status()["error"] == "Токенов Garmin нет."
 
 
+def with_kp(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ai_coach import kp
+
+    path = Path(__file__).parent / "fixtures" / "weather" / "kp.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(kp, "fetch_kp", lambda: raw)
+
+
+def kp_count(db: Path) -> int:
+    conn = open_db(db)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM kp_index").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_run_syncs_kp_after_weather(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_weather(monkeypatch)
+    with_kp(monkeypatch)
+    syncer.start(db)
+    wait_idle()
+    assert kp_count(db) == 81
+    log = kinds(db)
+    assert log.index("kp") > log.index("weather")
+
+
+def test_kp_failure_is_not_in_status_error(db: Path) -> None:
+    syncer.start(db)
+    wait_idle()
+    assert "kp" in kinds(db)
+    assert syncer.status()["error"] is None
+
+
+def test_kp_runs_even_after_weather_failure(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_kp(monkeypatch)
+    syncer.start(db)
+    wait_idle()
+    assert kp_count(db) == 81
+    assert syncer.status()["error"] is None
+
+
+def test_kp_runs_even_after_garmin_error(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_tokens(*a: object, **k: object) -> None:
+        raise GarminAuthError("Токенов Garmin нет.")
+
+    monkeypatch.setattr(syncer, "load_client", no_tokens)
+    with_kp(monkeypatch)
+    syncer.start(db)
+    wait_idle()
+    assert kp_count(db) == 81
+    assert syncer.status()["error"] == "Токенов Garmin нет."
+
+
 def test_sync_thread_is_daemon(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     kwargs_seen: list[dict[str, object]] = []
     real_thread = threading.Thread

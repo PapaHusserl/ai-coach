@@ -87,6 +87,19 @@ def test_last_sync_log_skips_weather_rows(conn: sqlite3.Connection) -> None:
     assert row["kind"] == "workload"
 
 
+def test_last_sync_log_skips_kp_rows(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:00", "kind": "workload", "status": "ok"})
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:01", "kind": "kp", "status": "error"})
+    row = last_sync_log(conn)
+    assert row is not None
+    assert row["kind"] == "workload"
+
+
+def test_last_sync_log_only_kp_rows_is_none(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:01", "kind": "kp", "status": "ok"})
+    assert last_sync_log(conn) is None
+
+
 def test_last_sync_log_only_weather_rows_is_none(conn: sqlite3.Connection) -> None:
     add_sync_log(conn, {"started_at": "2026-11-22T10:00:01", "kind": "weather", "status": "ok"})
     assert last_sync_log(conn) is None

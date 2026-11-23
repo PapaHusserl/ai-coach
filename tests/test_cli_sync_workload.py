@@ -101,6 +101,7 @@ def test_sync_calendar_logs_workload_and_weather(
     assert [(r["kind"], r["status"]) for r in sync_log(isolated)] == [
         ("workload", "ok"),
         ("weather", "error"),
+        ("kp", "error"),
     ]
 
 
@@ -128,6 +129,7 @@ def test_sync_logs_both_sync_and_workload(isolated: Path, monkeypatch: pytest.Mo
     use_calendar(monkeypatch, FakeCalendar())
     runner.invoke(main.app, ["sync", "--days", "1"])
     assert sorted((r["kind"], r["status"]) for r in sync_log(isolated)) == [
+        ("kp", "error"),
         ("sync", "ok"),
         ("weather", "error"),
         ("workload", "ok"),
@@ -240,6 +242,7 @@ def test_sync_calendar_also_prints_weather_line(
     assert [r[0] for r in rows(isolated, "SELECT kind FROM sync_log ORDER BY id")] == [
         "workload",
         "weather",
+        "kp",
     ]
 
 
@@ -282,6 +285,84 @@ def test_weather_does_not_add_sync_run(isolated: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
     use_calendar(monkeypatch, FakeCalendar())
     with_weather(monkeypatch)
+    runner.invoke(main.app, ["sync", "--days", "1"])
+    assert [r["kind"] for r in sync_log(isolated)].count("sync") == 1
+
+
+def with_kp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Сервис NOAA подменён настоящим ответом из фикстуры."""
+    from ai_coach import kp
+
+    raw = json.loads((Path(__file__).parent / "fixtures" / "weather" / "kp.json").read_text())
+    monkeypatch.setattr(kp, "fetch_kp", lambda: raw)
+
+
+def test_sync_writes_kp_after_weather(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    with_weather(monkeypatch)
+    with_kp(monkeypatch)
+    runner.invoke(main.app, ["sync", "--days", "1"])
+    assert rows(isolated, "SELECT COUNT(*) FROM kp_index")[0][0] == 81
+    kinds = [r["kind"] for r in sync_log(isolated)]
+    assert kinds.index("kp") > kinds.index("weather")
+
+
+def test_sync_calendar_also_writes_kp(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", no_garmin)
+    use_calendar(monkeypatch, FakeCalendar())
+    with_kp(monkeypatch)
+    runner.invoke(main.app, ["sync", "--calendar"])
+    assert rows(isolated, "SELECT COUNT(*) FROM kp_index")[0][0] == 81
+    assert rows(isolated, "SELECT status FROM sync_log WHERE kind = 'kp'") == [("ok",)]
+
+
+def test_kp_success_adds_no_line_to_output(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    with_weather(monkeypatch)
+    result = runner.invoke(main.app, ["sync", "--days", "1"])
+    with_kp(monkeypatch)
+    with_kp_result = runner.invoke(main.app, ["sync", "--days", "1"])
+    assert len(with_kp_result.output.splitlines()) == len(result.output.splitlines())
+    assert with_kp_result.output.splitlines()[-1] == "погода: записана, +4°"
+    lowered = with_kp_result.output.lower()
+    assert "kp" not in lowered
+    assert "бур" not in lowered
+
+
+def test_kp_failure_adds_no_line_and_keeps_exit_code_0(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    with_weather(monkeypatch)
+    result = runner.invoke(main.app, ["sync", "--days", "1"])
+    assert result.exit_code == 0
+    assert result.output.splitlines()[-1] == "погода: записана, +4°"
+    assert "kp" not in result.output.lower()
+    assert "Traceback" not in result.output
+    assert rows(isolated, "SELECT status FROM sync_log WHERE kind = 'kp'") == [("error",)]
+
+
+def test_kp_runs_after_garmin_error_and_exit_stays_1(
+    isolated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_tokens(*a: object, **k: object) -> None:
+        raise GarminAuthError("Токенов Garmin нет. Выполни: coach login")
+
+    monkeypatch.setattr(main, "load_client", no_tokens)
+    use_calendar(monkeypatch, FakeCalendar())
+    with_kp(monkeypatch)
+    result = runner.invoke(main.app, ["sync"])
+    assert result.exit_code == 1
+    assert rows(isolated, "SELECT COUNT(*) FROM kp_index")[0][0] == 81
+
+
+def test_kp_does_not_add_sync_run(isolated: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "load_client", lambda *a, **k: FakeGarmin())
+    use_calendar(monkeypatch, FakeCalendar())
+    with_kp(monkeypatch)
     runner.invoke(main.app, ["sync", "--days", "1"])
     assert [r["kind"] for r in sync_log(isolated)].count("sync") == 1
 

@@ -933,6 +933,12 @@ def test_weather_topic_place_unknown_line_names_ten_seconds() -> None:
     assert any("10 секунд" in ln for ln in lines)
 
 
+def test_weather_topic_storm_paragraph_has_needles() -> None:
+    text = topic("weather.md")
+    for needle in ("Kp", "NOAA"):
+        assert needle in text, needle
+
+
 def test_weather_topic_keeps_reserve_below_limit() -> None:
     assert HELP_TOPIC_LIMIT - len((TOPICS / "weather.md").read_bytes()) >= 200
 

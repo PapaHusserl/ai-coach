@@ -64,6 +64,7 @@ def test_sync_writes_sync_log(isolated: Path, monkeypatch: pytest.MonkeyPatch) -
         ("sync", "ok"),
         ("workload", "ok"),
         ("weather", "error"),
+        ("kp", "error"),
     ]
 
 

@@ -31,6 +31,13 @@ def upsert_weather_hours(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -
         upsert(conn, "weather_hours", ["time"], row)
 
 
+def upsert_kp(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
+    """Kp: строки time (ключ), kp, kind, fetched_at; то же время - перезапись.
+    Транзакцию держит вызывающий."""
+    for row in rows:
+        upsert(conn, "kp_index", ["time"], row)
+
+
 def list_weather_hours(conn: sqlite3.Connection, start: str, end: str) -> list[dict[str, Any]]:
     """Часы с датой time от start до end включительно, по возрастанию времени."""
     sql = (

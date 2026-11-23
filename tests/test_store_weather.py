@@ -223,3 +223,51 @@ def test_add_weather_signal_other_kind_and_other_day_are_new_rows(conn: sqlite3.
     add_weather_signal(conn, signal_row(kind="temperature_rise"))
     add_weather_signal(conn, signal_row(date="2026-11-23"))
     assert len(stored_signals(conn)) == 3
+
+
+def kp_row(**values: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "time": "2026-11-22T15:00:00",
+        "kp": 2.0,
+        "kind": "predicted",
+        "fetched_at": "2026-11-22T14:10:00",
+    }
+    return {**row, **values}
+
+
+def stored_kp(conn: sqlite3.Connection) -> list[tuple[object, ...]]:
+    sql = "SELECT time, kp, kind, fetched_at FROM kp_index ORDER BY time"
+    return [tuple(r) for r in conn.execute(sql)]
+
+
+def test_upsert_kp_writes_all_rows(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_kp
+
+    upsert_kp(conn, [kp_row(), kp_row(time="2026-11-22T18:00:00", kp=0.67)])
+    assert stored_kp(conn) == [
+        ("2026-11-22T15:00:00", 2.0, "predicted", "2026-11-22T14:10:00"),
+        ("2026-11-22T18:00:00", 0.67, "predicted", "2026-11-22T14:10:00"),
+    ]
+
+
+def test_upsert_kp_same_time_is_overwritten_by_fresh_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_kp
+
+    upsert_kp(conn, [kp_row()])
+    upsert_kp(conn, [kp_row(kind="observed", kp=3.33, fetched_at="2026-11-22T20:10:00")])
+    assert stored_kp(conn) == [("2026-11-22T15:00:00", 3.33, "observed", "2026-11-22T20:10:00")]
+
+
+def test_upsert_kp_keeps_rows_absent_from_new_answer(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_kp
+
+    upsert_kp(conn, [kp_row(), kp_row(time="2026-11-22T18:00:00")])
+    upsert_kp(conn, [kp_row(time="2026-11-22T18:00:00", kind="observed")])
+    assert [r[0] for r in stored_kp(conn)] == ["2026-11-22T15:00:00", "2026-11-22T18:00:00"]
+
+
+def test_upsert_kp_empty_list_changes_nothing(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.weather import upsert_kp
+
+    upsert_kp(conn, [])
+    assert stored_kp(conn) == []

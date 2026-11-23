@@ -235,6 +235,13 @@ def test_snapshot_last_sync_is_not_weather_row(conn: sqlite3.Connection) -> None
     assert snapshot["last_sync"]["kind"] == "workload"
 
 
+def test_snapshot_last_sync_is_not_kp_row(conn: sqlite3.Connection) -> None:
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:00", "kind": "workload", "status": "ok"})
+    add_sync_log(conn, {"started_at": "2026-11-22T10:00:01", "kind": "kp", "status": "error"})
+    snapshot = call(conn, "get_morning_snapshot", date=DAY)
+    assert snapshot["last_sync"]["kind"] == "workload"
+
+
 def test_snapshot_without_data_does_not_fail(conn: sqlite3.Connection) -> None:
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
     assert snapshot["date"] == DAY

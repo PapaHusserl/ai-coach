@@ -88,6 +88,18 @@ def test_answer_has_now_rows_truncated_history_and_hourly(conn: sqlite3.Connecti
     assert set(answer) == {"now", "rows", "truncated", "history", "hourly", "signals"}
 
 
+def test_answer_does_not_show_kp_rows(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO kp_index (time, kp, kind, fetched_at) "
+        "VALUES ('2026-11-22T15:00:00', 5.33, 'observed', '2026-11-22T14:10:00')"
+    )
+    conn.commit()
+    text = call_text(conn, "get_weather", date_from=DAY, date_to=DAY)
+    assert set(json.loads(text)) == {"now", "rows", "truncated", "history", "hourly", "signals"}
+    assert "kp" not in text.lower()
+    assert "5.33" not in text
+
+
 def put_pressure(conn: sqlite3.Connection, marks: dict[str, float], count: int = 72) -> None:
     """Часы от 2026-11-22T00:00: давление 1015, кроме часов из marks; температура 4."""
     start = datetime.fromisoformat(f"{DAY}T00:00")

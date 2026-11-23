@@ -36,7 +36,7 @@ def clean_syncer_state(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def no_real_place_and_weather(monkeypatch: pytest.MonkeyPatch) -> None:
     """Настоящие геолокация и сеть в тестах не вызываются: оба читателя по умолчанию отказывают."""
-    from ai_coach import location, weather
+    from ai_coach import kp, location, weather
 
     def refuse_place(*args: object, **kwargs: object) -> location.Place:
         raise location.LocationError("unavailable")
@@ -47,6 +47,7 @@ def no_real_place_and_weather(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(location, "read_place", refuse_place)
     monkeypatch.setattr(weather, "fetch_forecast", refuse_forecast)
     monkeypatch.setattr(weather, "fetch_archive", refuse_forecast)
+    monkeypatch.setattr(kp, "fetch_kp", refuse_forecast)
 
 
 @pytest.fixture

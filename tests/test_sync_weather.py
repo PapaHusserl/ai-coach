@@ -861,3 +861,184 @@ def test_failed_sync_writes_no_signal(
     set_limits(monkeypatch, 5, 7)
     sync(conn, fetch=no_network)
     assert stored_signals(conn) == []
+
+
+# --- партия 11: sync_kp (Р37 = 2, Р42 = 1) ---
+
+KP_FIXTURE = Path(__file__).parent / "fixtures" / "weather" / "kp.json"
+KP_STAMP = "2026-11-22T15:00:00"
+
+
+def kp_answer() -> list[dict[str, Any]]:
+    return json.loads(KP_FIXTURE.read_text(encoding="utf-8"))
+
+
+def run_kp(
+    conn: sqlite3.Connection,
+    now: datetime = NOW,
+    fetch: Callable[[], Any] | None = None,
+) -> object:
+    from ai_coach.sync.weather_sync import sync_kp
+
+    return sync_kp(conn, now=now, fetch=fetch or kp_answer)
+
+
+def kp_log(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    sql = "SELECT kind, status FROM sync_log WHERE kind = 'kp' ORDER BY id"
+    return [(r["kind"], r["status"]) for r in conn.execute(sql)]
+
+
+def kp_no_network() -> list[dict[str, Any]]:
+    raise WeatherError("NOAA не ответил")
+
+
+def kp_at(conn: sqlite3.Connection, stamp: str = KP_STAMP) -> tuple[object, ...]:
+    row = conn.execute("SELECT kp, kind, fetched_at FROM kp_index WHERE time = ?", (stamp,))
+    return tuple(row.fetchone())
+
+
+def test_sync_kp_writes_81_rows_and_ok_log(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    assert count(conn, "kp_index") == 81
+    assert kp_log(conn) == [("kp", "ok")]
+
+
+def test_sync_kp_row_has_kind_number_and_fetch_time(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    assert kp_at(conn) == (2.0, "estimated", "2026-11-22T14:10:00")
+    assert kp_at(conn, "2026-11-15T00:00:00")[0] == 0.67
+
+
+def test_sync_kp_returns_nothing_for_the_summary(conn: sqlite3.Connection) -> None:
+    assert run_kp(conn) is None
+
+
+def test_sync_kp_second_call_overwrites_row_with_observation(conn: sqlite3.Connection) -> None:
+    early = kp_answer()
+    early[61].update(observed="predicted", kp=2.0)
+    late = kp_answer()
+    late[61].update(observed="observed", kp=3.33)
+    run_kp(conn, fetch=lambda: early)
+    run_kp(conn, now=NOW + timedelta(hours=6), fetch=lambda: late)
+    assert count(conn, "kp_index") == 81
+    assert kp_at(conn) == (3.33, "observed", "2026-11-22T20:10:00")
+    assert kp_log(conn) == [("kp", "ok"), ("kp", "ok")]
+
+
+def test_sync_kp_failure_logs_error_and_does_not_raise(conn: sqlite3.Connection) -> None:
+    assert run_kp(conn, fetch=kp_no_network) is None
+    assert count(conn, "kp_index") == 0
+    assert kp_log(conn) == [("kp", "error")]
+
+
+def test_sync_kp_failure_keeps_earlier_rows(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    run_kp(conn, now=NOW + timedelta(hours=1), fetch=kp_no_network)
+    assert count(conn, "kp_index") == 81
+    assert kp_at(conn)[2] == "2026-11-22T14:10:00"
+    assert kp_log(conn) == [("kp", "ok"), ("kp", "error")]
+
+
+def test_sync_kp_unparsable_answer_is_error_and_writes_nothing(conn: sqlite3.Connection) -> None:
+    run_kp(conn, fetch=lambda: {"kp": 1})
+    assert count(conn, "kp_index") == 0
+    assert kp_log(conn) == [("kp", "error")]
+
+
+def test_sync_kp_bad_row_in_middle_writes_no_rows(conn: sqlite3.Connection) -> None:
+    bad = kp_answer()
+    bad[70]["kp"] = "много"
+    run_kp(conn, fetch=lambda: bad)
+    assert count(conn, "kp_index") == 0
+    assert kp_log(conn) == [("kp", "error")]
+
+
+@pytest.mark.parametrize("key", ["time_tag", "observed"])
+def test_sync_kp_null_text_field_is_error_row_without_exception(
+    conn: sqlite3.Connection, key: str
+) -> None:
+    bad = kp_answer()
+    bad[70][key] = None
+    run_kp(conn, fetch=lambda: bad)
+    assert count(conn, "kp_index") == 0
+    assert kp_log(conn) == [("kp", "error")]
+
+
+def test_sync_kp_default_reader_is_kp_fetch_kp(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach import kp
+    from ai_coach.sync.weather_sync import sync_kp
+
+    monkeypatch.setattr(kp, "fetch_kp", kp_answer)
+    sync_kp(conn, now=NOW)
+    assert count(conn, "kp_index") == 81
+
+
+def test_sync_kp_default_reader_refusal_is_error_row(conn: sqlite3.Connection) -> None:
+    from ai_coach.sync.weather_sync import sync_kp
+
+    sync_kp(conn, now=NOW)
+    assert kp_log(conn) == [("kp", "error")]
+
+
+def test_sync_kp_without_now_still_logs(conn: sqlite3.Connection) -> None:
+    from ai_coach.sync.weather_sync import sync_kp
+
+    sync_kp(conn, fetch=kp_answer)
+    assert kp_log(conn) == [("kp", "ok")]
+
+
+def test_sync_kp_does_not_ask_for_the_place(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ai_coach import location
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("место не нужно")
+
+    monkeypatch.setattr(location, "resolve_place", forbidden)
+    monkeypatch.setattr(location, "read_place", forbidden)
+    run_kp(conn)
+    assert count(conn, "kp_index") == 81
+
+
+def test_sync_kp_works_when_geolocation_is_denied(conn: sqlite3.Connection) -> None:
+    sync(conn, locate=refuse("denied"))
+    run_kp(conn)
+    assert count(conn, "kp_index") == 81
+    assert weather_log(conn) == [("weather", "error")]
+
+
+def test_sync_kp_writes_no_weather_tables(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    assert [count(conn, t) for t in ("weather_now", "weather_days", "weather_hours")] == [0, 0, 0]
+    assert weather_log(conn) == []
+
+
+def test_sync_weather_does_not_write_kp(conn: sqlite3.Connection) -> None:
+    sync(conn)
+    assert count(conn, "kp_index") == 0
+    assert kp_log(conn) == []
+
+
+def test_sync_kp_does_not_count_as_sync_run(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    run_kp(conn, fetch=kp_no_network)
+    assert sync_runs_on(conn, NOW.date().isoformat()) == 0
+    assert sync_runs_on(conn, date.today().isoformat()) == 0
+
+
+def kp_messages(conn: sqlite3.Connection) -> list[str]:
+    sql = "SELECT message FROM sync_log WHERE kind = 'kp' ORDER BY id"
+    return [r["message"] for r in conn.execute(sql)]
+
+
+def test_sync_kp_error_log_keeps_error_text(conn: sqlite3.Connection) -> None:
+    run_kp(conn, fetch=kp_no_network)
+    assert kp_messages(conn) == ["NOAA не ответил"]
+
+
+def test_sync_kp_ok_log_message_has_row_count(conn: sqlite3.Connection) -> None:
+    run_kp(conn)
+    assert kp_messages(conn) == ["Kp: записано 81"]

@@ -11,6 +11,7 @@ from typing import Any
 from ai_coach.garmin.client import GarminError, load_client
 from ai_coach.store.db import open_db
 from ai_coach.sync import sync as run_sync
+from ai_coach.sync import sync_kp as run_kp
 from ai_coach.sync import sync_weather as run_weather
 from ai_coach.sync import sync_workload as run_workload
 
@@ -42,6 +43,7 @@ def _run(db: str | Path | None) -> None:
                 _set(error=str(e))
             run_workload(conn, DAYS)
             run_weather(conn)
+            run_kp(conn)
         finally:
             conn.close()
     except Exception as e:  # noqa: BLE001 - поток не должен падать молча

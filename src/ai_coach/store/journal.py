@@ -262,9 +262,9 @@ def add_sync_log(conn: sqlite3.Connection, values: dict[str, Any]) -> int:
 
 
 def last_sync_log(conn: sqlite3.Connection) -> dict[str, Any] | None:
-    """Последняя запись sync_log (по id), кроме погоды (kind='weather', 'weather_archive')."""
+    """Последняя запись sync_log (по id), кроме погоды и Kp ('weather', 'weather_archive', 'kp')."""
     sql = (
-        "SELECT * FROM sync_log WHERE kind NOT IN ('weather', 'weather_archive') "
+        "SELECT * FROM sync_log WHERE kind NOT IN ('weather', 'weather_archive', 'kp') "
         "ORDER BY id DESC LIMIT 1"
     )
     return fetch_one(conn, sql, ())

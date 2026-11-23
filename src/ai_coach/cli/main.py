@@ -61,6 +61,7 @@ from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import upsert_counter
 from ai_coach.sync import FitImportError, import_export, import_fit, summary
 from ai_coach.sync import sync as run_sync
+from ai_coach.sync import sync_kp as run_kp
 from ai_coach.sync import sync_weather as run_weather
 from ai_coach.sync import sync_workload as run_workload
 from ai_coach.workload import (
@@ -160,6 +161,7 @@ def sync(
             failed = True
         typer.echo(run_workload(conn, days))
         typer.echo(run_weather(conn))
+        run_kp(conn)
     finally:
         conn.close()
     if failed:
