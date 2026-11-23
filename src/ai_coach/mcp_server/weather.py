@@ -4,6 +4,7 @@ import sqlite3
 from datetime import timedelta
 from typing import Any
 
+from ai_coach.load.weather_signal import weather_report
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import cap, period
 from ai_coach.store.weather import (
@@ -27,7 +28,8 @@ def _with_word(row: dict[str, Any]) -> dict[str, Any]:
 def weather(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
     """now - последнее наблюдение (в том числе вне периода), rows - дни периода со словом
     погоды, history - наблюдения периода (время, температура, давление): точка на каждый синк,
-    hourly - прогноз по часам, шаг 3 ч, со вчера на 7,5 суток (период не влияет)."""
+    hourly - прогноз по часам, шаг 3 ч, со вчера на 7,5 суток (период не влияет),
+    signals - сигналы погоды на сегодня (период не влияет)."""
     period(date_from, date_to)
     last = last_weather_now(conn)
     now = None
@@ -35,7 +37,14 @@ def weather(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str,
         now = _with_word({k: v for k, v in last.items() if k != "fetched_at"})
     answer = cap([_with_word(r) for r in list_weather_days(conn, date_from, date_to)], newest=True)
     points = [{k: r[k] for k in HISTORY_KEYS} for r in list_weather_now(conn, date_from, date_to)]
-    return {"now": now, **answer, "history": cap(points, newest=True), "hourly": _hourly(conn)}
+    signals = weather_report(conn, tools.today().isoformat(), tools.now())["signals"]
+    return {
+        "now": now,
+        **answer,
+        "history": cap(points, newest=True),
+        "hourly": _hourly(conn),
+        "signals": signals,
+    }
 
 
 def _hourly(conn: sqlite3.Connection) -> dict[str, Any]:

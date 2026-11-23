@@ -309,6 +309,67 @@ def test_signal_sources_go_in_the_agreed_order(
     assert order == sorted(order, key=firsts.index)
 
 
+def put_weather_hours(conn: sqlite3.Connection, day: date, marks: dict[str, float]) -> None:
+    """72 часа от day 00:00: давление 1015, кроме часов из marks; температура 4."""
+    start = datetime.combine(day, datetime.min.time())
+    for i in range(72):
+        time = (start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M")
+        conn.execute(
+            "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, humidity, "
+            "wind, fetched_at, lat, lon, place_source, source) "
+            "VALUES (?, 4.0, ?, 1008.4, 80, 3.0, '2026-11-07T06:00:00', 52.52, 13.41, "
+            "'macos', 'forecast')",
+            (time, marks.get(time, 1015.0)),
+        )
+    conn.commit()
+
+
+def test_weather_signal_of_today_has_source_weather_and_row_keys(conn: sqlite3.Connection) -> None:
+    put_weather_hours(conn, DAY, {"2026-11-07T19:00": 1008.0})
+    [signal] = [s for s in state_view(conn, DAY, NOW)["signals"] if s["source"] == "weather"]
+    assert signal == {
+        "source": "weather",
+        "kind": "pressure_drop",
+        "value": 7.0,
+        "limit": 4,
+        "at": "19:00",
+        "next_day": False,
+    }
+
+
+def test_no_weather_signal_without_hours(conn: sqlite3.Connection) -> None:
+    assert "weather" not in {s["source"] for s in state_view(conn, DAY, NOW)["signals"]}
+
+
+def test_no_weather_row_for_yesterday(conn: sqlite3.Connection) -> None:
+    put_weather_hours(conn, DAY, {"2026-11-07T19:00": 1008.0})
+    view = state_view(conn, DAY - timedelta(days=1), NOW)
+    assert "weather" not in {s["source"] for s in view["signals"]}
+
+
+def test_weather_goes_after_deviations(conn: sqlite3.Connection) -> None:
+    put_weather_hours(conn, DAY, {"2026-11-07T19:00": 1008.0})
+    put_who5(conn, 24)
+    put(conn, DAY, 7, readiness=30)
+    order = list(dict.fromkeys(s["source"] for s in state_view(conn, DAY, NOW)["signals"]))
+    assert order[-2:] == ["deviations", "weather"]
+
+
+def test_weather_signals_are_the_report_signals_in_its_order(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [
+        {"kind": "pressure_drop", "value": 7.0, "limit": 4, "at": "19:00", "next_day": False},
+        {"kind": "temperature_rise", "value": 11.0, "limit": 10, "at": "15:00", "next_day": False},
+    ]
+    monkeypatch.setattr(
+        "ai_coach.web.state.weather_report",
+        lambda *args, **kwargs: {"date": DAY.isoformat(), "signals": rows},
+    )
+    found = [s for s in state_view(conn, DAY, NOW)["signals"] if s["source"] == "weather"]
+    assert [s["kind"] for s in found] == ["pressure_drop", "temperature_rise"]
+
+
 def test_sleep_goes_before_deviations(conn: sqlite3.Connection) -> None:
     nights(conn, 4, rhr=50)
     view = state_view(conn, DAY, NOW)

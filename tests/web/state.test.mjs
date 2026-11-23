@@ -69,6 +69,7 @@ const CODES = [
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
 	"illness_rest", "illness_return", "hrv_streak", "illness_light", "fatigue", "irritability",
+	"pressure_drop", "temperature_rise", "temperature_drop",
 ];
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
@@ -84,7 +85,7 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 29 кодов отчётов", async () => {
+test("SIGNAL_WORDS: ровно 32 кода отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });
@@ -485,4 +486,84 @@ test("chartSegments: пропуск в начале и в конце не рис
 			[20, 50],
 		],
 	]);
+});
+
+// П7, партия 9: сигнал погоды — слова, час, «порог», «завтра» (Р35 = 2, Р39 = 1, Р40 = 3, Р44 = 2).
+const WEATHER = { source: "weather", value: 7.0, limit: 5, at: "19:00", next_day: false };
+
+test("SIGNAL_WORDS: слова погоды — «перепад давления» и «перепад температуры»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.pressure_drop, "перепад давления");
+	assert.equal(SIGNAL_WORDS.temperature_rise, "перепад температуры");
+	assert.equal(SIGNAL_WORDS.temperature_drop, "перепад температуры");
+});
+
+test("signalRows: pressure_drop — «перепад давления» и «7 к 19:00 (порог 5)»", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...WEATHER, kind: "pressure_drop" }]));
+	assert.equal(row.word, "перепад давления");
+	assert.equal(row.detail, "7 к 19:00 (порог 5)");
+});
+
+test("signalRows: pressure_drop 5.1 — «5.1 к 19:00 (порог 5)»", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...WEATHER, kind: "pressure_drop", value: 5.1 }]));
+	assert.equal(row.detail, "5.1 к 19:00 (порог 5)");
+});
+
+test("signalRows: temperature_rise и temperature_drop — «перепад температуры», «8 к 15:00 (порог 7)»", async () => {
+	const { signalRows } = await stateModel();
+	for (const kind of ["temperature_rise", "temperature_drop"]) {
+		const [row] = signalRows(stateOf([{ ...WEATHER, kind, value: 8.0, limit: 7, at: "15:00" }]));
+		assert.equal(row.word, "перепад температуры");
+		assert.equal(row.detail, "8 к 15:00 (порог 7)");
+	}
+});
+
+test("signalRows: next_day true — «7 завтра к 03:00 (порог 5)»", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...WEATHER, kind: "pressure_drop", at: "03:00", next_day: true }]));
+	assert.equal(row.detail, "7 завтра к 03:00 (порог 5)");
+});
+
+test("signalRows: next_day false — слова «завтра» нет", async () => {
+	const { signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...WEATHER, kind: "pressure_drop", at: "03:00" }]));
+	assert.ok(!text(row).includes("завтра"));
+});
+
+test("signalRows: у температуры next_day true — «8 завтра к 06:00 (порог 7)»", async () => {
+	const { signalRows } = await stateModel();
+	const signal = { ...WEATHER, kind: "temperature_drop", value: 8.0, limit: 7, at: "06:00", next_day: true };
+	const [row] = signalRows(stateOf([signal]));
+	assert.equal(row.detail, "8 завтра к 06:00 (порог 7)");
+});
+
+test("signalRows: два сигнала погоды — порядок сервера, давление и температура", async () => {
+	const { signalRows } = await stateModel();
+	const rows = signalRows(
+		stateOf([
+			{ ...WEATHER, kind: "pressure_drop" },
+			{ ...WEATHER, kind: "temperature_rise", value: 8.0, limit: 7, at: "15:00" },
+		]),
+	);
+	assert.deepEqual(rows.map((row) => row.kind), ["pressure_drop", "temperature_rise"]);
+});
+
+test("signalRows: прежние коды без ключа at — деталь как до шага, без «к» и «завтра»", async () => {
+	const { signalRows } = await stateModel();
+	const rows = signalRows(
+		stateOf([
+			{ source: "illness", kind: "corridor_out", value: 1, limit: 2 },
+			{ source: "deviations", kind: "wellbeing_below", value: 3, limit: 4 },
+			{ source: "illness", kind: "illness_light", value: 2, limit: 5 },
+		]),
+	);
+	assert.deepEqual(rows.map((row) => row.detail), ["1 (порог 2)", "3 (норма 4)", "день 2 из 5"]);
+});
+
+test("слова «ориентир» в модели нет", async () => {
+	const { SIGNAL_WORDS, signalRows } = await stateModel();
+	const [row] = signalRows(stateOf([{ ...WEATHER, kind: "pressure_drop" }]));
+	assert.ok(!JSON.stringify([SIGNAL_WORDS, row]).includes("ориентир"));
 });

@@ -7,6 +7,7 @@ from typing import Any
 from ai_coach.load.illness import illness_report
 from ai_coach.load.overload import overload_report
 from ai_coach.load.sleep import sleep_report
+from ai_coach.load.weather_signal import weather_report
 from ai_coach.load.who5 import who5_report
 from ai_coach.mcp_server import tools
 from ai_coach.mcp_server.tools import ToolError, day_deviations
@@ -44,7 +45,7 @@ def _trends(conn: sqlite3.Connection, day: date) -> dict[str, Any]:
 
 
 def state_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, Any]:
-    """signals (sleep, illness, overload, who5, deviations), trends за 14 дней и вес за 30,
+    """signals (sleep, illness, overload, who5, deviations, weather), trends за 14 дней и вес за 30,
     load_error - текст, если нагрузка не считается (тогда сигналы без неё)."""
     iso = day.isoformat()
     tss: dict[str, float] = {}
@@ -63,5 +64,6 @@ def state_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, 
         + _signals("overload", overload_report(conn, iso, tss)["signals"])
         + _signals("who5", who5_report(conn, iso)["signals"])
         + _signals("deviations", day_deviations(conn, iso, load_row))
+        + _signals("weather", weather_report(conn, iso, now)["signals"])
     )
     return {"signals": signals, "trends": _trends(conn, day), "load_error": load_error}

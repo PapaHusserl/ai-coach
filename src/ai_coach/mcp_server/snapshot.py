@@ -11,6 +11,7 @@ from ai_coach.agenda import agenda_rows
 from ai_coach.decisions import day_part, pending
 from ai_coach.load import illness_report, overload_report, sleep_report, who5_report
 from ai_coach.load.overload import overloaded
+from ai_coach.load.weather_signal import weather_report
 from ai_coach.mcp_server import tools
 from ai_coach.meds import short_meds
 from ai_coach.pantry import expiring, stock
@@ -98,6 +99,7 @@ NOT_LISTS = (
     "evening_done_today",
     "week_review_due",
     "overload",
+    "weather",
     "sleep",
     "illness",
     "who5",
@@ -226,6 +228,7 @@ def morning_snapshot(
     )
     snapshot["agenda"] = part([{k: row[k] for k in AGENDA_FIELDS} for row in found_agenda])
     snapshot["overload"] = overload_report(conn, date, tss)
+    snapshot["weather"] = weather_report(conn, date, tools.now())
     snapshot["sleep"] = sleep_report(conn, date, tools.now())
     found_illness = illness_report(conn, date, tss, snapshot["sleep"])
     snapshot["illness"] = {k: v for k, v in found_illness.items() if k != "days"}

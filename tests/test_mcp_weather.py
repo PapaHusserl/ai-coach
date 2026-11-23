@@ -85,7 +85,69 @@ def put_hours(conn: sqlite3.Connection, first: str, count: int) -> None:
 
 def test_answer_has_now_rows_truncated_history_and_hourly(conn: sqlite3.Connection) -> None:
     answer = call(conn, "get_weather", date_from=DAY, date_to=DAY)
-    assert set(answer) == {"now", "rows", "truncated", "history", "hourly"}
+    assert set(answer) == {"now", "rows", "truncated", "history", "hourly", "signals"}
+
+
+def put_pressure(conn: sqlite3.Connection, marks: dict[str, float], count: int = 72) -> None:
+    """Часы от 2026-11-22T00:00: давление 1015, кроме часов из marks; температура 4."""
+    start = datetime.fromisoformat(f"{DAY}T00:00")
+    for i in range(count):
+        time = (start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M")
+        conn.execute(
+            "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, humidity, "
+            "wind, fetched_at, lat, lon, place_source, source) "
+            "VALUES (?, 4.0, ?, 1008.4, 80, 3.0, '2026-11-22T14:10:00', ?, ?, 'macos', 'forecast')",
+            (time, marks.get(time, 1015.0), LAT, LON),
+        )
+    conn.commit()
+
+
+def test_signals_are_empty_without_hours(conn: sqlite3.Connection) -> None:
+    assert call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"] == []
+
+
+def test_signals_are_empty_when_pressure_is_flat(conn: sqlite3.Connection) -> None:
+    put_pressure(conn, {})
+    assert call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"] == []
+
+
+def test_signals_have_pressure_drop_row_with_hour(conn: sqlite3.Connection) -> None:
+    put_pressure(conn, {f"{DAY}T19:00": 1008.0})
+    signals = call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"]
+    assert signals == [
+        {"kind": "pressure_drop", "value": 7.0, "limit": 4, "at": "19:00", "next_day": False}
+    ]
+
+
+def test_signals_ignore_the_period_of_the_call(conn: sqlite3.Connection) -> None:
+    put_pressure(conn, {f"{DAY}T19:00": 1008.0})
+    signals = call(conn, "get_weather", date_from="2026-10-01", date_to="2026-10-02")["signals"]
+    assert [s["kind"] for s in signals] == ["pressure_drop"]
+
+
+def test_signals_are_counted_at_reading_time_not_taken_from_log(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_pressure(conn, {f"{DAY}T12:00": 1005.0, "2026-11-23T03:00": 1009.0})
+    freeze(monkeypatch, f"{DAY} 07:20:00")
+    [morning] = call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"]
+    freeze(monkeypatch, f"{DAY} 19:20:00")
+    [evening] = call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"]
+    assert (morning["value"], morning["at"], morning["next_day"]) == (10.0, "12:00", False)
+    assert (evening["value"], evening["at"], evening["next_day"]) == (6.0, "03:00", True)
+
+
+def test_signals_row_has_no_place_keys(conn: sqlite3.Connection) -> None:
+    put_pressure(conn, {f"{DAY}T19:00": 1008.0})
+    [row] = call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"]
+    assert set(row) == {"kind", "value", "limit", "at", "next_day"}
+
+
+def test_description_names_signals_and_sync() -> None:
+    text = TOOLS["get_weather"][1]
+    assert "signals" in text
+    assert "сигнал" in text
+    assert "coach sync" in text
 
 
 def test_now_is_last_observation_even_outside_period(conn: sqlite3.Connection) -> None:

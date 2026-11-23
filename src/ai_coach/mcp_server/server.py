@@ -79,7 +79,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "workload (нагрузка вне тренировок за 7 дней: часы встреч, вечера, туду, груминг), "
         "workload_ahead (календарь на 7 дней вперёд, без названий и счётчиков; overloaded - "
         "день перегружен только по календарю, без тренировок: нет флага - не гарантия), "
-        "overload (как get_overload), sleep (как get_sleep), illness (как get_illness, без days), "
+        "overload (как get_overload), weather (сигналы погоды, как в get_weather), "
+        "sleep (как get_sleep), illness (как get_illness, без days), "
         "who5 (последний WHO-5: score, prev_score, delta, days_since, due - пора проводить, "
         "low_until, signals), "
         "claude (Claude Code за 7 дней: prompts, evening, decisions, repos, switches; без имён), "
@@ -138,7 +139,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "не почасовой ряд; hourly - прогноз по часам, шаг 3 ч (time, temperature, pressure), "
         "со вчера на 7,5 суток, от периода не зависит. Не больше 60 дней и 60 наблюдений, "
         "остаются самые новые: truncated у дней, history.truncated у наблюдений; у hourly "
-        "первые 60 строк, hourly.truncated. Погода на момент последнего coach sync, "
+        "первые 60 строк, hourly.truncated; signals - сигналы погоды на сегодня (kind, "
+        "value, limit, at - час экстремума, next_day), считаются при чтении, от периода "
+        "не зависят, пустой список - сигнала нет. Погода на момент последнего coach sync, "
         "обновить - coach sync.",
     ),
     "get_overload": (

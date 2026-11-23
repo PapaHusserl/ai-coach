@@ -18,6 +18,9 @@ export const SIGNAL_WORDS = {
 	who5_low: "WHO-5 низкий",
 	who5_reduced: "WHO-5 снижен",
 	who5_drop: "WHO-5 упал",
+	pressure_drop: "перепад давления",
+	temperature_rise: "перепад температуры",
+	temperature_drop: "перепад температуры",
 	wellbeing: "самочувствие",
 	mood: "настроение",
 	stress: "стресс",
@@ -81,6 +84,10 @@ function detailOf(signal) {
 		const day = `день ${signal.count === "series" ? "болезни " : ""}${shown(signal.value)} из ${shown(signal.limit)}`;
 		const why = signal.kind === "illness_rest" ? signal.why ?? [] : [];
 		return why.length === 0 ? day : `${day} — ${why.map((code) => REASON_WORDS[code] ?? code).join(", ")}`;
+	}
+	if (signal.at !== undefined) {
+		const when = `${signal.next_day ? "завтра " : ""}к ${signal.at}`;
+		return `${shown(signal.value)} ${when} (порог ${shown(signal.limit)})`;
 	}
 	if (signal.limit === null) return shown(signal.value);
 	return `${shown(signal.value)} (${NORM_KINDS.includes(signal.kind) ? "норма" : "порог"} ${shown(signal.limit)})`;

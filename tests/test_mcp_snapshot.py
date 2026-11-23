@@ -119,6 +119,7 @@ def test_snapshot_has_all_sections(conn: sqlite3.Connection) -> None:
         "workload_ahead",
         "agenda",
         "overload",
+        "weather",
         "sleep",
         "illness",
         "who5",
@@ -853,3 +854,85 @@ def test_snapshot_that_cannot_be_cut_enough_raises(
     monkeypatch.setattr(snapshot_module, "SNAPSHOT_MAX_CHARS", 10)
     with pytest.raises(ToolError, match=r"Снапшот не помещается в лимит даже без списков\.$"):
         call(conn, "get_morning_snapshot", date=DAY)
+
+
+# --- П7, партия 9: сигнал погоды в сводке ---
+
+
+def put_weather_hours(conn: sqlite3.Connection, marks: dict[str, float], count: int = 72) -> None:
+    """Часы от DAY 00:00: давление 1015, кроме часов из marks; температура 4."""
+    start = datetime.fromisoformat(f"{DAY}T00:00")
+    for i in range(count):
+        time = (start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M")
+        conn.execute(
+            "INSERT INTO weather_hours (time, temperature, pressure, pressure_surface, humidity, "
+            "wind, fetched_at, lat, lon, place_source, source) "
+            "VALUES (?, 4.0, ?, 1008.4, 80, 3.0, ?, 52.52, 13.41, 'macos', 'forecast')",
+            (time, marks.get(time, 1015.0), f"{DAY}T06:00:00"),
+        )
+    conn.commit()
+
+
+def test_snapshot_weather_has_no_signals_without_hours(conn: sqlite3.Connection) -> None:
+    assert call(conn, "get_morning_snapshot", date=DAY)["weather"]["signals"] == []
+
+
+def test_snapshot_weather_has_pressure_drop_signal(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0})
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+    signals = call(conn, "get_morning_snapshot", date=DAY)["weather"]["signals"]
+    assert signals == [
+        {"kind": "pressure_drop", "value": 7.0, "limit": 4, "at": "19:00", "next_day": False}
+    ]
+
+
+def test_snapshot_weather_signals_equal_get_weather_signals(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0})
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+    from_snapshot = call(conn, "get_morning_snapshot", date=DAY)["weather"]["signals"]
+    from_tool = call(conn, "get_weather", date_from=DAY, date_to=DAY)["signals"]
+    assert from_snapshot == from_tool != []
+
+
+def test_snapshot_weather_has_no_signals_for_past_date(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0})
+    freeze(monkeypatch, f"{day_shift(1)} 14:10:00")
+    assert call(conn, "get_morning_snapshot", date=DAY)["weather"]["signals"] == []
+
+
+def test_snapshot_deviations_do_not_change_with_weather_signal(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+    before = call(conn, "get_morning_snapshot", date=DAY)["deviations"]
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0})
+    assert call(conn, "get_morning_snapshot", date=DAY)["deviations"] == before
+
+
+def test_get_deviations_has_no_row_for_weather_signal(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0})
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+    assert call(conn, "get_deviations", date=DAY)["rows"] == []
+
+
+def test_snapshot_description_names_weather() -> None:
+    assert "weather" in TOOLS["get_morning_snapshot"][1]
+
+
+def test_snapshot_with_weather_signal_fits_total_limit(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overfill(conn)
+    put_weather_hours(conn, {f"{DAY}T19:00": 1008.0}, count=192)
+    freeze(monkeypatch, f"{DAY} 14:10:00")
+    text = call_text(conn, "get_morning_snapshot", date=DAY)
+    assert len(text) <= SNAPSHOT_MAX_CHARS
+    assert json.loads(text)["weather"]["signals"][0]["kind"] == "pressure_drop"
