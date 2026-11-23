@@ -30,6 +30,7 @@ from ai_coach.cli.practices import practice_app
 from ai_coach.cli.profile import goal_app, profile_app
 from ai_coach.cli.pvt import pvt
 from ai_coach.cli.recipes import recipe_app
+from ai_coach.cli.report import report_app
 from ai_coach.cli.review import review_app
 from ai_coach.cli.sport_nutrition import protocol_app, supplement_app
 from ai_coach.cli.status import status
@@ -96,6 +97,7 @@ app.add_typer(practice_app, name="practice")
 app.add_typer(habit_app, name="habit")
 app.add_typer(review_app, name="review")
 app.add_typer(decide_app, name="decide")
+app.add_typer(report_app, name="report")
 app.add_typer(event_app, name="event")
 app.add_typer(todo_app, name="todo")
 app.add_typer(protocol_app, name="protocol")

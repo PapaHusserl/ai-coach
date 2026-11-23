@@ -240,6 +240,15 @@ def test_help_index_mentions_pult_todo_topic() -> None:
     assert "`pult-todo.md`" in HELP.read_text(encoding="utf-8")
 
 
+def test_help_index_names_coach_report() -> None:
+    assert "`coach report`" in HELP.read_text(encoding="utf-8")
+
+
+def test_start_topic_describes_report_commands() -> None:
+    text = topic("start.md")
+    assert all(f"coach report {sub}" in text for sub in ("add", "list", "done"))
+
+
 def test_todo_topic_points_to_pult_todo() -> None:
     assert "pult-todo.md" in topic("todo.md")
 
@@ -1306,3 +1315,32 @@ def test_deviations_below_norm_weakness_line_excludes_mood() -> None:
     section = text.split("## Ниже своей нормы", 1)[1].split("\n## ", 1)[0]
     line = next(ln for ln in section.splitlines() if "строк" in ln and "сне" in ln)
     assert "не настроения" in line
+
+
+def index_topic_lines() -> list[str]:
+    block = HELP.read_text().split("Оглавление (тема - о чём - файл):\n", 1)[1]
+    return [ln for ln in block.split("\n\n", 1)[0].splitlines() if ln.strip()]
+
+
+def test_help_index_every_line_starts_with_dash() -> None:
+    assert [ln for ln in index_topic_lines() if not ln.startswith("- ")] == []
+
+
+def test_help_index_has_no_glued_topics() -> None:
+    assert [ln for ln in index_topic_lines() if re.search(r"\.md`- ", ln)] == []
+
+
+def test_help_index_has_twenty_topic_lines() -> None:
+    assert len(index_topic_lines()) == 20
+
+
+def test_help_index_has_no_separate_pult_todo_line() -> None:
+    assert [ln for ln in index_topic_lines() if ln.startswith("- Пульт: туду")] == []
+
+
+def test_help_index_forms_and_weight_food_are_separate_lines() -> None:
+    lines = index_topic_lines()
+    forms = [ln for ln in lines if ln.startswith("- Формы - ")]
+    weight = [ln for ln in lines if ln.startswith("- Вес и еда - ")]
+    assert len(forms) == 1 and len(weight) == 1
+    assert "Вес и еда" not in forms[0]
