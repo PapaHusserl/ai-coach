@@ -466,3 +466,30 @@ def test_recovery_days_have_no_raw_json(conn: sqlite3.Connection) -> None:
     recovery_row(conn, "2026-10-01", {"secret": "SECRET", "sleep": {"restingHeartRate": 50}})
     found = list_recovery_days(conn, "2026-10-01", "2026-10-01")
     assert "SECRET" not in json.dumps(found)
+
+
+IMPORT_RAW = {"hrv": {"metrics": [{"type": "HR", "value": 52}]}}
+API_RAW = {"sleep": {"restingHeartRate": 50}}
+
+
+def test_first_api_night_is_api_date_after_import_nights(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.garmin_data import first_api_night
+
+    recovery_row(conn, "2026-09-29", IMPORT_RAW)
+    recovery_row(conn, "2026-09-30", IMPORT_RAW)
+    recovery_row(conn, "2026-10-02", API_RAW)
+    recovery_row(conn, "2026-10-01", API_RAW)
+    assert first_api_night(conn) == "2026-10-01"
+
+
+def test_first_api_night_is_none_with_import_nights_only(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.garmin_data import first_api_night
+
+    recovery_row(conn, "2026-09-30", IMPORT_RAW)
+    assert first_api_night(conn) is None
+
+
+def test_first_api_night_is_none_on_empty_database(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.garmin_data import first_api_night
+
+    assert first_api_night(conn) is None

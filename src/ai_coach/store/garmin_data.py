@@ -100,6 +100,16 @@ def list_hrv_corridor(conn: sqlite3.Connection, start: str, end: str) -> list[di
     return fetch_all(conn, sql, (start, end))
 
 
+def first_api_night(conn: sqlite3.Connection) -> str | None:
+    """Дата первой ночи API (есть $.sleep.restingHeartRate); None - таких ночей нет."""
+    sql = (
+        "SELECT MIN(date) AS first FROM daily_metrics "
+        "WHERE json_extract(raw_json, '$.sleep.restingHeartRate') IS NOT NULL"
+    )
+    row = fetch_one(conn, sql, ())
+    return row["first"] if row else None
+
+
 def upsert_activity(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     """Ключ — activity_id. raw_json обязателен."""
     upsert(conn, "activities", ["activity_id"], values)

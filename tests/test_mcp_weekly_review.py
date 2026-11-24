@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, db_file, rows, tool_names
 
 from ai_coach.mcp_server import build_server
+from ai_coach.store.garmin_data import upsert_daily_metrics
 
 # 2026-10-11 - воскресенье, 12 - понедельник, 13 - вторник
 SUN, MON, TUE, WED, SAT = "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-10"
@@ -33,9 +34,44 @@ def test_tool_exists(conn: sqlite3.Connection) -> None:
 def test_default_is_four_weeks(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
     freeze(monkeypatch, f"{WED} 12:00:00")
     result = call(conn, "get_weekly_review")
-    assert set(result) == {"rows", "truncated"}
+    assert set(result) == {"rows", "truncated", "recovery"}
     assert result["truncated"] is False
     assert len(result["rows"]) == 4
+
+
+def test_recovery_lists_three_factors_in_order(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{WED} 12:00:00")
+    found = call(conn, "get_weekly_review")["recovery"]
+    assert [f["factor"] for f in found["factors"]] == [
+        "evening_work",
+        "claude_evening",
+        "heavy_day",
+    ]
+    assert all(f["enough"] is False for f in found["factors"])
+
+
+def test_recovery_counts_pairs_from_the_database(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{WED} 12:00:00")
+    conn.execute(
+        "INSERT INTO day_counters (date, kind, value, source, synced_at) "
+        "VALUES (?, 'screen_work_evening_hours', 2.0, 'screen', '2026-10-14T10:00:00')",
+        (SAT,),
+    )
+    upsert_daily_metrics(
+        conn,
+        {
+            "date": SUN,
+            "hrv_last_night": 41,
+            "sleep_seconds": 25200,
+            "raw_json": {"sleep": {"restingHeartRate": 52}},
+        },
+    )
+    found = call(conn, "get_weekly_review")["recovery"]["factors"][0]
+    assert (found["factor"], found["with"], found["without"]) == ("evening_work", 1, 0)
 
 
 @pytest.mark.parametrize("weeks", [1, 2, 12])

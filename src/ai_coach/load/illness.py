@@ -25,6 +25,7 @@ from ai_coach.load.episode import (
     status_streak,
     vitals_flags,
 )
+from ai_coach.load.overload import EVENING_WORK_MIN, TOTAL_HIGH, day_entries, evening_hours
 from ai_coach.load.sleep import sleep_report
 from ai_coach.store.forms import get_form, list_form_log
 from ai_coach.store.garmin_data import list_recovery_days
@@ -237,16 +238,20 @@ def _context(
     tss: dict[str, float] | None,
     sleep: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """confounders (short_night, trained_yesterday), tss_yesterday и sleep_debt."""
+    """confounders (short_night, trained_yesterday, evening_work, heavy_day), tss_yesterday и
+    sleep_debt."""
     report = sleep if sleep is not None else sleep_report(conn, day)
     kinds = {s["kind"] for s in report["signals"]}
     yesterday = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
     spent = (tss or {}).get(yesterday)
+    last = day_entries(conn, yesterday, yesterday, tss or {})[0]
     confounders = [
         name
         for name, found in (
             ("short_night", "short_night" in kinds),
             ("trained_yesterday", bool(spent)),
+            ("evening_work", evening_hours(last) >= EVENING_WORK_MIN),
+            ("heavy_day", last["total"] >= TOTAL_HIGH),
         )
         if found
     ]

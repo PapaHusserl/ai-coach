@@ -24,6 +24,7 @@ from ai_coach.store.agenda import add_event
 from ai_coach.store.forms import add_form, add_form_entry, get_form
 from ai_coach.store.garmin_data import upsert_daily_metrics
 from ai_coach.store.journal import add_wellbeing
+from ai_coach.store.workload import upsert_counter
 
 TODAY = date(2026, 11, 2)
 
@@ -428,6 +429,81 @@ def test_report_without_sleep_has_no_confounders(conn: sqlite3.Connection) -> No
     found = report(conn)
     assert found["confounders"] == []
     assert found["sleep_debt"] is False
+
+
+def counter(conn: sqlite3.Connection, days: int, kind: str, value: float) -> None:
+    upsert_counter(
+        conn,
+        {
+            "date": back(days).isoformat(),
+            "kind": kind,
+            "value": value,
+            "source": "screen",
+            "synced_at": "2026-11-02T10:00:00",
+        },
+    )
+
+
+def test_report_evening_work_yesterday_in_confounders(conn: sqlite3.Connection) -> None:
+    counter(conn, 1, "screen_work_evening_hours", 1.0)
+    assert report(conn)["confounders"] == ["evening_work"]
+
+
+def test_report_short_evening_yesterday_is_not_confounder(conn: sqlite3.Connection) -> None:
+    counter(conn, 1, "screen_work_evening_hours", 0.99)
+    assert report(conn)["confounders"] == []
+
+
+def test_report_evening_work_of_other_day_is_ignored(conn: sqlite3.Connection) -> None:
+    counter(conn, 2, "screen_work_evening_hours", 3.0)
+    counter(conn, 0, "screen_work_evening_hours", 3.0)
+    assert report(conn)["confounders"] == []
+
+
+def test_report_heavy_day_yesterday_in_confounders(conn: sqlite3.Connection) -> None:
+    counter(conn, 1, "screen_work_hours", 8.0)  # вчера воскресенье: 1,5 × 8,0 = 12,0
+    assert report(conn)["confounders"] == ["heavy_day"]
+
+
+def test_report_day_just_below_heavy_is_not_confounder(conn: sqlite3.Connection) -> None:
+    counter(conn, 1, "screen_work_hours", 7.99)  # 1,5 × 7,99 = 11,985 -> 11,98 < 12
+    assert report(conn)["confounders"] == []
+
+
+def test_report_heavy_day_of_other_day_is_ignored(conn: sqlite3.Connection) -> None:
+    counter(conn, 2, "screen_work_hours", 14.0)
+    assert report(conn)["confounders"] == []
+
+
+def test_report_heavy_day_counts_yesterday_tss(conn: sqlite3.Connection) -> None:
+    found = report(conn, tss={back(1).isoformat(): 240})  # 0,05 × 240 = 12
+    assert found["confounders"] == ["trained_yesterday", "heavy_day"]
+
+
+def test_report_all_confounders_in_fixed_order(conn: sqlite3.Connection) -> None:
+    counter(conn, 1, "screen_work_evening_hours", 2.0)
+    counter(conn, 1, "screen_work_hours", 12.0)
+    sleep = {"signals": [{"kind": "short_night", "value": 1.5, "limit": 1.0}]}
+    found = report(conn, tss={back(1).isoformat(): 30}, sleep=sleep)
+    assert found["confounders"] == [
+        "short_night",
+        "trained_yesterday",
+        "evening_work",
+        "heavy_day",
+    ]
+
+
+def test_report_new_confounders_do_not_change_signals(conn: sqlite3.Connection) -> None:
+    base_28(conn)
+    out_day(conn, 1)
+    out_day(conn, 0)
+    before = report(conn)
+    counter(conn, 1, "screen_work_evening_hours", 2.0)
+    counter(conn, 1, "screen_work_hours", 12.0)
+    after = report(conn)
+    assert before["signals"] != []
+    assert after["confounders"] == ["evening_work", "heavy_day"]
+    assert after["signals"] == before["signals"]
 
 
 def test_report_has_no_raw_json(conn: sqlite3.Connection) -> None:

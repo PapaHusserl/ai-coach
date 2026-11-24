@@ -55,7 +55,7 @@ def review_due(conn: sqlite3.Connection, day: str) -> bool:
     return get_review(conn, week_of_review(current)) is None
 
 
-def _tss(conn: sqlite3.Connection, start: str, end: str) -> dict[str, float] | None:
+def days_tss(conn: sqlite3.Connection, start: str, end: str) -> dict[str, float] | None:
     """TSS по дням; нет пульса покоя - None (TSS недели неизвестен)."""
     found = last_rest_hr(conn, end)
     if found is None:
@@ -160,7 +160,7 @@ def weekly_review(
     first = monday(current) - timedelta(days=7 * (weeks - 1))
     start, end = first.isoformat(), current.isoformat()
     if tss is None:
-        tss = _tss(conn, start, end)
+        tss = days_tss(conn, start, end)
     has_tss = tss is not None
     days = {d["date"]: d for d in day_entries(conn, start, end, tss or {})}
     wellbeing = _wellbeing(conn, start, end)

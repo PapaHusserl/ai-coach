@@ -246,9 +246,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "границы личного коридора (±0,75 SD за 28 дней; null - данных меньше 14 дней); rhr_high, "
         "hrv_low, out_today - день вне коридора (пульс выше или HRV ниже); streak - таких дней "
         "подряд, до 7; baseline_days - дней из 28 с пульсом и HRV; days - 7 дней (date, rhr, "
-        "hrv, out); confounders - что могло сдвинуть цифры без болезни (short_night, "
-        "trained_yesterday); tss_yesterday; sleep_debt - долг сна (риск выше); episode - фаза "
-        "болезни по текстам записей и форм (phase ill / rest / return / light / null, severe, "
+        "hrv, out); confounders - что могло сдвинуть без болезни (short_night, trained_yesterday, "
+        "evening_work, heavy_day); tss_yesterday; sleep_debt - долг сна (риск выше); episode - "
+        "фаза болезни по текстам записей и форм (phase ill / rest / return / light / null, severe, "
         "sick_first, sick_last, clean_days, rest_day, rest_step, return_day, until, by_cap, "
         "not_clean - no_record, no_night, corridor, skin_temp, respiration, spo2; covid - у "
         "серии есть отметка COVID, series_day - номер дня серии или null); hrv_streak - "
@@ -307,7 +307,11 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "нагрузка), work_hours, evening_hours, weekend_work_hours, todo_closed, todo_open, mood, "
         "stress, fatigue, irritability, sleep, readiness (средние, null - данных нет), "
         "days_with_data, delta - разница "
-        "с предыдущей неделей (null - нет базы). Выводов нет - их делает тренер.",
+        "с предыдущей неделей (null - нет базы). recovery.factors - личный отклик ночи на "
+        "нагрузку за 90 дней, по трём факторам (evening_work, claude_evening, heavy_day): "
+        "with / without - число ночей с фактором и без, hrv, rhr, sleep_min - разница "
+        "медиан (null - нет данных), enough - в каждой группе не меньше 10 ночей. Наблюдение, "
+        "не причина. Выводов нет - их делает тренер.",
     ),
     "get_decisions": (
         decisions.decisions,
