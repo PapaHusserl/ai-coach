@@ -441,13 +441,13 @@ def test_delta_of_fatigue_is_none_when_one_week_has_no_mean(conn: sqlite3.Connec
     assert delta["irritability"] is None
 
 
-def test_delta_keys_are_thirteen_with_new_marks(conn: sqlite3.Connection) -> None:
+def test_delta_keys_are_fifteen_with_marks_and_rest(conn: sqlite3.Connection) -> None:
     from ai_coach.review.service import DELTA_KEYS
 
     delta = weekly_review(conn, WED, weeks=2)[1]["delta"]
-    assert len(DELTA_KEYS) == 13
+    assert len(DELTA_KEYS) == 15
     assert set(delta) == set(DELTA_KEYS)
-    assert {"fatigue", "irritability"} <= set(delta)
+    assert {"fatigue", "irritability", "rest_hours", "days_off"} <= set(delta)
 
 
 def test_marks_after_today_are_not_in_fatigue_mean(conn: sqlite3.Connection) -> None:
@@ -504,3 +504,102 @@ def test_evening_hours_of_week_are_rounded_to_two_decimals(conn: sqlite3.Connect
 def test_weekend_work_hours_are_rounded_to_two_decimals(conn: sqlite3.Connection) -> None:
     screen(conn, "2026-10-10", "screen_work_hours", 1.234)
     assert by_start(weekly_review(conn, WED))["2026-10-05"]["weekend_work_hours"] == 1.23
+
+
+# --- отдых и выходные (Н7, партия 1б) ---
+
+WEEK_A = "2026-10-05"  # 10-05..10-11, неделя целиком
+WEEK_B = "2026-10-12"  # 10-12..10-18, текущая, today = WED (10-14)
+
+
+def busy(conn: sqlite3.Connection, *days: str) -> None:
+    for day in days:
+        counter(conn, day, "work_hours", 6.0)
+
+
+def test_rest_hours_is_mean_of_answered_days(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-06", "rest_hours", 2.0)
+    counter(conn, "2026-10-08", "rest_hours", 4.0)
+    row = by_start(weekly_review(conn, WED))[WEEK_A]
+    assert row["rest_hours"] == pytest.approx(3.0)
+    assert row["rest_days"] == 2
+
+
+def test_rest_hours_none_without_answers(conn: sqlite3.Connection) -> None:
+    for row in weekly_review(conn, WED):
+        assert row["rest_hours"] is None
+        assert row["rest_days"] == 0
+
+
+def test_rest_answer_zero_is_a_value(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-06", "rest_hours", 0.0)
+    row = by_start(weekly_review(conn, WED))[WEEK_A]
+    assert row["rest_hours"] == 0.0
+    assert row["rest_days"] == 1
+
+
+def test_calendar_rest_is_not_rest_hours(conn: sqlite3.Connection) -> None:
+    event = stored_event(
+        "rest", uid="r-1", start_at="2026-10-06T10:00:00", end_at="2026-10-06T13:00:00"
+    )
+    replace_calendar_window(conn, "2026-10-06", "2026-10-06", [event])
+    row = by_start(weekly_review(conn, WED))[WEEK_A]
+    assert row["rest_hours"] is None
+    assert row["rest_days"] == 0
+
+
+def test_days_off_counts_zero_and_empty_days_of_full_week(conn: sqlite3.Connection) -> None:
+    busy(conn, "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09")
+    counter(conn, "2026-10-10", "work_hours", 0.0)  # выходной с ответом; 10-11 - без данных
+    assert by_start(weekly_review(conn, WED))[WEEK_A]["days_off"] == 2
+
+
+def test_days_off_skips_today_without_manual_work_hours(conn: sqlite3.Connection) -> None:
+    # Пн и Вт без данных - выходные; сегодня (Ср) без ручных часов не считается, дни после - тоже
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["days_off"] == 2
+
+
+def test_days_off_counts_today_with_manual_work_hours(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-14", "work_hours", 0.0)
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["days_off"] == 3
+
+
+def test_days_off_today_with_manual_hours_above_max_is_not_off(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-14", "work_hours", 6.0)
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["days_off"] == 2
+
+
+def test_days_off_on_monday_without_manual_hours_is_zero(conn: sqlite3.Connection) -> None:
+    # П1а: в неделе один день - сегодняшний, он не учтён, остаётся пустой список
+    row = weekly_review(conn, date(2026, 10, 12), weeks=1)[0]
+    assert row["days_off"] == 0
+
+
+def test_days_off_on_monday_with_manual_zero_is_one(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-12", "work_hours", 0.0)
+    assert weekly_review(conn, date(2026, 10, 12), weeks=1)[0]["days_off"] == 1
+
+
+def test_delta_rest_hours_is_difference_of_means(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-06", "rest_hours", 2.0)
+    counter(conn, "2026-10-13", "rest_hours", 5.0)
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["delta"]["rest_hours"] == pytest.approx(3.0)
+
+
+def test_delta_rest_hours_none_when_previous_week_has_no_answers(
+    conn: sqlite3.Connection,
+) -> None:
+    counter(conn, "2026-10-13", "rest_hours", 5.0)
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["delta"]["rest_hours"] is None
+
+
+def test_delta_rest_hours_none_when_week_has_no_answers(conn: sqlite3.Connection) -> None:
+    counter(conn, "2026-10-06", "rest_hours", 2.0)
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["delta"]["rest_hours"] is None
+
+
+def test_delta_days_off_is_a_number(conn: sqlite3.Connection) -> None:
+    busy(conn, "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09")
+    busy(conn, "2026-10-12")
+    # неделя A: выходных 2 (Сб, Вс без данных); неделя B: выходной только Вт -> 1; дельта -1
+    assert by_start(weekly_review(conn, WED))[WEEK_B]["delta"]["days_off"] == -1

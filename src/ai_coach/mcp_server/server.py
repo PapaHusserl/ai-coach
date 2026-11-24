@@ -307,6 +307,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "старой к новой, последняя - текущая неполная (partial). По неделе: tss, total (общая "
         "нагрузка), work_hours, evening_hours, weekend_work_hours, todo_closed, todo_open, mood, "
         "stress, fatigue, irritability, sleep, readiness (средние, null - данных нет), "
+        "rest_hours (среднее ручных часов отдыха по дням с ответом, null - ответов нет), "
+        "rest_days (дней с ответом), days_off (дней без работы: не больше 0,5 ч), "
         "days_with_data, delta - разница "
         "с предыдущей неделей (null - нет базы). recovery.factors - личный отклик ночи на "
         "нагрузку за 90 дней, по трём факторам (evening_work, claude_evening, heavy_day): "

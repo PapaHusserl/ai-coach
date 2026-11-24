@@ -107,6 +107,16 @@ def test_row_has_expected_fields(conn: sqlite3.Connection, monkeypatch: pytest.M
     assert need <= set(rows(conn, "get_weekly_review")[0])
 
 
+def test_row_has_rest_fields_and_recovery_stays(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze(monkeypatch, f"{WED} 12:00:00")
+    result = call(conn, "get_weekly_review")
+    assert {"rest_hours", "rest_days", "days_off"} <= set(result["rows"][0])
+    assert {"rest_hours", "days_off"} <= set(result["rows"][-1]["delta"])
+    assert "recovery" in result
+
+
 def test_tool_description_names_fatigue_and_irritability(conn: sqlite3.Connection) -> None:
     server = build_server(db_file(conn))
     tool = next(t for t in asyncio.run(server.list_tools()) if t.name == "get_weekly_review")

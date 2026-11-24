@@ -434,6 +434,11 @@ papa-kaban.md fable · kaban-test.md opus · kaban-dekart.md fable.
   (6,5 мин pytest; всего 7 мин); живой `overload_report` по окну 2026-10-12…11-23 (база только чтение, TSS пустой) —
   `no_day_off` 12 дней в 2 отрезках, совпало с «На живой базе, партия 1а». `get_overload` через MCP — после
   `/mcp` reconnect, в приёмке руками партии 2.
+- П1б, на выходе (оркестратор, 2026-11-24 23:35): `make check` — check: OK, 7379 passed, smells 0 (7 мин); живой
+  `weekly` (`mcp_server/review.py`, база только чтение, 23:28 под нагрузкой make check) — 0,96 с (риск 3, порог 2 с —
+  не задет), 4 недели, у каждой `rest_hours`, `rest_days`, `days_off`, в `delta` — `rest_hours`, `days_off`;
+  `rest_days` по неделям 4 / 3 / 7 / 1 — сходится с «Замерами»; `recovery` на месте.
+- П1б: мама к1 и свекровь к1 — замечаний нет; старый `test_delta_keys` 13 → 15 по плану (Р3а, Р3в) — доеба.
 
 ## Правки по ревью
 

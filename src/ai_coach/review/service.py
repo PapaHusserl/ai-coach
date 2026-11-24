@@ -7,6 +7,7 @@ from typing import Any
 
 from ai_coach.load import daily_tss
 from ai_coach.load.overload import MANUAL_HOURS, day_entries, evening_hours, hours
+from ai_coach.load.rest import counted_days, day_off
 from ai_coach.load.thresholds import resolve_thresholds
 from ai_coach.store.garmin_data import last_rest_hr, list_daily_metrics
 from ai_coach.store.journal import list_wellbeing, wellbeing_day
@@ -28,6 +29,8 @@ DELTA_KEYS = (
     "irritability",
     "sleep",
     "readiness",
+    "rest_hours",
+    "days_off",
 )
 
 
@@ -118,6 +121,8 @@ def _week(
         k for k, d in zip(past, rows, strict=True) if _has_data(d) or k in wellbeing or k in metrics
     ]
 
+    answered = [d["manual_rest_hours"] for d in rows if d["manual_rest_hours"] is not None]
+
     def average(source: dict[str, dict[str, Any]], key: str) -> float | None:
         return _mean([source[k][key] for k in past if source.get(k, {}).get(key) is not None])
 
@@ -138,6 +143,9 @@ def _week(
         "irritability": average(wellbeing, "irritability"),
         "sleep": average(metrics, "sleep_score"),
         "readiness": average(metrics, "readiness_score"),
+        "rest_hours": _mean(answered),
+        "rest_days": len(answered),
+        "days_off": sum(day_off(d) for d in counted_days(rows, today.isoformat())),
         "days_with_data": len(counted),
     }
 
@@ -152,7 +160,10 @@ def weekly_review(
     week_start, week_end, partial, tss, total (сумма total_load дней), work_hours (ручные часы
     главнее календарных), evening_hours, weekend_work_hours, todo_closed, todo_open (последний
     снимок недели), mood, stress, fatigue, irritability (среднее последних за день), sleep
-    (sleep_score), readiness (средние; None - данных нет), days_with_data, delta - разница
+    (sleep_score), readiness (средние; None - данных нет), rest_hours (среднее ручных часов
+    отдыха по дням с ответом, ноль - ответ; None - ответов нет), rest_days (дней с ответом),
+    days_off (выходных: дни до today, где часы работы не больше DAY_OFF_WORK_MAX; сегодня без
+    ручных часов работы не считается), days_with_data, delta - разница
     числовых полей с предыдущей неделей (у первой недели delta - None, где нет данных - None в
     значении). tss по дням можно передать, иначе считается из активностей (нет пульса покоя -
     tss недель None)."""
