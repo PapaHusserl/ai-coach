@@ -15,6 +15,7 @@ import sqlite3
 from datetime import date, timedelta
 from typing import Any
 
+from ai_coach.load.rest import DAY_OFF_LOOKBACK, find_rest
 from ai_coach.store.garmin_data import list_daily_metrics
 from ai_coach.store.journal import list_wellbeing
 from ai_coach.store.workload import list_counters
@@ -177,13 +178,15 @@ def day_entries(
 
 
 def overload_report(conn: sqlite3.Connection, day: str, tss: dict[str, float]) -> dict[str, Any]:
-    """Нагрузка за OVERLOAD_DAYS дней до day включительно и сигналы перегруза. tss - TSS
+    """Нагрузка за OVERLOAD_DAYS дней до day включительно и сигналы перегруза (find_overload по
+    этим дням, find_rest - по DAY_OFF_LOOKBACK + 1 дням). tss - TSS
     тренировок по дням (нет дня - 0). Ответ: date, total (нагрузка day), days (date, total и
     ручные часы manual_work/hobby/rest_hours, None - не вводились, и часы экрана
-    screen_work/hobby_hours, None - нет данных), signals (find_overload)."""
+    screen_work/hobby_hours, None - нет данных), signals (find_overload, затем find_rest)."""
     last = date.fromisoformat(day)
-    first = (last - timedelta(days=OVERLOAD_DAYS - 1)).isoformat()
-    days = day_entries(conn, first, day, tss)
+    first = (last - timedelta(days=DAY_OFF_LOOKBACK)).isoformat()
+    wide = day_entries(conn, first, day, tss)
+    days = wide[-OVERLOAD_DAYS:]
     start = (last - timedelta(days=METRICS_DAYS - 1)).isoformat()
     moods: dict[str, dict[str, Any]] = {}
     for mark in list_wellbeing(conn, start, day):
@@ -191,7 +194,7 @@ def overload_report(conn: sqlite3.Connection, day: str, tss: dict[str, float]) -
             if mark[key] is not None:  # последнее заданное за день
                 moods.setdefault(mark["date"], {"date": mark["date"]})[key] = mark[key]
     metrics = list_daily_metrics(conn, start, day) + list(moods.values())
-    signals = find_overload(days, metrics)
+    signals = find_overload(days, metrics) + find_rest(wide, day)
     keys = (*(f"manual_{kind}" for kind in MANUAL_HOURS), *SCREEN_HOURS)
     shown = [{"date": d["date"], "total": d["total"], **{k: d[k] for k in keys}} for d in days]
     return {"date": day, "total": days[-1]["total"], "days": shown, "signals": signals}

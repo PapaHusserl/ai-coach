@@ -212,6 +212,53 @@ def test_overload_catches_a_run_of_heavy_days(conn: sqlite3.Connection) -> None:
     assert "evening_streak" in found
 
 
+def test_overload_days_stay_seven_with_wider_rest_window(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    days = call(conn, "get_overload", date=DAY)["days"]
+    assert [d["date"] for d in days] == [shift(DAY, n) for n in range(-6, 1)]
+
+
+def test_no_day_off_signal_after_a_long_run_of_work(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    found = [
+        s for s in call(conn, "get_overload", date=DAY)["signals"] if s["kind"] == "no_day_off"
+    ]
+    # сегодня без ручных часов - пропускается, счёт от вчера
+    assert found == [{"kind": "no_day_off", "value": 13, "limit": 7}]
+
+
+def test_no_day_off_stands_next_to_the_old_signals(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    assert {"total_streak", "evening_streak", "no_day_off"} <= set(kinds(conn))
+
+
+def test_no_day_off_value_is_capped_at_fourteen(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -14), 15)
+    manual(conn, DAY, "work_hours", 6.0)
+    found = [
+        s for s in call(conn, "get_overload", date=DAY)["signals"] if s["kind"] == "no_day_off"
+    ]
+    assert found == [{"kind": "no_day_off", "value": 14, "limit": 7}]
+
+
+def test_no_day_off_counts_days_older_than_the_shown_week(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -9), 10)
+    found = [
+        s for s in call(conn, "get_overload", date=DAY)["signals"] if s["kind"] == "no_day_off"
+    ]
+    assert found[0]["value"] == 9
+
+
+def test_no_day_off_absent_after_a_manual_day_off(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    manual(conn, shift(DAY, -3), "work_hours", 0)
+    assert "no_day_off" not in kinds(conn)
+
+
+def test_no_day_off_absent_on_a_light_period(conn: sqlite3.Connection) -> None:
+    assert "no_day_off" not in kinds(conn)
+
+
 def test_overload_run_must_reach_the_checked_day(conn: sqlite3.Connection) -> None:
     heavy_days(conn, shift(DAY, -13), 10)
     assert "total_streak" not in kinds(conn)

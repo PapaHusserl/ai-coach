@@ -69,8 +69,21 @@ const CODES = [
 	"recovery_drop", "todo_growth", "who5_low", "who5_reduced", "who5_drop", "wellbeing", "mood",
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
 	"illness_rest", "illness_return", "hrv_streak", "illness_light", "fatigue", "irritability",
-	"pressure_drop", "temperature_rise", "temperature_drop",
+	"pressure_drop", "temperature_rise", "temperature_drop", "no_day_off",
 ];
+
+test("SIGNAL_WORDS: no_day_off — «нет полного выходного» (Н7, Р10а = 1)", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.no_day_off, "нет полного выходного");
+});
+
+test("signalRows: no_day_off — слово и «9 (порог 7)»", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "overload", kind: "no_day_off", value: 9, limit: 7 };
+	const [found] = signalRows(stateOf([row]));
+	assert.ok(text(found).includes("нет полного выходного"));
+	assert.ok(text(found).includes("9 (порог 7)"));
+});
 
 test("SIGNAL_WORDS: слабый сигнал первого дня — «пульс или HRV вне нормы»", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
@@ -85,7 +98,7 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 32 кода отчётов", async () => {
+test("SIGNAL_WORDS: ровно 33 кода отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
 });

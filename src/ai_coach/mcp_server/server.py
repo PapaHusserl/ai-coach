@@ -151,7 +151,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "до date (date, total, ручные часы manual_work/hobby/rest_hours, null - не вводились, "
         "часы экрана screen_work/hobby_hours, null - нет данных), "
         "signals - total_streak, evening_streak (работа после 19:00: экран, без него календарь), "
-        "weekend_work, recovery_drop, todo_growth "
+        "weekend_work, recovery_drop, todo_growth, no_day_off (дней подряд без выходного, "
+        "выходной - не больше 0,5 ч работы; сегодня без ручных часов работы не считается) "
         "(kind, value, limit; у recovery_drop value и limit - объекты по readiness/mood/stress); "
         "пустой список - перегруза нет. Нет нагрузки тренировок - "
         "TSS считается нулём, причина в load_error. Ручные часы пишет coach feel.",

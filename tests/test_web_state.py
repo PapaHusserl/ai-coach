@@ -294,6 +294,15 @@ def test_overload_signals_come_from_overload_report(
     assert sources(view, "total_streak") == ["overload"]
 
 
+def test_no_day_off_signal_comes_from_overload_report(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = {"signals": [{"kind": "no_day_off", "value": 9, "limit": 7}]}
+    monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: fake)
+    view = state_view(conn, DAY, NOW)
+    assert sources(view, "no_day_off") == ["overload"]
+
+
 def test_signal_sources_go_in_the_agreed_order(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

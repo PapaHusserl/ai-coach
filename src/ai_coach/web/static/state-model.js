@@ -13,6 +13,7 @@ export const SIGNAL_WORDS = {
 	total_streak: "нагрузка три дня подряд",
 	evening_streak: "работа по вечерам три дня",
 	weekend_work: "работа в выходные",
+	no_day_off: "нет полного выходного",
 	recovery_drop: "восстановление хуже",
 	todo_growth: "туду растёт",
 	who5_low: "WHO-5 низкий",
