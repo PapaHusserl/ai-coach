@@ -119,3 +119,72 @@ def test_allow_has_no_habit_wildcard() -> None:
 
 def test_allow_has_no_habit_edit_or_delete() -> None:
     assert not [r for r in allow() if "habit edit" in r or "habit delete" in r]
+
+
+FOCUS_LINE = (
+    "Дневная оценка: «фокус 4 2 3» (фокус, усталость, усилие, 1-5) - "
+    "выполни `uv run coach focus 4 2 3`, больше ничего."
+)
+SLIP_LINE = (
+    'Срыв: «срыв: <текст>» - выполни `uv run coach slip "<текст как есть>"`, '
+    "не комментируй, не уточняй, окон не открывай."
+)
+
+
+def test_coach_names_report_add_in_bash_list() -> None:
+    assert "`report add`" in (AGENTS / "coach.md").read_text()
+
+
+def test_coach_reads_report_side_file() -> None:
+    text = (AGENTS / "coach.md").read_text()
+    assert "cat .claude/agents/coach/report.md" in text
+
+
+def test_report_side_file_is_not_empty() -> None:
+    assert (AGENTS / "coach" / "report.md").read_text().strip()
+
+
+def test_report_side_file_within_limit() -> None:
+    assert len((AGENTS / "coach" / "report.md").read_bytes()) <= SIDE_FILE_LIMIT
+
+
+@pytest.mark.parametrize(
+    "needle",
+    ["uv run coach report add", "без чисел", "пульс", "HRV", "координат", "записал для техагента:"],
+)
+def test_report_side_file_has_needle(needle: str) -> None:
+    assert needle in (AGENTS / "coach" / "report.md").read_text()
+
+
+def test_records_file_has_focus_line_verbatim() -> None:
+    assert FOCUS_LINE in (AGENTS / "coach" / "records.md").read_text().splitlines()
+
+
+def test_records_file_has_slip_line_verbatim() -> None:
+    assert SLIP_LINE in (AGENTS / "coach" / "records.md").read_text().splitlines()
+
+
+def test_coach_no_longer_has_focus_line() -> None:
+    assert FOCUS_LINE not in (AGENTS / "coach.md").read_text().splitlines()
+
+
+def test_coach_no_longer_has_slip_line() -> None:
+    assert SLIP_LINE not in (AGENTS / "coach.md").read_text().splitlines()
+
+
+def test_coach_links_to_records_for_focus_and_slip() -> None:
+    lines = (AGENTS / "coach.md").read_text().splitlines()
+    linked = [ln for ln in lines if "coach/records.md" in ln and "фокус" in ln and "срыв" in ln]
+    assert len(linked) == 1
+
+
+def test_allow_has_report_command_and_side_file() -> None:
+    rules = allow()
+    assert "Bash(uv run coach report:*)" in rules
+    assert "Bash(cat .claude/agents/coach/report.md)" in rules
+
+
+def test_agents_md_local_rules_name_report_list_and_done() -> None:
+    text = (ROOT / "AGENTS.md").read_text()
+    assert "coach report list" in text
+    assert "coach report done" in text

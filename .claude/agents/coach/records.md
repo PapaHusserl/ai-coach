@@ -3,3 +3,7 @@
 Поправить или удалить запись: найди id `uv run coach log food|weight [--date <YYYY-MM-DD>]`, покажи запись, и только после «да» правь или удаляй: `uv run coach edit|delete food|weight <id>` (аргументы - `cat .claude/agents/coach-help/food.md`, запускать как `uv run coach ...`; Claude Code спросит ещё раз). Правка текста еды сбрасывает КБЖУ - потом посчитай по coach-food.
 
 Дозапись групп старым записям - `cat .claude/skills/coach-food/groups.md`, раздел «Дозапись старым записям».
+
+Дневная оценка: «фокус 4 2 3» (фокус, усталость, усилие, 1-5) - выполни `uv run coach focus 4 2 3`, больше ничего.
+
+Срыв: «срыв: <текст>» - выполни `uv run coach slip "<текст как есть>"`, не комментируй, не уточняй, окон не открывай.
