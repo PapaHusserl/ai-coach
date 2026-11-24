@@ -7,7 +7,13 @@ from pathlib import Path
 
 import typer
 from mcp_fakes import tool_names
-from text_limits import HELP_INDEX_LIMIT, HELP_TOPIC_LIMIT, PULT_TODO_LINK_LIMIT
+from text_limits import (
+    AGENT_LIMITS,
+    HELP_INDEX_LIMIT,
+    HELP_TOPIC_LIMIT,
+    PULT_TODO_LINK_LIMIT,
+    SIDE_FILE_LIMIT,
+)
 
 from ai_coach import pvt
 from ai_coach.cli import main
@@ -1336,6 +1342,65 @@ def test_help_index_has_twenty_topic_lines() -> None:
 
 def test_help_index_has_no_separate_pult_todo_line() -> None:
     assert [ln for ln in index_topic_lines() if ln.startswith("- Пульт: туду")] == []
+
+
+def test_recovery_side_file_is_within_side_limit() -> None:
+    assert len((AGENTS / "coach-wellbeing" / "recovery.md").read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_week_file_keeps_reserve_below_limit() -> None:
+    size = len((AGENTS / "coach-week.md").read_bytes())
+    assert AGENT_LIMITS["coach-week.md"] - size >= 200
+
+
+def test_wellbeing_role_keeps_reserve_below_limit() -> None:
+    size = len((AGENTS / "coach-wellbeing.md").read_bytes())
+    assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200
+
+
+def test_sleep_topic_names_new_confounders() -> None:
+    text = topic("sleep.md")
+    assert "`evening_work`" in text
+    assert "`heavy_day`" in text
+
+
+def test_overload_topic_has_recovery_response_card() -> None:
+    assert "Личный отклик ночи на нагрузку" in topic("overload.md")
+
+
+def test_overload_recovery_card_names_ways_to_ask() -> None:
+    text = topic("overload.md")
+    assert "итоги недели" in text
+    assert "как я восстанавливаюсь после рабочих вечеров" in text
+
+
+def test_overload_recovery_card_says_observation_and_few_data() -> None:
+    text = topic("overload.md").split("Личный отклик ночи на нагрузку", 1)[1]
+    assert "наблюдение, не причина" in text
+    assert "данных мало" in text
+
+
+def recovery_card() -> str:
+    return topic("overload.md").split("Личный отклик ночи на нагрузку", 1)[1]
+
+
+def test_overload_recovery_card_says_line_per_factor() -> None:
+    text = recovery_card()
+    assert "по строке на фактор" in text
+    assert "ночей из 10" in text
+    assert "одну строку" not in text
+
+
+def test_overload_recovery_card_keeps_plan_and_offers_trial() -> None:
+    text = recovery_card()
+    assert "План по отклику тренер не меняет" in text
+    assert "освободить вечер как пробу" in text
+
+
+def test_overload_recovery_card_confounders_do_not_name_sleep() -> None:
+    text = recovery_card()
+    assert "сон, погода и болезнь" not in text
+    assert "время года" in text
 
 
 def test_help_index_forms_and_weight_food_are_separate_lines() -> None:

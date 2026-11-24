@@ -120,3 +120,103 @@ def test_week_conclusions_item_names_burnout_with_fatigue_and_irritability() -> 
 
 def test_week_decisions_line_names_threshold_ten() -> None:
     assert re.search(r"\b10\b", decisions_line())
+
+
+# шаг Н6, партия 2: отклик ночи на нагрузку в обзоре недели
+
+RECOVERY_CAT = "cat .claude/agents/coach-wellbeing/recovery.md"
+
+
+def recovery_text() -> str:
+    return (AGENTS / "coach-wellbeing" / "recovery.md").read_text()
+
+
+def test_recovery_side_file_exists_and_is_not_empty() -> None:
+    assert recovery_text().strip()
+
+
+def test_recovery_side_file_is_allowed_to_cat() -> None:
+    assert f"Bash({RECOVERY_CAT})" in ALLOW
+
+
+def test_week_file_points_to_recovery_side_file() -> None:
+    assert RECOVERY_CAT in (AGENTS / "coach-week.md").read_text()
+
+
+def test_week_file_names_recovery_key() -> None:
+    assert "`recovery`" in week_item(3)
+
+
+def test_recovery_side_file_names_key_and_factors() -> None:
+    text = recovery_text()
+    for needle in ("`recovery`", "evening_work", "claude_evening", "heavy_day", "`enough`"):
+        assert needle in text, needle
+
+
+def test_recovery_side_file_says_observation_not_cause() -> None:
+    assert "наблюдение, не причина" in recovery_text()
+
+
+def test_recovery_side_file_says_few_data_with_threshold_ten() -> None:
+    text = recovery_text()
+    assert "данных мало" in text
+    assert re.search(r"\b10\b", text)
+
+
+def test_recovery_side_file_requires_night_count_with_value() -> None:
+    assert "ночей" in recovery_text()
+
+
+def test_recovery_ready_line_follows_r6b_template() -> None:
+    pattern = (
+        r"После рабочих вечеров \(N ночей против M спокойных\): HRV ниже на X мс, "
+        r"пульс покоя выше на Y, сон короче на Z мин - наблюдение, не причина\."
+    )
+    text = recovery_text()
+    assert re.search(pattern, text)
+    assert "своих не подставляй" in text
+
+
+def test_recovery_few_data_line_follows_r6b_template() -> None:
+    pattern = r"Отклик на рабочие вечера: данных мало \(N ночей из 10\)\."
+    assert re.search(pattern, recovery_text())
+
+
+def test_recovery_templates_have_no_digits_instead_of_letters() -> None:
+    text = recovery_text()
+    for bad in (r"\d+ ночей против", r"на \d+ мс", r"\d+ ночей из 10"):
+        assert not re.search(bad, text), bad
+
+
+def test_recovery_says_line_per_factor_up_to_three() -> None:
+    text = recovery_text()
+    assert "По строке на фактор" in text
+    assert "не больше трёх" in text
+    assert "одной строкой" not in text
+    assert "одна строка на все" not in text
+
+
+def test_recovery_names_difference_only_when_enough() -> None:
+    assert "только у фактора с `enough` = true" in recovery_text()
+
+
+def test_recovery_keeps_question_and_evening_trial() -> None:
+    text = recovery_text()
+    assert "замечает ли это сам" in text
+    assert "освободить вечер как пробу" in text
+    assert "План и черновики по одной разнице не меняй" in text
+    assert "Советов и изменений плана по одной разнице нет" not in text
+
+
+def test_recovery_allows_direct_question_with_one_call() -> None:
+    text = recovery_text()
+    assert "прямой вопрос" in text
+    assert "`get_weekly_review`" in text
+    assert "только в недельном обзоре" not in text
+    assert "строка только о нём" not in text
+
+
+def test_recovery_confounders_do_not_name_sleep() -> None:
+    text = recovery_text()
+    assert "сон, погода и болезнь" not in text
+    assert "время года" in text

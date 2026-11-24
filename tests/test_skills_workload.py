@@ -1052,6 +1052,17 @@ def test_morning_recovery_weather_pointer_is_full_cat() -> None:
     assert PRECURSORS_CAT in line
 
 
+def test_wellbeing_confounders_phrase_names_four_causes() -> None:
+    phrase = (
+        "вчера тренировка / короткая ночь / рабочий вечер / тяжёлый день - сдвиг мог быть от них"
+    )
+    assert phrase in WELLBEING.read_text()
+
+
+def test_wellbeing_role_points_to_recovery_side_file() -> None:
+    assert "cat .claude/agents/coach-wellbeing/recovery.md" in WELLBEING.read_text()
+
+
 def test_weather_topic_threshold_words_are_not_tied_to_marks_or_backlog() -> None:
     text = (ROOT / "agents" / "coach-help" / "weather.md").read_text()
     assert "Пороги ты выбрал сам по своему ряду погоды" in text
