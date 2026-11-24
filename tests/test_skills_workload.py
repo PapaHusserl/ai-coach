@@ -291,8 +291,11 @@ def test_wellbeing_fields_file_describes_claude_fields_as_observation() -> None:
     assert "наблюдение" in text
 
 
+FIELDS = ROOT / "agents" / "coach-wellbeing" / "fields.md"
+
+
 def test_coach_wellbeing_explains_unmarked_demand_note() -> None:
-    assert "вызов/помеха не размечены" in WELLBEING.read_text()
+    assert "вызов/помеха не размечены" in FIELDS.read_text()
 
 
 def test_coach_wellbeing_gives_hours_priority_manual_screen_calendar() -> None:
@@ -301,10 +304,20 @@ def test_coach_wellbeing_gives_hours_priority_manual_screen_calendar() -> None:
 
 
 def test_coach_wellbeing_explains_screen_lines_of_sync_summary() -> None:
-    text = WELLBEING.read_text()
+    text = FIELDS.read_text()
     assert "экран не настроен" in text
     assert "экран: …" in text
     assert "ActivityWatch" in text
+
+
+def test_coach_wellbeing_no_longer_holds_sync_screen_lines() -> None:
+    text = WELLBEING.read_text()
+    assert "экран не настроен" not in text
+    assert "вызов/помеха не размечены" not in text
+
+
+def test_coach_wellbeing_points_to_fields_file_for_sync_messages() -> None:
+    assert "cat .claude/agents/coach-wellbeing/fields.md" in WELLBEING.read_text()
 
 
 def test_coach_wellbeing_says_null_screen_means_no_data() -> None:

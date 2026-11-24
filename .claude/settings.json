@@ -4,6 +4,7 @@
       "mcp__ai-coach",
       "Bash(uv run coach report:*)",
       "Bash(cat .claude/agents/coach-wellbeing/recovery.md)",
+      "Bash(cat .claude/agents/coach-wellbeing/rest.md)",
       "Bash(cat .claude/agents/coach/report.md)",
       "Bash(cat .claude/agents/coach-help/weather.md)",
       "Bash(cat .claude/agents/coach-help/evening-signals.md)",

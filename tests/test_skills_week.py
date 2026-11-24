@@ -220,3 +220,65 @@ def test_recovery_confounders_do_not_name_sleep() -> None:
     text = recovery_text()
     assert "сон, погода и болезнь" not in text
     assert "время года" in text
+
+
+# шаг Н7, партия 2: отдых и выходные
+
+REST_CAT = "cat .claude/agents/coach-wellbeing/rest.md"
+REST_PHRASE = (
+    "Без полного выходного N дней (порог 7). Отдых - часть роста, не простой: "
+    "предлагаю один день без работы в ближайшие выходные - поставить в календарь?"
+)
+
+
+def rest_text() -> str:
+    return (AGENTS / "coach-wellbeing" / "rest.md").read_text()
+
+
+def test_rest_side_file_exists_and_is_not_empty() -> None:
+    assert rest_text().strip()
+
+
+def test_rest_side_file_is_allowed_to_cat() -> None:
+    assert f"Bash({REST_CAT})" in ALLOW
+
+
+def test_wellbeing_names_no_day_off_and_points_to_rest_file() -> None:
+    text = (AGENTS / "coach-wellbeing.md").read_text()
+    assert "no_day_off" in text
+    assert REST_CAT in text
+
+
+def test_wellbeing_says_weekend_work_and_no_day_off_are_one_signal() -> None:
+    text = (AGENTS / "coach-wellbeing.md").read_text()
+    line = next(ln for ln in text.splitlines() if "weekend_work" in ln and "no_day_off" in ln)
+    assert "один сигнал" in line
+
+
+def test_rest_side_file_has_sample_phrase_verbatim() -> None:
+    assert REST_PHRASE in rest_text()
+
+
+def test_rest_side_file_pair_gives_one_offer_day_without_work() -> None:
+    assert "день без работы, про полдня выходных не говори" in rest_text()
+
+
+def test_rest_side_file_names_signal_and_week_fields() -> None:
+    text = rest_text()
+    for needle in ("no_day_off", "rest_hours", "rest_days", "days_off"):
+        assert needle in text, needle
+
+
+def test_week_file_names_three_rest_fields_in_fields_item() -> None:
+    item = week_item(2)
+    for needle in ("`rest_hours`", "`rest_days`", "`days_off`"):
+        assert needle in item, needle
+
+
+def test_week_file_says_few_data_with_count_out_of_four() -> None:
+    text = (AGENTS / "coach-week.md").read_text()
+    assert "данных мало (N дней из 4)" in text
+
+
+def test_week_file_points_to_rest_side_file() -> None:
+    assert REST_CAT in week_item(3)

@@ -1353,6 +1353,59 @@ def test_week_file_keeps_reserve_below_limit() -> None:
     assert AGENT_LIMITS["coach-week.md"] - size >= 200
 
 
+# шаг Н7, партия 2: справка об отдыхе и выходных
+
+
+def test_rest_side_file_is_within_side_limit() -> None:
+    assert len((AGENTS / "coach-wellbeing" / "rest.md").read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_fields_side_file_is_within_side_limit() -> None:
+    assert len((AGENTS / "coach-wellbeing" / "fields.md").read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_overload_topic_names_no_day_off_signal() -> None:
+    from ai_coach.load import rest
+
+    text = topic("overload.md")
+    assert "no_day_off" in text
+    assert rest.DAY_OFF_LIMIT == 7  # «7 дней» в тексте - от этой константы
+    assert rest.DAY_OFF_WORK_MAX == 0.5  # «0,5 ч» в тексте - от этой константы
+    assert "7 дней" in text
+    assert "0,5 ч" in text
+
+
+def test_overload_topic_says_no_day_off_is_offered_a_day_without_work() -> None:
+    line = next(ln for ln in topic("overload.md").splitlines() if "no_day_off" in ln)
+    assert "выходн" in line
+
+
+def test_overload_topic_pair_gives_one_offer_day_without_work() -> None:
+    text = topic("overload.md")
+    assert "оба вместе - одно предложение: день без работы" in text
+
+
+def test_workload_topic_weekly_review_names_rest_and_days_off() -> None:
+    text = topic("workload.md").split("## Недельный обзор", 1)[1].split("\n## ", 1)[0]
+    assert "отдых" in text
+    assert "выходн" in text
+    assert "данных мало" in text
+
+
+def test_wellbeing_topic_says_rest_hours_are_asked_even_with_screen() -> None:
+    text = topic("wellbeing.md")
+    assert "часы отдыха" in text
+    assert "экран" in text
+
+
+def test_overload_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "overload.md").read_bytes()) >= 200
+
+
+def test_workload_topic_keeps_reserve_below_limit() -> None:
+    assert HELP_TOPIC_LIMIT - len((TOPICS / "workload.md").read_bytes()) >= 200
+
+
 def test_wellbeing_role_keeps_reserve_below_limit() -> None:
     size = len((AGENTS / "coach-wellbeing.md").read_bytes())
     assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200

@@ -67,6 +67,10 @@ def test_evening_skill_offers_screen_hours_and_writes_them_with_feel() -> None:
     assert "--work N --hobby M" in text
 
 
+def test_evening_skill_asks_rest_hours_after_screen_hours_answer() -> None:
+    assert "Сколько часов отдыха за сегодня?" in EVENING.read_text()
+
+
 def test_evening_skill_still_asks_hours_without_screen() -> None:
     assert "нет - спроси сам" in EVENING.read_text()
 
