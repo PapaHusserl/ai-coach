@@ -268,7 +268,7 @@ def sync(
             upsert_activity(conn, activity)
             for row in sets:
                 upsert_strength_set(conn, row)
-        rebuild_plan_actual(conn, day_list[-1], day_list[0])
+        rebuild_plan_actual(conn, day_list[-1], day_list[0], today.isoformat())
         for threshold in thresholds:
             if not zones_unchanged(conn, threshold):
                 upsert_threshold(conn, threshold)

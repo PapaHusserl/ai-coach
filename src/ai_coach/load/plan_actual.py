@@ -60,7 +60,9 @@ def _rebuild_day(
     date: str,
     planned_list: list[dict[str, Any]],
     activities: list[dict[str, Any]],
+    today: str | None = None,
 ) -> None:
+    """План без пары своего вида в день today строки не получает: день не закрыт."""
     free = list(activities)
     unmatched: list[dict[str, Any]] = []
     for planned in planned_list:
@@ -71,7 +73,7 @@ def _rebuild_day(
         free.remove(found)
         kind, details = _pair(conn, planned, found)
         add_plan_actual(conn, _row(date, kind, planned["id"], found["activity_id"], details))
-    for planned in unmatched:
+    for planned in [] if date == today else unmatched:
         if free:
             other = free.pop(0)
             add_plan_actual(conn, _row(date, "different", planned["id"], other["activity_id"]))
@@ -81,8 +83,13 @@ def _rebuild_day(
         add_plan_actual(conn, _row(date, "extra", None, activity["activity_id"]))
 
 
-def rebuild_plan_actual(conn: sqlite3.Connection, start: str, end: str) -> None:
-    """Пересчёт plan_actual за период start..end включительно (без commit)."""
+def rebuild_plan_actual(
+    conn: sqlite3.Connection, start: str, end: str, today: str | None = None
+) -> None:
+    """Пересчёт plan_actual за период start..end включительно (без commit).
+
+    У дня today планы без активности своего вида строки не получают (ни skipped, ни different).
+    """
     delete_plan_actual(conn, start, end)
     planned_by_day: dict[str, list[dict[str, Any]]] = {}
     for planned in list_planned_workouts(conn, start, end):
@@ -92,4 +99,6 @@ def rebuild_plan_actual(conn: sqlite3.Connection, start: str, end: str) -> None:
     for activity in list_activities(conn, start, end):
         activities_by_day.setdefault(activity["start_time_local"][:10], []).append(activity)
     for date in sorted(planned_by_day.keys() | activities_by_day.keys()):
-        _rebuild_day(conn, date, planned_by_day.get(date, []), activities_by_day.get(date, []))
+        _rebuild_day(
+            conn, date, planned_by_day.get(date, []), activities_by_day.get(date, []), today
+        )

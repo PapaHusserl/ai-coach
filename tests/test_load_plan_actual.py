@@ -227,6 +227,71 @@ def test_rebuild_twice_gives_no_duplicates(conn: sqlite3.Connection) -> None:
     assert sorted(r["kind"] for r in rows(conn)) == ["done", "extra"]
 
 
+def test_today_plan_without_activity_has_no_row(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "run")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    assert rows(conn) == []
+
+
+def test_yesterday_plan_without_activity_is_skipped_with_today(conn: sqlite3.Connection) -> None:
+    planned = plan(conn, "2026-03-09", "run")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert (row["date"], row["kind"], row["planned_id"]) == ("2026-03-09", "skipped", planned)
+
+
+def test_today_plan_with_own_activity_is_done(conn: sqlite3.Connection) -> None:
+    planned = plan(conn, "2026-03-10", "run")
+    act = activity(conn, 1, "2026-03-10 07:00:00", "running")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert (row["kind"], row["planned_id"], row["activity_id"]) == ("done", planned, act)
+
+
+def test_today_strength_with_missed_exercise_is_different(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "strength", spec=STRENGTH_SPEC)
+    act = activity(conn, 1, "2026-03-10 07:00:00", "strength_training")
+    active_set(conn, act, 0, BENCH_STEP)
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert row["kind"] == "different"
+    assert json.loads(row["details_json"])["missing_exercises"] == ["BARBELL_ROW"]
+
+
+def test_today_other_sport_is_extra_without_plan_row(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "run")
+    act = activity(conn, 1, "2026-03-10 07:00:00", "lap_swimming")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert (row["kind"], row["planned_id"], row["activity_id"]) == ("extra", None, act)
+
+
+def test_yesterday_other_sport_is_different_with_today(conn: sqlite3.Connection) -> None:
+    planned = plan(conn, "2026-03-09", "run")
+    act = activity(conn, 1, "2026-03-09 07:00:00", "lap_swimming")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert (row["kind"], row["planned_id"], row["activity_id"]) == ("different", planned, act)
+
+
+def test_today_two_plans_one_activity_second_has_no_row(conn: sqlite3.Connection) -> None:
+    first = plan(conn, "2026-03-10", "run")
+    plan(conn, "2026-03-10", "bike")
+    activity(conn, 1, "2026-03-10 07:00:00", "running")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    [row] = rows(conn)
+    assert (row["kind"], row["planned_id"]) == ("done", first)
+
+
+def test_rebuild_twice_with_today_gives_no_duplicates(conn: sqlite3.Connection) -> None:
+    plan(conn, "2026-03-10", "run")
+    plan(conn, "2026-03-09", "run")
+    activity(conn, 1, "2026-03-10 07:00:00", "lap_swimming")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    rebuild_plan_actual(conn, "2026-03-01", "2026-03-31", today="2026-03-10")
+    assert sorted(r["kind"] for r in rows(conn)) == ["extra", "skipped"]
+
+
 def test_rebuild_replaces_stale_rows_in_period_only(conn: sqlite3.Connection) -> None:
     planned = plan(conn, "2026-03-10", "run")
     rebuild_plan_actual(conn, "2026-03-01", "2026-03-31")

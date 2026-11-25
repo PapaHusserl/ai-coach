@@ -66,6 +66,40 @@ def test_sync_rebuilds_plan_actual(conn: sqlite3.Connection) -> None:
     assert [r["kind"] for r in list_plan_actual(conn, day(), day())] == ["done"]
 
 
+def test_sync_today_plan_without_activity_has_no_plan_actual_row(conn: sqlite3.Connection) -> None:
+    add_planned_workout(
+        conn,
+        {
+            "date": day(),
+            "sport": "strength",
+            "name": "Силовая",
+            "status": "pushed",
+            "workout_json": {"exercises": []},
+        },
+    )
+    fake = FakeGarmin()
+    fake.activities = []
+    run_sync(conn, fake, 1)
+    assert list_plan_actual(conn, day(), day()) == []
+
+
+def test_sync_yesterday_plan_without_activity_is_skipped(conn: sqlite3.Connection) -> None:
+    add_planned_workout(
+        conn,
+        {
+            "date": day(1),
+            "sport": "strength",
+            "name": "Силовая",
+            "status": "pushed",
+            "workout_json": {"exercises": []},
+        },
+    )
+    fake = FakeGarmin()
+    fake.activities = []
+    run_sync(conn, fake, 2)
+    assert [r["kind"] for r in list_plan_actual(conn, day(1), day(1))] == ["skipped"]
+
+
 def test_sync_keeps_raw_json_of_metrics(conn: sqlite3.Connection) -> None:
     run_sync(conn, FakeGarmin(), 1)
     row = get_daily_metrics(conn, day())

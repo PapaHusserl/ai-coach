@@ -173,7 +173,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "get_plan_actual": (
         tools.plan_actual,
-        "Сопоставление плана и факта: done / skipped / extra / different.",
+        "Сопоставление плана и факта: done / skipped / extra / different. "
+        "За сегодня skipped и different без активности своего вида нет: "
+        "план без активности остаётся без строки до следующего дня.",
     ),
     "get_load": (
         tools.load,

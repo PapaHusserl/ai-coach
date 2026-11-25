@@ -78,7 +78,7 @@ Garmin ломает доступ (кэш, import, raw_json); недокумен�
 
 - Колонки таблиц — как в `src/ai_coach/store/migrations/0001_init.sql`; в `daily_metrics` выжимка + один `raw_json` на день.
 - Путь к БД: аргумент `path` → `$AI_COACH_DB` → `~/.local/share/ai-coach/coach.db`.
-- `plan_actual.kind`: `done / skipped / extra / different`; пересчёт за период — удалить и добавить заново; естественного ключа у planned_workouts/plan_actual нет.
+- `plan_actual.kind`: `done / skipped / extra / different`; пересчёт за период — удалить и добавить заново; у сегодняшнего дня план без активности своего вида строки не получает (`skipped` и `different` — со следующего дня); естественного ключа у planned_workouts/plan_actual нет.
 - Commit делает вызывающий код (sync — одной транзакцией).
 - Upsert только по ключевым колонкам → `ON CONFLICT DO NOTHING`.
 - `weight_log`, `food_log` без `raw_json` (ручной ввод).
