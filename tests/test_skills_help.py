@@ -1411,6 +1411,22 @@ def test_wellbeing_role_keeps_reserve_below_limit() -> None:
     assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200
 
 
+def test_overload_topic_names_attention_signals() -> None:
+    text = topic("overload.md")
+    assert "switching_high" in text
+    assert "long_stretch" in text
+
+
+def test_overload_topic_has_switching_and_stretch_section() -> None:
+    assert "## Переключения и длинные отрезки" in topic("overload.md")
+
+
+def test_workload_topic_names_new_screen_fields() -> None:
+    text = topic("workload.md")
+    assert "screen_switches_hour" in text
+    assert "screen_stretch_hours" in text
+
+
 def test_sleep_topic_names_new_confounders() -> None:
     text = topic("sleep.md")
     assert "`evening_work`" in text

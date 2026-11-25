@@ -1083,3 +1083,54 @@ def test_weather_topic_threshold_words_are_not_tied_to_marks_or_backlog() -> Non
     assert "Личная подстройка - позже" in text
     assert "отметок" not in text
     assert "BACKLOG 147" not in text
+
+
+# шаг Н8, партия 2: переключения и длинные отрезки
+
+ATTENTION = ROOT / "agents" / "coach-wellbeing" / "attention.md"
+ATTENTION_CAT = "cat .claude/agents/coach-wellbeing/attention.md"
+SWITCHING_PHRASE = (
+    "Вчера переключений между видами работы N в час - больше твоего обычного (медиана M). "
+    "Это про усталость, не про продуктивность: как себя чувствуешь? Предлагаю почту и "
+    "мессенджеры разбирать пачками 2-3 раза в день, а перед вынужденным переключением "
+    "записывать строчку, где остановился."
+)
+STRETCH_PHRASE = (
+    "Вчера самый длинный отрезок работы без паузы - N ч (порог 2). Предлагаю сегодня "
+    "паузу-прогулку на 10 минут в середине такого отрезка - поставить в план дня?"
+)
+
+
+def test_wellbeing_points_to_attention_side_file() -> None:
+    assert ATTENTION_CAT in WELLBEING.read_text()
+
+
+def test_wellbeing_names_attention_signals() -> None:
+    text = WELLBEING.read_text()
+    assert "switching_high" in text
+    assert "long_stretch" in text
+
+
+def test_allow_can_read_attention_file() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert f"Bash({ATTENTION_CAT})" in allow
+
+
+def test_attention_file_has_switching_phrase_verbatim() -> None:
+    assert SWITCHING_PHRASE in ATTENTION.read_text()
+
+
+def test_attention_file_has_stretch_phrase_verbatim() -> None:
+    assert STRETCH_PHRASE in ATTENTION.read_text()
+
+
+def test_attention_file_does_not_use_minutes_or_percent_as_argument() -> None:
+    text = ATTENTION.read_text()
+    assert "23 минуты" not in text
+    assert "40 %" not in text
+
+
+def test_fields_file_names_both_new_screen_fields() -> None:
+    text = (ROOT / "agents" / "coach-wellbeing" / "fields.md").read_text()
+    assert "screen_switches_hour" in text
+    assert "screen_stretch_hours" in text
