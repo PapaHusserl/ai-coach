@@ -359,8 +359,9 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
     "get_agenda": (
         agenda.agenda,
         "События тренера в календаре (date_from, date_to - YYYY-MM-DD, до 92 дней): черновики "
-        "(draft) и записанные в календарь (written) с днём начала в периоде, плюс активный "
-        "повторяющийся чек-ин: id, kind (" + "/".join(KINDS) + "), title, date, "
+        "(draft) и записанные в календарь (written) с днём начала в периоде; "
+        "повторяющийся чек-ин - строкой в каждом своём дне периода (id один, date - день "
+        "вхождения): id, kind (" + "/".join(KINDS) + "), title, date, "
         "start_at, end_at, all_day, note, category (для нагрузки или null), survey (опросник "
         "чек-ина, form:<имя> формы или null), alarm_min, repeat, workout_id, practice_id, "
         "status. Записывает в календарь пользователь командой coach event write.",

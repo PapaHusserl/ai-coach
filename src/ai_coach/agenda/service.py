@@ -8,10 +8,11 @@ Commit делает вызывающий код, кроме write_event и remov
 """
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 
 from ai_coach.agenda.draft import AgendaError, parse_moment, validate_draft
+from ai_coach.agenda.repeat import moved, on_day
 from ai_coach.store.agenda import (
     ACTIVE,
     active_repeats,
@@ -179,3 +180,19 @@ def agenda_rows(conn: sqlite3.Connection, date_from: str, date_to: str) -> list[
     earlier = [row for row in active_repeats(conn) if row["date"] < date_from]
     rows[:0] = earlier
     return [{k: v for k, v in row.items() if k not in HIDDEN} for row in rows]
+
+
+def agenda_by_day(conn: sqlite3.Connection, date_from: str, date_to: str) -> list[dict[str, Any]]:
+    """agenda_rows, где повторяющийся пункт стоит строкой в каждом своём дне периода (on_day) со
+    временем и датой этого дня; порядок - start_at, id."""
+    result: list[dict[str, Any]] = []
+    for row in agenda_rows(conn, date_from, date_to):
+        if row["repeat"] is None:
+            result.append(row)
+            continue
+        day = date.fromisoformat(max(row["date"], date_from))
+        while day <= date.fromisoformat(date_to):
+            if on_day(row, day):
+                result.append({**moved(row, day), "date": day.isoformat()})
+            day += timedelta(days=1)
+    return sorted(result, key=lambda r: (r["start_at"], r["id"]))

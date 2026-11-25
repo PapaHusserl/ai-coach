@@ -8,6 +8,7 @@ from test_web_food import put_offer as put_offer_on
 from test_web_training import RUN_SPEC, activity, actual, workout
 from workload_fakes import coach_event
 
+from ai_coach.agenda.repeat import moved, on_day
 from ai_coach.profile.service import set_value
 from ai_coach.store.agenda import add_event
 from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing, add_who5
@@ -15,7 +16,6 @@ from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError
 from ai_coach.web.marks import save_mark
-from ai_coach.web.repeat import moved, on_day
 from ai_coach.workouts.phone import player_payload
 
 DAY = date(2026, 11, 7)

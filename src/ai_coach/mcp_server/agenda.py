@@ -9,7 +9,7 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ai_coach.agenda import AgendaError, agenda_rows, cancel_event, create_draft, move_draft
+from ai_coach.agenda import AgendaError, agenda_by_day, cancel_event, create_draft, move_draft
 from ai_coach.agenda.day_plan import create_day_plan as build_day_plan
 from ai_coach.agenda.draft import SURVEYS
 from ai_coach.agenda.service import shifted
@@ -127,12 +127,13 @@ def move_draft_event(conn: sqlite3.Connection, event_id: int, start_at: str) -> 
 
 
 def agenda(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
-    """События тренера (черновики и записанные в календарь) с днём начала в периоде, плюс
-    активный повторяющийся чек-ин: id, kind, title, date, start_at, end_at, all_day, note,
+    """События тренера (черновики и записанные в календарь) с днём начала в периоде;
+    повторяющийся чек-ин - строкой в каждом своём дне периода (id один, date - день
+    вхождения): id, kind, title, date, start_at, end_at, all_day, note,
     category, survey (опросник чек-ина, form:<имя> формы или null), alarm_min, repeat,
     workout_id, practice_id, status."""
     period(date_from, date_to)
-    return cap(agenda_rows(conn, date_from, date_to))
+    return cap(agenda_by_day(conn, date_from, date_to))
 
 
 def done_log(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:

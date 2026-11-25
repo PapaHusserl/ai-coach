@@ -222,9 +222,42 @@ def test_list_shows_two_earlier_repeating_checkins(isolated: Path) -> None:
         )  # fmt: skip
     result = run("list", "--from", "2026-10-10", "--to", "2026-10-12")
     assert result.exit_code == 0, result.output
-    assert "Напомни 11:00" in result.output
-    assert "Напомни 15:00" in result.output
-    assert result.output.index("Напомни 11:00") < result.output.index("Напомни 15:00")
+    lines = result.output.splitlines()
+    assert len(lines) == 6
+    starts = [line.split("  ")[2].split(" - ")[0] for line in lines]
+    assert starts == [
+        "2026-10-10T11:00:00",
+        "2026-10-10T15:00:00",
+        "2026-10-11T11:00:00",
+        "2026-10-11T15:00:00",
+        "2026-10-12T11:00:00",
+        "2026-10-12T15:00:00",
+    ]
+    assert all("повтор: daily" in line for line in lines)
+    assert "2026-10-01" not in result.output
+
+
+def test_list_weekly_outside_its_weekday_shows_no_events(isolated: Path) -> None:
+    seed(
+        isolated, kind="checkin", category=None, repeat="weekly", title="Раз в неделю",
+        date="2026-10-01", start_at="2026-10-01T11:00:00", end_at="2026-10-01T11:15:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert result.exit_code == 0, result.output
+    assert "Событий нет." in result.output
+
+
+def test_list_repeating_checkin_line_has_day_of_occurrence(isolated: Path) -> None:
+    event_id = seed(
+        isolated, kind="checkin", category=None, repeat="daily", survey="evening",
+        status="written", calendar_uid="u1", title="Вечерний чек-ин",
+        date="2026-10-01", start_at="2026-10-01T23:30:00", end_at="2026-10-01T23:45:00",
+    )  # fmt: skip
+    result = run("list", "--from", "2026-10-10", "--to", "2026-10-10")
+    assert result.output.strip() == (
+        f"{event_id}  written  2026-10-10T23:30:00 - 23:45  checkin  Вечерний чек-ин"
+        "  повтор: daily  опросник: evening"
+    )
 
 
 def test_list_shows_survey_of_checkin(isolated: Path) -> None:

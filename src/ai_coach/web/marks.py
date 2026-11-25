@@ -5,13 +5,13 @@ from datetime import date, datetime
 from typing import Any
 
 from ai_coach.agenda.forms import MAX_SCORE, MIN_SCORE
+from ai_coach.agenda.repeat import moved, on_day
 from ai_coach.store.agenda import ACTIVE, get_event, mark_done, unmark_done
 from ai_coach.store.journal import add_focus, add_slip, add_wellbeing
 from ai_coach.store.workload import upsert_counter
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.food import save_food
 from ai_coach.web.forms import save_form
-from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.survey import is_form, marks_of
 from ai_coach.web.who5 import save_who5
 

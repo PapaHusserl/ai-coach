@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from ai_coach.agenda.service import agenda_rows
+from ai_coach.agenda.service import agenda_by_day
 from ai_coach.profile.service import current_profile, profile_nutrition
 from ai_coach.store.agenda import own_uids
 from ai_coach.store.forms import list_forms
@@ -18,7 +18,6 @@ from ai_coach.web.food import meal_view, offers_view
 from ai_coach.web.forms import form_view
 from ai_coach.web.header import header_view
 from ai_coach.web.marks import COOKING
-from ai_coach.web.repeat import moved, on_day
 from ai_coach.web.training import fact, plan_view
 from ai_coach.web.who5 import who5_view
 from ai_coach.workload.service import (
@@ -51,8 +50,7 @@ def _training(conn: sqlite3.Connection, row: dict[str, Any], day: date) -> dict[
 
 def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str, Any]]:
     """Пункты тренера дня; у каждого marks (отметки пункта за день) и due (красный)."""
-    rows = [r for r in agenda_rows(conn, day.isoformat(), day.isoformat()) if on_day(r, day)]
-    rows = sorted((moved(r, day) for r in rows), key=lambda r: (r["start_at"], r["id"]))
+    rows = agenda_by_day(conn, day.isoformat(), day.isoformat())
     marks = marks_for_day(conn, day.isoformat())
     evening = evening_done(conn, day.isoformat())
     who5 = who5_view(conn, day.isoformat())

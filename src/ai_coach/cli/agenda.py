@@ -9,7 +9,7 @@ import typer
 
 from ai_coach.agenda import (
     AgendaError,
-    agenda_rows,
+    agenda_by_day,
     cancel_event,
     move_draft,
     move_event,
@@ -74,13 +74,14 @@ def event_list(
     date_from: Annotated[str | None, typer.Option("--from", help="С даты YYYY-MM-DD")] = None,
     date_to: Annotated[str | None, typer.Option("--to", help="По дату YYYY-MM-DD")] = None,
 ) -> None:
-    """Черновики и записанные события (по умолчанию от 30 дней назад до 14 вперёд)."""
+    """Черновики и записанные события по дням, повторяющиеся - в каждом своём дне (по умолчанию
+    от 30 дней назад до 14 вперёд)."""
     today = date.today()
     first = check_date(date_from) if date_from else (today - timedelta(days=PAST_DAYS)).isoformat()
     last = check_date(date_to) if date_to else (today + timedelta(days=AHEAD_DAYS)).isoformat()
     conn = open_db()
     try:
-        rows = agenda_rows(conn, first, last)
+        rows = agenda_by_day(conn, first, last)
     finally:
         conn.close()
     if not rows:

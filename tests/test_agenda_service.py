@@ -453,6 +453,115 @@ def test_agenda_rows_skip_inactive_repeats(conn: sqlite3.Connection) -> None:
     assert agenda_rows(conn, "2026-10-10", "2026-10-14") == []
 
 
+def series(conn: sqlite3.Connection, repeat: str, day: str = "2026-10-01", **fields: Any) -> int:
+    clock = at(day, "11:00:00", "11:15:00")
+    return stored(conn, **{**CHECKIN, "repeat": repeat}, date=day, **clock, **fields)
+
+
+def test_by_day_daily_gives_row_per_day(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    event_id = series(conn, "daily")
+    rows = agenda_by_day(conn, "2026-10-10", "2026-10-12")
+    assert [r["start_at"] for r in rows] == [
+        "2026-10-10T11:00:00",
+        "2026-10-11T11:00:00",
+        "2026-10-12T11:00:00",
+    ]
+    assert [r["end_at"] for r in rows] == [
+        "2026-10-10T11:15:00",
+        "2026-10-11T11:15:00",
+        "2026-10-12T11:15:00",
+    ]
+    assert [r["date"] for r in rows] == ["2026-10-10", "2026-10-11", "2026-10-12"]
+    assert {r["id"] for r in rows} == {event_id}
+
+
+def test_by_day_weekly_outside_its_weekday_has_no_rows(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "weekly")
+    assert agenda_by_day(conn, "2026-10-10", "2026-10-14") == []
+
+
+def test_by_day_weekly_single_day_on_its_weekday(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "weekly")
+    rows = agenda_by_day(conn, "2026-10-08", "2026-10-08")
+    assert [r["date"] for r in rows] == ["2026-10-08"]
+
+
+def test_by_day_weekly_includes_series_start_day(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "weekly")
+    rows = agenda_by_day(conn, "2026-10-01", "2026-10-15")
+    assert [r["date"] for r in rows] == ["2026-10-01", "2026-10-08", "2026-10-15"]
+
+
+def test_by_day_biweekly_every_second_week(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "biweekly")
+    rows = agenda_by_day(conn, "2026-10-02", "2026-10-31")
+    assert [r["date"] for r in rows] == ["2026-10-15", "2026-10-29"]
+
+
+def test_by_day_series_has_no_rows_before_its_date(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "daily", "2026-10-12")
+    rows = agenda_by_day(conn, "2026-10-10", "2026-10-14")
+    assert [r["date"] for r in rows] == ["2026-10-12", "2026-10-13", "2026-10-14"]
+
+
+def test_by_day_series_after_period_has_no_rows(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "daily", "2026-10-20")
+    assert agenda_by_day(conn, "2026-10-10", "2026-10-14") == []
+
+
+def test_by_day_orders_by_start_within_day(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    for clock, title in (("15:00:00", "поздний"), ("11:00:00", "ранний")):
+        stored(
+            conn, **CHECKIN, title=title, date="2026-10-01", **at("2026-10-01", clock, "16:00:00")
+        )
+    stored(conn, title="задача", **at("2026-10-12", "12:00:00", "13:00:00"), date="2026-10-12")
+    rows = agenda_by_day(conn, "2026-10-12", "2026-10-12")
+    assert [r["title"] for r in rows] == ["ранний", "задача", "поздний"]
+
+
+@pytest.mark.parametrize("status", ["cancelled", "removed"])
+def test_by_day_skips_inactive_series(conn: sqlite3.Connection, status: str) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "daily", status=status)
+    assert agenda_by_day(conn, "2026-10-10", "2026-10-12") == []
+
+
+def test_by_day_event_without_repeat_is_one_row_like_agenda_rows(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    stored(conn, title="задача", **at("2026-10-12"), date="2026-10-12")
+    rows = agenda_by_day(conn, "2026-10-10", "2026-10-14")
+    assert rows == agenda_rows(conn, "2026-10-10", "2026-10-14")
+    assert len(rows) == 1
+
+
+def test_by_day_hides_service_fields(conn: sqlite3.Connection) -> None:
+    from ai_coach.agenda.service import agenda_by_day
+
+    series(conn, "daily")
+    stored(conn, title="задача", **at("2026-10-11"), date="2026-10-11")
+    hidden = {"calendar_uid", "created_at", "written_at", "removed_at", "removed_by"}
+    for row in agenda_by_day(conn, "2026-10-10", "2026-10-12"):
+        assert hidden.isdisjoint(row)
+
+
 def test_commit_error_after_write_reports_uid(conn: sqlite3.Connection) -> None:
     event_id = stored(conn)
     with pytest.raises(AgendaError, match="fake-uid-1"):

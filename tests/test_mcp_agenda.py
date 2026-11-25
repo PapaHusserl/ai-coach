@@ -225,6 +225,37 @@ def test_get_agenda_returns_all_earlier_repeating_checkins(conn: sqlite3.Connect
     assert [r["title"] for r in data["rows"]] == ["Чек-ин 11:00", "Чек-ин 15:00"]
 
 
+def add_daily(conn: sqlite3.Connection, clock: str = "11:00", repeat: str = "daily") -> None:
+    add_event(conn, coach_event(
+        kind="checkin", category=None, repeat=repeat, title=f"Чек-ин {clock}",
+        date="2026-10-01", start_at=f"2026-10-01T{clock}:00", end_at=f"2026-10-01T{clock}:15",
+    ))  # fmt: skip
+
+
+def test_get_agenda_gives_occurrence_day_in_date_and_start(conn: sqlite3.Connection) -> None:
+    add_daily(conn, "11:00")
+    add_daily(conn, "15:00")
+    rows = call(conn, "get_agenda", date_from="2026-10-10", date_to="2026-10-10")["rows"]
+    assert len(rows) == 2
+    assert {r["date"] for r in rows} == {"2026-10-10"}
+    assert all(r["start_at"].startswith("2026-10-10") for r in rows)
+
+
+def test_get_agenda_weekly_outside_its_weekday_is_empty(conn: sqlite3.Connection) -> None:
+    add_daily(conn, repeat="weekly")
+    data = call(conn, "get_agenda", date_from="2026-10-10", date_to="2026-10-10")
+    assert data["rows"] == []
+    assert data["truncated"] is False
+
+
+def test_get_agenda_long_period_of_daily_is_cut_to_60(conn: sqlite3.Connection) -> None:
+    add_daily(conn)
+    end = (date(2026, 10, 10) + timedelta(days=91)).isoformat()
+    data = call(conn, "get_agenda", date_from="2026-10-10", date_to=end)
+    assert len(data["rows"]) == 60
+    assert data["truncated"] is True
+
+
 def test_cancel_draft_event(conn: sqlite3.Connection) -> None:
     draft_id = create(conn)["draft_id"]
     result = call(conn, "cancel_draft_event", event_id=draft_id)

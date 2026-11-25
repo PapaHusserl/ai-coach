@@ -6,6 +6,7 @@
 
 from ai_coach.agenda.draft import AgendaError
 from ai_coach.agenda.service import (
+    agenda_by_day,
     agenda_rows,
     cancel_event,
     create_draft,
@@ -17,6 +18,7 @@ from ai_coach.agenda.service import (
 
 __all__ = [
     "AgendaError",
+    "agenda_by_day",
     "agenda_rows",
     "cancel_event",
     "create_draft",
