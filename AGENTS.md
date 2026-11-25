@@ -2,7 +2,7 @@
 
 Правила ведения docs/ROADMAP.md, docs/BACKLOG.md, docs/handoff.md, docs/done/ и гигиены репо — @docs/RULES.md
 
-Общие практики проектов — @~/projects/dashboard/priv/scaffold/COMMON.md
+Общие практики проектов — @~/projects/semia-kabanov/pravila/COMMON.md
 
 ## Местные правила
 
