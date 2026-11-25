@@ -3,6 +3,7 @@
 import sqlite3
 from typing import Any
 
+from ai_coach.pantry.offer import use_offer
 from ai_coach.profile.nutrition import remaining
 from ai_coach.store.journal import add_food, add_food_groups, list_food
 from ai_coach.store.meal_offer import get_offer, list_offers
@@ -21,8 +22,15 @@ def offers_view(conn: sqlite3.Connection, event_id: int, day: str) -> list[dict[
     return [{k: o[k] for k in keys} for o in list_offers(conn, event_id, day)]
 
 
-def _offer_entry(conn: sqlite3.Connection, offer_id: Any, base: dict[str, Any]) -> int:
-    """Запись варианта: КБЖУ и группы сразу, /coach-food её не считает."""
+def _offer_entry(
+    conn: sqlite3.Connection,
+    offer_id: Any,
+    base: dict[str, Any],
+    now: str,
+    report: dict[str, Any] | None,
+) -> int:
+    """Запись варианта: КБЖУ и группы сразу, /coach-food её не считает; продукты состава, что есть
+    в кладовой, списываются в момент now, итог списания - в report."""
     valid = type(offer_id) is int and offer_id > 0
     offer = get_offer(conn, offer_id) if valid else None
     if offer is None or offer["event_id"] != base["event_id"] or offer["date"] != base["date"]:
@@ -32,19 +40,32 @@ def _offer_entry(conn: sqlite3.Connection, offer_id: Any, base: dict[str, Any]) 
     text = f"{offer['name']}: {lines}"
     food_id = add_food(
         conn,
-        {"event_id": base["event_id"], "logged_at": base["logged_at"], "text": text} | values,
+        {"event_id": base["event_id"], "logged_at": base["logged_at"], "text": text}
+        | values
+        | {"offer_id": offer["id"]},
     )
     add_food_groups(conn, food_id, offer["groups"])
+    used = use_offer(conn, offer["items"], food_id, now)
+    if report is not None:
+        report.update(used)
     return food_id
 
 
-def save_food(conn: sqlite3.Connection, payload: dict[str, Any], base: dict[str, Any]) -> int:
+def save_food(
+    conn: sqlite3.Connection,
+    payload: dict[str, Any],
+    base: dict[str, Any],
+    now: str,
+    report: dict[str, Any] | None = None,
+) -> int:
     """Запись еды пункта: text (КБЖУ пусты до /coach-food) или offer_id (вариант тренера, КБЖУ
-    и группы сразу), ровно одно. base: event_id, date, logged_at."""
+    и группы сразу, продукты из кладовой списываются), ровно одно. base: event_id, date,
+    logged_at; now - момент списания (у прошедшего пункта logged_at - его конец);
+    report получает {used, skipped, warnings} списания."""
     if "offer_id" in payload:
         if payload.get("text") is not None:
             raise MarkError("Нужен либо текст, либо вариант.")
-        return _offer_entry(conn, payload["offer_id"], base)
+        return _offer_entry(conn, payload["offer_id"], base, now, report)
     value = payload.get("text")
     text = value.strip() if isinstance(value, str) else ""
     if not text:

@@ -112,11 +112,16 @@ def _checkin(conn: sqlite3.Connection, payload: dict[str, Any], base: dict[str, 
 
 
 def _entry(
-    conn: sqlite3.Connection, mark: Any, payload: dict[str, Any], base: dict[str, Any]
+    conn: sqlite3.Connection,
+    mark: Any,
+    payload: dict[str, Any],
+    base: dict[str, Any],
+    spent: tuple[str, dict[str, Any] | None],
 ) -> int:
-    """Запись в журнал: food, rating, feel, slip; id строки."""
+    """Запись в журнал: food, rating, feel, slip; id строки. spent: момент и отчёт списания
+    кладовой (только у food)."""
     if mark == "food":
-        return save_food(conn, payload, base)
+        return save_food(conn, payload, base, *spent)
     if mark == "rating":
         scores = {k: _score(k, payload.get(k)) for k in ("focus", "fatigue", "effort")}
         return add_focus(conn, {**base, **scores, "text": _text(payload)})
@@ -126,9 +131,15 @@ def _entry(
     return add_slip(conn, {**base, "text": _text(payload, required=True)})
 
 
-def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) -> int | None:
+def save_mark(
+    conn: sqlite3.Connection,
+    payload: dict[str, Any],
+    now: datetime,
+    report: dict[str, Any] | None = None,
+) -> int | None:
     """Записать отметку пункта (без commit); id строки, у done - None. date - день пункта,
-    logged_at - min(сейчас, конец пункта): у прошедшего пункта - его конец."""
+    logged_at - min(сейчас, конец пункта): у прошедшего пункта - его конец. report получает
+    итог списания кладовой у варианта еды."""
     row, day = _event(conn, payload)
     mark = payload.get("mark")
     _kinds(row, mark)
@@ -151,4 +162,4 @@ def save_mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) 
         return save_who5(conn, payload, base)
     if mark == "form":
         return save_form(conn, payload, base, row["survey"])
-    return _entry(conn, mark, payload, base)
+    return _entry(conn, mark, payload, base, (now.isoformat(sep=" ", timespec="seconds"), report))

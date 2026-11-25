@@ -22,13 +22,15 @@ import { formFields } from "./form-fields.js";
 import { formCanSave, formPayload, withFormTab } from "./form-model.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
 import { offersBlock } from "./offers-pane.js";
+import { pantryLines } from "./pantry-lines.js";
 import { toast } from "./toast.js";
 import { fillTraining } from "./training-pane.js";
 import { who5Fields } from "./who5-fields.js";
 
 export * from "./marks-model.js";
+export { pantryLines };
 
-const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, training: null, who5: null, form: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, pantry: [], training: null, who5: null, form: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -85,6 +87,8 @@ async function sendNow(tab, text, extra) {
 		status = response.status;
 		reply = await response.text();
 		if (response.ok) {
+			const lines = pantryLines(JSON.parse(reply));
+			if (lines.length) state.pantry = lines;
 			forms[tab] = {};
 			await state.reload();
 			buildForm();
@@ -103,6 +107,7 @@ function fillMeal() {
 	const eaten = foodSummary(state.meal);
 	ui.saved.textContent = `Записано ✓ ${eaten}`;
 	ui.saved.hidden = eaten === "";
+	ui.pantry.replaceChildren(...state.pantry.map((line) => el("p", "bar-label", line)));
 	ui.left.textContent = remainingText(state.meal);
 	fillOffers();
 }
@@ -157,10 +162,11 @@ function saveLabel(food, offers) {
 // Верх окна еды: «Записано ✓», остаток дня, варианты блюд.
 function mealHead(box) {
 	ui.saved = el("p", "saved");
+	ui.pantry = el("div");
 	ui.left = el("p", "bar-label");
 	ui.offers = el("div");
 	fillMeal();
-	box.append(ui.saved, ui.left, ui.offers);
+	box.append(ui.saved, ui.pantry, ui.left, ui.offers);
 }
 
 // Поля вкладки tab (шкалы, WHO-5, форма тренера, часы и погружение чек-ина); save — кнопка «Сохранить».
@@ -183,6 +189,7 @@ function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
 	ui.saved = null;
+	ui.pantry = null;
 	ui.left = null;
 	ui.offers = null;
 	ui.save = null;
@@ -259,6 +266,7 @@ function startPane(row, view) {
 	state.future = isFuture(row, view.now);
 	state.forms = drafts[`${view.date}:${row.id}`] ??= {};
 	state.offer = 0;
+	state.pantry = [];
 	showError("");
 	buildTabs(row.kind, row.survey);
 	buildForm();

@@ -4,16 +4,18 @@ from typing import Any
 
 import pytest
 
+from ai_coach.pantry.service import stock
 from ai_coach.store.journal import list_food, list_food_groups, list_food_pending
 from ai_coach.web.errors import MarkError
 from ai_coach.web.food import save_food
 
 D = "2026-11-08"
 BASE = {"event_id": 5, "date": D, "logged_at": f"{D} 09:00:00"}
+NOW = f"{D} 09:00:00"
 
 
 def test_text_goes_to_food_log_with_event_id_and_time(conn: sqlite3.Connection) -> None:
-    food_id = save_food(conn, {"text": "  овсянка с бананом "}, BASE)
+    food_id = save_food(conn, {"text": "  овсянка с бананом "}, BASE, NOW)
     [row] = list_food(conn, D, D)
     assert row["id"] == food_id
     assert (row["event_id"], row["logged_at"], row["text"]) == (
@@ -24,7 +26,7 @@ def test_text_goes_to_food_log_with_event_id_and_time(conn: sqlite3.Connection) 
 
 
 def test_text_entry_has_no_nutrition_and_waits_for_coach_food(conn: sqlite3.Connection) -> None:
-    save_food(conn, {"text": "борщ"}, BASE)
+    save_food(conn, {"text": "борщ"}, BASE, NOW)
     [row] = list_food_pending(conn)
     assert (row["kcal"], row["protein_g"], row["fat_g"], row["carbs_g"]) == (None, None, None, None)
 
@@ -34,13 +36,13 @@ def test_empty_text_is_rejected_and_nothing_written(
     conn: sqlite3.Connection, fields: dict[str, Any]
 ) -> None:
     with pytest.raises(MarkError):
-        save_food(conn, fields, BASE)
+        save_food(conn, fields, BASE, NOW)
     assert list_food(conn, D, D) == []
 
 
 def test_two_entries_for_one_item_are_both_kept(conn: sqlite3.Connection) -> None:
-    save_food(conn, {"text": "яйца"}, BASE)
-    save_food(conn, {"text": "кофе"}, {**BASE, "logged_at": f"{D} 09:10:00"})
+    save_food(conn, {"text": "яйца"}, BASE, NOW)
+    save_food(conn, {"text": "кофе"}, {**BASE, "logged_at": f"{D} 09:10:00"}, NOW)
     assert [r["text"] for r in list_food(conn, D, D)] == ["яйца", "кофе"]
 
 
@@ -73,7 +75,7 @@ def put_offer(
 
 def test_offer_goes_to_food_log_with_nutrition_event_id_and_time(conn: sqlite3.Connection) -> None:
     offer_id = put_offer(conn)
-    food_id = save_food(conn, {"offer_id": offer_id}, BASE)
+    food_id = save_food(conn, {"offer_id": offer_id}, BASE, NOW)
     [row] = list_food(conn, D, D)
     assert row["id"] == food_id
     assert (row["event_id"], row["logged_at"]) == (5, f"{D} 09:00:00")
@@ -82,12 +84,12 @@ def test_offer_goes_to_food_log_with_nutrition_event_id_and_time(conn: sqlite3.C
 
 
 def test_offer_entry_is_not_pending_for_coach_food(conn: sqlite3.Connection) -> None:
-    save_food(conn, {"offer_id": put_offer(conn)}, BASE)
+    save_food(conn, {"offer_id": put_offer(conn)}, BASE, NOW)
     assert list_food_pending(conn) == []
 
 
 def test_offer_entry_gets_groups(conn: sqlite3.Connection) -> None:
-    food_id = save_food(conn, {"offer_id": put_offer(conn)}, BASE)
+    food_id = save_food(conn, {"offer_id": put_offer(conn)}, BASE, NOW)
     groups = {(r["food_id"], r["group_key"]) for r in list_food_groups(conn, D, D)}
     assert groups == {(food_id, "eggs"), (food_id, "whole_grains")}
 
@@ -95,14 +97,14 @@ def test_offer_entry_gets_groups(conn: sqlite3.Connection) -> None:
 def test_offer_of_another_item_is_rejected_and_nothing_written(conn: sqlite3.Connection) -> None:
     offer_id = put_offer(conn, event_id=6)
     with pytest.raises(MarkError):
-        save_food(conn, {"offer_id": offer_id}, BASE)
+        save_food(conn, {"offer_id": offer_id}, BASE, NOW)
     assert list_food(conn, D, D) == []
 
 
 def test_offer_of_other_day_is_rejected_and_nothing_written(conn: sqlite3.Connection) -> None:
     offer_id = put_offer(conn, day="2026-11-07")
     with pytest.raises(MarkError):
-        save_food(conn, {"offer_id": offer_id}, BASE)
+        save_food(conn, {"offer_id": offer_id}, BASE, NOW)
     assert list_food(conn, D, D) == []
 
 
@@ -110,7 +112,7 @@ def test_offer_of_other_day_is_rejected_and_nothing_written(conn: sqlite3.Connec
 def test_missing_or_bad_offer_id_is_rejected(conn: sqlite3.Connection, offer_id: Any) -> None:
     put_offer(conn)
     with pytest.raises(MarkError):
-        save_food(conn, {"offer_id": offer_id}, BASE)
+        save_food(conn, {"offer_id": offer_id}, BASE, NOW)
     assert list_food(conn, D, D) == []
 
 
@@ -119,24 +121,47 @@ def test_text_and_offer_together_are_rejected_and_nothing_written(
 ) -> None:
     offer_id = put_offer(conn)
     with pytest.raises(MarkError):
-        save_food(conn, {"offer_id": offer_id, "text": "борщ"}, BASE)
+        save_food(conn, {"offer_id": offer_id, "text": "борщ"}, BASE, NOW)
     assert list_food(conn, D, D) == []
 
 
 def test_offer_can_be_taken_twice_as_two_entries(conn: sqlite3.Connection) -> None:
     offer_id = put_offer(conn)
-    save_food(conn, {"offer_id": offer_id}, BASE)
-    save_food(conn, {"offer_id": offer_id}, {**BASE, "logged_at": f"{D} 09:10:00"})
+    save_food(conn, {"offer_id": offer_id}, BASE, NOW)
+    save_food(conn, {"offer_id": offer_id}, {**BASE, "logged_at": f"{D} 09:10:00"}, NOW)
     assert len(list_food(conn, D, D)) == 2
+
+
+def test_offer_with_zero_qty_line_is_saved_and_other_lines_are_used(
+    conn: sqlite3.Connection,
+) -> None:
+    items = [{"what": "соль", "qty": "0 г"}, {"what": "рис", "qty": "150 г"}]
+    sql = (
+        "INSERT INTO meal_offer (event_id, date, position, name, items_json, kcal, protein_g, "
+        "fat_g, carbs_g, groups_json) VALUES (5, ?, 1, 'Рис', ?, 200, 4, 1, 40, '[]')"
+    )
+    offer_id = conn.execute(sql, (D, json.dumps(items))).lastrowid
+    for name, qty in (("соль", 100), ("рис", 500)):
+        conn.execute(
+            "INSERT INTO pantry_log (item, qty, unit, op, logged_at) VALUES (?, ?, 'g', 'add', ?)",
+            (name, qty, f"{D} 07:00:00"),
+        )
+    conn.commit()
+    report: dict[str, Any] = {}
+    save_food(conn, {"offer_id": offer_id}, BASE, NOW, report)
+    assert len(list_food(conn, D, D)) == 1
+    assert (report["used"], report["skipped"]) == (["рис 150 г"], ["соль 0 г"])
+    left = {r["item"]: r["qty"] for r in stock(conn)}
+    assert left == {"соль": 100, "рис": 350}
 
 
 def test_missing_offer_error_text_goes_to_user(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError) as info:
-        save_food(conn, {"offer_id": 999}, BASE)
+        save_food(conn, {"offer_id": 999}, BASE, NOW)
     assert str(info.value) == "Такого варианта у пункта нет."
 
 
 def test_text_and_offer_error_text_goes_to_user(conn: sqlite3.Connection) -> None:
     with pytest.raises(MarkError) as info:
-        save_food(conn, {"offer_id": put_offer(conn), "text": "борщ"}, BASE)
+        save_food(conn, {"offer_id": put_offer(conn), "text": "борщ"}, BASE, NOW)
     assert str(info.value) == "Нужен либо текст, либо вариант."

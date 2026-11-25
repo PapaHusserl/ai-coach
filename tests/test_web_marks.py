@@ -1,3 +1,4 @@
+import json
 import re
 import sqlite3
 from datetime import datetime
@@ -10,6 +11,7 @@ from workload_fakes import coach_event
 
 from ai_coach.cli import main
 from ai_coach.load.deviations import main_wellbeing
+from ai_coach.pantry.service import stock
 from ai_coach.store.agenda import add_event, list_done, mark_done, unmark_done, update_event
 from ai_coach.store.journal import (
     add_food,
@@ -20,6 +22,7 @@ from ai_coach.store.journal import (
     list_slip,
     list_wellbeing,
 )
+from ai_coach.store.pantry import add_entry
 from ai_coach.store.workload import list_counters
 from ai_coach.web.day_marks import marks_for_day
 from ai_coach.web.errors import MarkError, NoEvent
@@ -701,3 +704,71 @@ def test_unknown_survey_in_base_gives_no_marks(conn: sqlite3.Connection) -> None
     eid = survey_checkin(conn, "мусор")
     with pytest.raises(MarkError):
         save_mark(conn, payload(eid, "checkin", score=4), at("20:05"))
+
+
+# П8 партия 1: «Съел вариант» списывает продукты из кладовой.
+OFFER_ITEMS = [{"what": "рис", "qty": "150 г"}, {"what": "яйцо", "qty": "2 шт"}]
+
+
+def put_meal_offer(conn: sqlite3.Connection, event_id: int, day: str = D) -> int:
+    sql = (
+        "INSERT INTO meal_offer (event_id, date, position, name, items_json, kcal, protein_g, "
+        "fat_g, carbs_g, groups_json) VALUES (?, ?, 1, 'Рис с яйцом', ?, 400, 15, 10, 60, '[]')"
+    )
+    cursor = conn.execute(sql, (event_id, day, json.dumps(OFFER_ITEMS)))
+    conn.commit()
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def pantry_add(conn: sqlite3.Connection, item: str, qty: float, unit: str) -> None:
+    add_entry(
+        conn,
+        {"item": item, "qty": qty, "unit": unit, "op": "add", "logged_at": f"{D} 07:00:00"},
+    )
+    conn.commit()
+
+
+def pantry_amounts(conn: sqlite3.Connection) -> dict[str, float]:
+    return {row["item"]: row["qty"] for row in stock(conn)}
+
+
+def test_offer_entry_lowers_pantry_and_keeps_offer_id(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "meal", "08:00", "09:00")
+    offer_id = put_meal_offer(conn, eid)
+    pantry_add(conn, "рис", 500, "g")
+    pantry_add(conn, "яйцо", 6, "pcs")
+    food_id = save_mark(conn, payload(eid, "food", offer_id=offer_id), at("08:30"))
+    assert pantry_amounts(conn) == {"рис": 350, "яйцо": 4}
+    [row] = list_food(conn, D, D)
+    assert (row["id"], row["offer_id"]) == (food_id, offer_id)
+
+
+def test_text_entry_does_not_touch_pantry_and_has_null_offer_id(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "meal", "08:00", "09:00")
+    pantry_add(conn, "рис", 500, "g")
+    save_mark(conn, payload(eid, "food", text="рис 150 г"), at("08:30"))
+    assert pantry_amounts(conn) == {"рис": 500}
+    assert list_food(conn, D, D)[0]["offer_id"] is None
+
+
+def test_foreign_offer_is_rejected_and_pantry_is_intact(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "meal", "08:00", "09:00")
+    other = event(conn, "meal", "13:00", "14:00")
+    offer_id = put_meal_offer(conn, other)
+    pantry_add(conn, "рис", 500, "g")
+    with pytest.raises(MarkError, match="Такого варианта у пункта нет."):
+        save_mark(conn, payload(eid, "food", offer_id=offer_id), at("08:30"))
+    assert pantry_amounts(conn) == {"рис": 500}
+    assert list_food(conn, D, D) == []
+
+
+def test_past_meal_offer_uses_pantry_by_real_now_not_item_end(conn: sqlite3.Connection) -> None:
+    eid = event(conn, "meal", "08:00", "09:00")
+    offer_id = put_meal_offer(conn, eid)
+    pantry_add(conn, "рис", 500, "g")
+    save_entry = {"item": "рис", "qty": 400, "unit": "g", "op": "set", "logged_at": f"{D} 10:00:00"}
+    add_entry(conn, save_entry)
+    conn.commit()
+    save_mark(conn, payload(eid, "food", offer_id=offer_id), at("12:00"))
+    assert pantry_amounts(conn) == {"рис": 250}

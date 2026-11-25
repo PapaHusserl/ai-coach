@@ -40,6 +40,7 @@ class PantryEntry:
     now: str
     expires_on: str | None = None
     opened: bool = False
+    note: str | None = None
 
 
 def _check_expiry(op: str, expires_on: str | None) -> None:
@@ -90,6 +91,8 @@ def record(conn: sqlite3.Connection, entry: PantryEntry) -> str | None:
         values["expires_on"] = expires_on
     if entry.opened or op == "open":
         values["opened"] = 1
+    if entry.note is not None:
+        values["note"] = entry.note
     add_entry(conn, values)
     return warning
 

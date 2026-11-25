@@ -78,7 +78,11 @@ def _refusal(path: str, headers: Message) -> tuple[int, str] | None:
 
 
 def _mark(conn: sqlite3.Connection, payload: dict[str, Any], now: datetime) -> dict[str, Any]:
-    return {"id": save_mark(conn, payload, now)}
+    report: dict[str, Any] = {}
+    reply: dict[str, Any] = {"id": save_mark(conn, payload, now, report)}
+    if report:
+        reply["pantry"] = report
+    return reply
 
 
 POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], dict[str, Any]]] = {

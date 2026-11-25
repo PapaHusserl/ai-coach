@@ -239,6 +239,49 @@ def test_post_ok_is_json_and_error_is_plain_text(port: int, db_path: Path) -> No
     assert types == ["application/json; charset=utf-8", "text/plain; charset=utf-8"]
 
 
+def put_offer_and_pantry(db_path: Path, event_id: int) -> int:
+    day = datetime.now().date().isoformat()
+    sql = (
+        "INSERT INTO meal_offer (event_id, date, position, name, items_json, kcal, protein_g, "
+        "fat_g, carbs_g, groups_json) VALUES (?, ?, 1, 'Рис с соусом', ?, 400, 15, 10, 60, '[]')"
+    )
+    items = [{"what": "рис", "qty": "150 г"}, {"what": "соус", "qty": "20 г"}]
+    conn = open_db(db_path)
+    try:
+        offer_id = conn.execute(sql, (event_id, day, json.dumps(items))).lastrowid
+        stamp = (datetime.now() - timedelta(hours=2)).isoformat(sep=" ", timespec="seconds")
+        conn.execute(
+            "INSERT INTO pantry_log (item, qty, unit, op, logged_at) "
+            "VALUES ('рис', 500, 'g', 'add', ?)",
+            (stamp,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    assert offer_id is not None
+    return offer_id
+
+
+def test_post_offer_mark_answers_pantry_report(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    offer_id = put_offer_and_pantry(db_path, event_id)
+    status, answer = post(port, mark_body(event_id, mark="food", offer_id=offer_id))
+    assert status == 200
+    reply = json.loads(answer)
+    assert reply["pantry"] == {
+        "used": ["рис 150 г"],
+        "skipped": ["соус 20 г"],
+        "warnings": [],
+    }
+
+
+def test_post_text_food_mark_has_no_pantry_key(port: int, db_path: Path) -> None:
+    event_id = add_task(db_path, "meal")
+    status, answer = post(port, mark_body(event_id, mark="food", text="суп"))
+    assert status == 200
+    assert "pantry" not in json.loads(answer)
+
+
 def test_post_done_answers_null_id(port: int, db_path: Path) -> None:
     event_id = add_task(db_path, "practice")
     status, answer = post(port, mark_body(event_id, mark="done", done=1))

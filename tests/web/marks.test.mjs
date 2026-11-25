@@ -731,6 +731,40 @@ test("screenFill + buildPayload checkin: подставленное уходит
 	assert.equal("rest" in payload, false);
 });
 
+test("pantryLines: списано и не списано — две строки", async () => {
+	const { pantryLines } = await import("../../src/ai_coach/web/static/marks.js");
+	const pantry = { used: ["рис 150 г", "яйцо 2 шт"], skipped: ["соус 20 г"], warnings: [] };
+	assert.deepEqual(pantryLines({ id: 1, pantry }), [
+		"Списано из кладовой: рис 150 г, яйцо 2 шт.",
+		"Не списано, нет в кладовой: соус 20 г.",
+	]);
+});
+
+test("pantryLines: всё списано — одна строка", async () => {
+	const { pantryLines } = await import("../../src/ai_coach/web/static/marks.js");
+	const pantry = { used: ["рис 150 г"], skipped: [], warnings: [] };
+	assert.deepEqual(pantryLines({ id: 1, pantry }), ["Списано из кладовой: рис 150 г."]);
+});
+
+test("pantryLines: ничего не списано", async () => {
+	const { pantryLines } = await import("../../src/ai_coach/web/static/marks.js");
+	const pantry = { used: [], skipped: [], warnings: [] };
+	assert.deepEqual(pantryLines({ id: 1, pantry }), ["Из кладовой ничего не списано."]);
+});
+
+test("pantryLines: used пуст, skipped не пуст — одна строка без «Не списано»", async () => {
+	const { pantryLines } = await import("../../src/ai_coach/web/static/marks.js");
+	const pantry = { used: [], skipped: ["соус 20 г"], warnings: [] };
+	assert.deepEqual(pantryLines({ id: 1, pantry }), ["Из кладовой ничего не списано."]);
+});
+
+test("pantryLines: предупреждение — строкой как пришло", async () => {
+	const { pantryLines } = await import("../../src/ai_coach/web/static/marks.js");
+	const warning = "рис: списано больше остатка, остаток 0.";
+	const pantry = { used: ["рис 150 г"], skipped: [], warnings: [warning] };
+	assert.ok(pantryLines({ id: 1, pantry }).includes(warning));
+});
+
 test("buildPayload: еда своим текстом — без offer_id", () => {
 	const form = { event_id: 5, date: "2026-11-07", text: " борщ " };
 	assert.deepEqual(buildPayload("food", form), {
