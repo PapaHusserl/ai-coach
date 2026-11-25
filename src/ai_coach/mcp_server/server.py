@@ -155,7 +155,10 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "weekend_work, recovery_drop, todo_growth, no_day_off (дней подряд без выходного, "
         "выходной - не больше 0,5 ч работы; сегодня без ручных часов работы не считается) "
         "(kind, value, limit; у recovery_drop value и limit - объекты по readiness/mood/stress); "
-        "пустой список - перегруза нет. Нет нагрузки тренировок - "
+        "пустой список - перегруза нет. attention - отдельно от signals, оценивается вчерашний "
+        "день: switches_hour, switches_median, base_days, stretch_hours и signals "
+        "switching_high (много переключений против своей медианы), long_stretch (рабочий "
+        "отрезок без паузы 2 ч и больше). Нет нагрузки тренировок - "
         "TSS считается нулём, причина в load_error. Ручные часы пишет coach feel.",
     ),
     "get_goals": (tools.goals_list, "Цели; status: active / done / cancelled, без него — все."),

@@ -14,7 +14,9 @@ from ai_coach.mcp_server.tools import load, period
 def overload(conn: sqlite3.Connection, date: str) -> dict[str, Any]:
     """Общая нагрузка за 7 дней до date включительно и сигналы перегруза (пороги и веса — в
     load/overload.py): total (нагрузка date), days (date, total, ручные часы), signals (kind,
-    value, limit; пустой список — перегруза нет). Нет нагрузки тренировок — TSS считается
+    value, limit; пустой список — перегруза нет), attention (отдельно от signals, оценивается
+    вчерашний день: date, switches_hour, switches_median, base_days, stretch_hours и signals
+    switching_high и long_stretch — kind, value, limit). Нет нагрузки тренировок — TSS считается
     нулём, причина — в load_error."""
     period(date, date)
     first = dt.date.fromisoformat(date) - dt.timedelta(days=OVERLOAD_DAYS - 1)

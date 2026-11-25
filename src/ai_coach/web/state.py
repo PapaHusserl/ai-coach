@@ -58,10 +58,12 @@ def state_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str, 
     except ToolError as error:
         load_error = str(error)
     sleep = sleep_report(conn, iso, now)
+    overload = overload_report(conn, iso, tss)
     signals = (
         _signals("sleep", sleep["signals"])
         + _signals("illness", illness_report(conn, iso, tss, sleep)["signals"])
-        + _signals("overload", overload_report(conn, iso, tss)["signals"])
+        + _signals("overload", overload["signals"])
+        + _signals("attention", overload["attention"]["signals"])
         + _signals("who5", who5_report(conn, iso)["signals"])
         + _signals("deviations", day_deviations(conn, iso, load_row))
         + _signals("weather", weather_report(conn, iso, now)["signals"])

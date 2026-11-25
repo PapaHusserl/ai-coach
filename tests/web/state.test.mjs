@@ -70,6 +70,7 @@ const CODES = [
 	"stress", "wellbeing_below", "mood_below", "symptoms", "fever", "readiness", "hrv", "sleep", "atl_over_ctl",
 	"illness_rest", "illness_return", "hrv_streak", "illness_light", "fatigue", "irritability",
 	"pressure_drop", "temperature_rise", "temperature_drop", "no_day_off",
+	"switching_high", "long_stretch",
 ];
 
 test("SIGNAL_WORDS: no_day_off — «нет полного выходного» (Н7, Р10а = 1)", async () => {
@@ -98,9 +99,46 @@ test("signalRows: corridor_out — слово и «1 (порог 2)»", async ()
 	assert.ok(text(found).includes("1 (порог 2)"));
 });
 
-test("SIGNAL_WORDS: ровно 33 кода отчётов", async () => {
+test("SIGNAL_WORDS: ровно 35 кодов отчётов", async () => {
 	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(CODES.length, 35);
 	assert.deepEqual(Object.keys(SIGNAL_WORDS).sort(), [...CODES].sort());
+});
+
+// Н8, партия 1б, Р10а = 1, Р10б = 1: слова двух сигналов внимания и приставка «вчера: ».
+test("SIGNAL_WORDS: switching_high — «много переключений», long_stretch — «долго без паузы»", async () => {
+	const { SIGNAL_WORDS } = await stateModel();
+	assert.equal(SIGNAL_WORDS.switching_high, "много переключений");
+	assert.equal(SIGNAL_WORDS.long_stretch, "долго без паузы");
+});
+
+test("signalRows: long_stretch из attention — «вчера: долго без паузы», «2.6 (порог 2)»", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "attention", kind: "long_stretch", value: 2.6, limit: 2 };
+	const [found] = signalRows(stateOf([row]));
+	assert.equal(found.word, "вчера: долго без паузы");
+	assert.equal(found.detail, "2.6 (порог 2)");
+});
+
+test("signalRows: switching_high из attention — «вчера: много переключений», «14.2 (порог 9.6)»", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "attention", kind: "switching_high", value: 14.2, limit: 9.6 };
+	const [found] = signalRows(stateOf([row]));
+	assert.equal(found.word, "вчера: много переключений");
+	assert.equal(found.detail, "14.2 (порог 9.6)");
+});
+
+test("signalRows: у сигнала с day приставка по-прежнему «вчера вечером: »", async () => {
+	const { signalRows } = await stateModel();
+	const [found] = signalRows(stateOf([{ ...DEVIATION, kind: "fatigue", day: "2026-11-06" }]));
+	assert.equal(found.word, "вчера вечером: усталость");
+});
+
+test("signalRows: у сигнала не из attention приставки «вчера: » нет", async () => {
+	const { signalRows } = await stateModel();
+	const row = { source: "overload", kind: "no_day_off", value: 9, limit: 7 };
+	const [found] = signalRows(stateOf([row]));
+	assert.equal(found.word, "нет полного выходного");
 });
 
 // Н38, партия 2, Р8 = 1: новые строки и пометка «вчера вечером» у перенесённых (ключ day).

@@ -288,7 +288,10 @@ def test_illness_rest_signal_keeps_why_and_gets_source(
 def test_overload_signals_come_from_overload_report(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = {"signals": [{"kind": "total_streak", "value": 3, "limit": 3}]}
+    fake = {
+        "signals": [{"kind": "total_streak", "value": 3, "limit": 3}],
+        "attention": {"signals": []},
+    }
     monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: fake)
     view = state_view(conn, DAY, NOW)
     assert sources(view, "total_streak") == ["overload"]
@@ -297,17 +300,63 @@ def test_overload_signals_come_from_overload_report(
 def test_no_day_off_signal_comes_from_overload_report(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = {"signals": [{"kind": "no_day_off", "value": 9, "limit": 7}]}
+    fake = {
+        "signals": [{"kind": "no_day_off", "value": 9, "limit": 7}],
+        "attention": {"signals": []},
+    }
     monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: fake)
     view = state_view(conn, DAY, NOW)
     assert sources(view, "no_day_off") == ["overload"]
+
+
+def test_attention_signals_come_from_the_attention_key_of_overload_report(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attention = [{"kind": "long_stretch", "value": 2.6, "limit": 2.0}]
+    fake = {"signals": [], "attention": {"signals": attention}}
+    monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: fake)
+    view = state_view(conn, DAY, NOW)
+    assert sources(view, "long_stretch") == ["attention"]
+    row = next(s for s in view["signals"] if s["kind"] == "long_stretch")
+    assert (row["value"], row["limit"]) == (2.6, 2.0)
+    assert "day" not in row
+
+
+def test_attention_rows_go_right_after_overload_rows(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = {
+        "signals": [{"kind": "total_streak", "value": 3, "limit": 3}],
+        "attention": {
+            "signals": [
+                {"kind": "switching_high", "value": 14.2, "limit": 9.6},
+                {"kind": "long_stretch", "value": 2.6, "limit": 2.0},
+            ]
+        },
+    }
+    monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(
+        "ai_coach.web.state.illness_report", lambda *args, **kwargs: {"signals": []}
+    )
+    nights(conn, 4, rhr=50)
+    put_who5(conn, 24)
+    signals = state_view(conn, DAY, NOW)["signals"]
+    order = [s["source"] for s in signals]
+    assert list(dict.fromkeys(order)) == ["sleep", "overload", "attention", "who5", "deviations"]
+    assert [s["kind"] for s in signals if s["source"] == "attention"] == [
+        "switching_high",
+        "long_stretch",
+    ]
 
 
 def test_signal_sources_go_in_the_agreed_order(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     illness = {"signals": [{"kind": "illness_risk", "value": 2, "limit": 2}]}
-    overload = {"signals": [{"kind": "total_streak", "value": 3, "limit": 3}]}
+    overload = {
+        "signals": [{"kind": "total_streak", "value": 3, "limit": 3}],
+        "attention": {"signals": []},
+    }
     monkeypatch.setattr("ai_coach.web.state.illness_report", lambda *args, **kwargs: illness)
     monkeypatch.setattr("ai_coach.web.state.overload_report", lambda *args, **kwargs: overload)
     nights(conn, 4, rhr=50)

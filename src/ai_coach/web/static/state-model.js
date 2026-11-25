@@ -35,6 +35,8 @@ export const SIGNAL_WORDS = {
 	hrv: "HRV",
 	sleep: "сон",
 	atl_over_ctl: "ATL выше CTL",
+	switching_high: "много переключений",
+	long_stretch: "долго без паузы",
 };
 
 const SERIES = [
@@ -77,6 +79,7 @@ const PHASE_KINDS = ["illness_rest", "illness_return", "illness_light"];
 
 function wordOf(signal) {
 	const word = (signal.covid && COVID_WORDS[signal.kind]) || SIGNAL_WORDS[signal.kind] || signal.kind;
+	if (signal.source === "attention") return `вчера: ${word}`;
 	return signal.day ? `вчера вечером: ${word}` : word;
 }
 

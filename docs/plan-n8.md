@@ -190,7 +190,7 @@ docs/research-switching.md «Правила тренера»).
 | `.claude/agents/coach-help/overload.md` | новый раздел «Переключения и длинные отрезки»: что это, как запустить, что получу | текст — по Р4, Р5, Р8, Р12 |
 | `README.md` (:93), `docs/architecture.md` (новый раздел «Н8» после «Н6», :328) | строки о ленте окон, двух счётчиках и `attention` | нет |
 | `tests/test_workload_timeline.py` (новый), `tests/test_workload_screen.py`, `tests/workload_fakes.py` (`FakeAw`, :203 — метод `timeline`), `tests/test_workload_sync.py`, `tests/test_mcp_workload.py`, `tests/test_mcp_snapshot_workload.py` | сценарии партии 1а | нет |
-| `tests/test_load_attention.py` (новый), `tests/test_load_overload.py`, `tests/test_mcp_overload.py`, `tests/test_web_state.py`, `tests/web/state.test.mjs` | сценарии партии 1б; в `state.test.mjs` — 35 кодов и `CODES` | нет |
+| `tests/test_load_attention.py` (новый), `tests/test_mcp_overload.py`, `tests/test_web_state.py`, `tests/web/state.test.mjs` | сценарии партии 1б; сценарии `overload_report` — в `test_mcp_overload.py` через `get_overload` (там же прежние); в `state.test.mjs` — 35 кодов и `CODES`; `tests/test_load_overload.py` не правится — только регресс в прогоне | нет |
 | `tests/test_skills_workload.py`, `tests/test_skills_help.py` | тексты, allow бокового файла, запасы | нет |
 | `docs/pipeline.md` | строка на партию (местное правило) | нет |
 
@@ -211,8 +211,9 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
 `ai_coach.load.attention:baseline`, `:find_attention`, `:attention_report` — новые;
 `ai_coach.load.overload:overload_report`. TESTS — `tests/test_workload_timeline.py` и `tests/test_load_attention.py`
 (новые), `tests/test_workload_screen.py` (`grep -l read_screen`; ещё `test_mcp_no_push.py` и `test_skills_workload.py`
-— там только имя), `tests/test_web_state.py` (единственный файл с `overload_report` по `grep -l`),
-`tests/test_load_overload.py`, `tests/test_mcp_overload.py`.
+— там только имя), `tests/test_web_state.py` (единственный файл с `overload_report` по `grep -l`; там он подменён),
+`tests/test_mcp_overload.py` (зовёт `overload_report` через `get_overload`). `tests/test_load_overload.py` в TESTS не
+входит: `overload_report` он не зовёт (`grep -c` — 0, 2026-11-25).
 
 **Объём** (ожидание, не проверено): партия 0 — около 150 строк (черновик в scratchpad длиннее, с вариантами, которые
 после решений не нужны); 1а — `src/` около 110, тесты около 250; 1б — `src/` около 80, тесты около 200; партия 2 —
@@ -238,7 +239,8 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
    - **1б. Сигналы** — `load/attention.py`, ключ `attention` в `overload_report`, источник в `state_view`, слова и
      приставка в `state-model.js`, описание `get_overload`, README, architecture, тесты. На выходе — кабану:
      `uv run pytest tests/test_load_attention.py tests/test_load_overload.py tests/test_mcp_overload.py
-     tests/test_web_state.py` и `node --test tests/web/state.test.mjs`; оркестратору: `make check`, живой вызов
+     tests/test_web_state.py` и `node --test tests/web/state.test.mjs` (`test_load_overload.py` — регресс без правок:
+     модуль `overload.py` меняется); оркестратору: `make check`, живой вызов
      `get_overload` на живой базе (только чтение) — сверка со строкой «На живой базе» из «Тестов».
 2. **Тексты тренера и справка** — `attention.md`, строка в `coach-wellbeing.md`, `fields.md`, два файла справки, тесты
    текстов. До партии: Влад добавил строку allow («Вне репо»). На выходе — кабану: тесты текстов и лимитов;
@@ -255,6 +257,9 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
 - П1а на выходе (оркестратор, 2026-11-25): `make check` OK (7459 passed, 12:39) на последней правке; по «да» Влада
   `uv run coach screen --days 45` (Р13); `sqlite3 -readonly`: за 2026-10-12…11-24 дней с `screen_switches_hour` — 44,
   с `screen_stretch_hours` — 44.
+- П1б на выходе (оркестратор, 2026-11-25): `make check` OK (7495 passed, 11:48) на последней правке; живая база
+  (только чтение, `attention_report` по дням 2026-10-12…11-24): дней 44, база готова у 30, `switching_high` — 5,
+  `long_stretch` — 15 — совпало со строкой «На живой базе».
 
 ## Правки по ревью
 
@@ -266,6 +271,14 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
   Р13; (2) Р14 в «Развилках» помечена «не решена» — исправлено (решение Влада в «Решениях»).
 - П1а, make check: 1 красный — `test_workload_service.py::test_all_six_screen_counters_are_in_the_row` ждал прежний
   набор `screen_*`; доеба поправила тест (полный словарь девяти счётчиков с двумя новыми), код не менялся.
+- П1б, свекровь к1: `tests/test_load_overload.py` в «Файлах» есть, в диффе нет. Решение папы 2026-11-25 (Read
+  `tests/test_mcp_overload.py:600–641`, `tests/test_load_overload.py:19–20`): в границах партии, тест не дописывать —
+  `test_load_overload.py` зовёт только `find_overload`, `hours`, `total_load`, а `overload_report` и до шага
+  проверялся через `get_overload` в `test_mcp_overload.py`; сценарии «Тестов» (ключ `attention` есть, `signals` не
+  изменились) там закрыты. Поправлены «Файлы» (строка тестов 1б, mutmut TESTS) и «Партии» 1б. Внутреннее, не видимое.
+- П1б, make check к1: pyright — `tests/test_load_attention.py:61`, `list[float]` не подходит к
+  `baseline(values: list[float | None])`; кабан сменил тип на `Sequence[float | None]` и убрал `list(past)` в
+  `attention_report` (мелочь мамы к1); тест не менялся. Свекровь к1, (2) «на выходе П1б» — в «Приёмке» после make check.
 
 **Партия 1: сигнатуры** (предложение; доеба вправе уточнить в тестах, расхождение — через папу).
 

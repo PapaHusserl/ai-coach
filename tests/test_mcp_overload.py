@@ -595,3 +595,47 @@ def test_overload_stress_without_later_entry_value_is_kept(conn: sqlite3.Connect
         feel(conn, day, "21:00:00", score=4, stress=5 if number < 3 else 1)
         feel(conn, day, "22:30:00", score=4, mood=3)
     assert "recovery_drop" in kinds(conn)
+
+
+# --- attention (Н8, партия 1б, Р7 = 1, Р8 = 1) ---
+
+YESTERDAY = shift(DAY, -1)
+
+
+def test_overload_has_attention_of_yesterday(conn: sqlite3.Connection) -> None:
+    attention = call(conn, "get_overload", date=DAY)["attention"]
+    assert attention["date"] == YESTERDAY
+    assert attention["signals"] == []
+
+
+def test_attention_long_stretch_is_in_attention_not_in_signals(conn: sqlite3.Connection) -> None:
+    screen(conn, YESTERDAY, "screen_stretch_hours", 2.6)
+    answer = call(conn, "get_overload", date=DAY)
+    assert answer["attention"]["signals"] == [{"kind": "long_stretch", "value": 2.6, "limit": 2.0}]
+    assert "long_stretch" not in kinds(conn)
+
+
+def test_attention_switching_high_is_in_attention_not_in_signals(conn: sqlite3.Connection) -> None:
+    for number in range(2, 16):
+        screen(conn, shift(DAY, -number), "screen_switches_hour", 8.0)
+    screen(conn, YESTERDAY, "screen_switches_hour", 12.0)
+    answer = call(conn, "get_overload", date=DAY)
+    found = answer["attention"]["signals"]
+    assert found == [{"kind": "switching_high", "value": 12.0, "limit": 12.0}]
+    assert "switching_high" not in kinds(conn)
+
+
+def test_attention_does_not_change_the_old_signals(conn: sqlite3.Connection) -> None:
+    heavy_days(conn, shift(DAY, -13), 14)
+    before = kinds(conn)
+    screen(conn, YESTERDAY, "screen_stretch_hours", 3.0)
+    assert kinds(conn) == before
+    assert "total_streak" in before
+
+
+def test_snapshot_overload_has_attention(conn: sqlite3.Connection) -> None:
+    screen(conn, YESTERDAY, "screen_stretch_hours", 2.6)
+    section = call(conn, "get_morning_snapshot", date=DAY)["overload"]
+    assert section["attention"]["date"] == YESTERDAY
+    assert [s["kind"] for s in section["attention"]["signals"]] == ["long_stretch"]
+    assert section["signals"] == []
