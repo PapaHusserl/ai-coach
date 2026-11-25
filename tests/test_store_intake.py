@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 
 from ai_coach.store.intake import delete_intake, list_intake, log_intake
+from ai_coach.store.meds import add_med, delete_med
 from ai_coach.store.sport_nutrition import add_supplement, delete_supplement
 
 NOW = "2026-10-08 10:00:00"
@@ -75,7 +76,7 @@ def test_log_zero_dose_is_refused(conn: sqlite3.Connection) -> None:
 
 def test_log_bad_kind_is_refused(conn: sqlite3.Connection) -> None:
     with pytest.raises(sqlite3.IntegrityError):
-        new_intake(conn, new_supplement(conn), kind="med")
+        new_intake(conn, new_supplement(conn), kind="protocol")
 
 
 def test_several_intakes_per_day_are_allowed(conn: sqlite3.Connection) -> None:
@@ -162,3 +163,79 @@ def test_delete_keeps_other_rows(conn: sqlite3.Connection) -> None:
     kept = new_intake(conn, sid)
     delete_intake(conn, gone, LATER)
     assert log_ids(conn) == [kept]
+
+
+# --- П8 партия 2: приёмы курсов (kind = med) ---
+
+
+def new_course(conn: sqlite3.Connection, name: str = "витамин d") -> int:
+    return add_med(
+        conn,
+        {
+            "name": name,
+            "kind": "vitamin",
+            "dose": 2000.0,
+            "unit": "iu",
+            "schedule": "daily",
+            "start_date": "2026-10-01",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+
+
+def course_values(item_id: int, day: str = DAY) -> dict:
+    return {"item_id": item_id, "date": day, "taken_at": f"{day} 09:00:00"}
+
+
+def test_course_intake_is_listed_with_name_and_unit_of_course(conn: sqlite3.Connection) -> None:
+    cid = new_course(conn)
+    lid = log_intake(conn, course_values(cid), "med")
+    [row] = list_intake(conn, DAY, DAY, "med")
+    assert (row["id"], row["kind"], row["item_id"]) == (lid, "med", cid)
+    assert (row["name"], row["unit"], row["dose"]) == ("витамин d", "iu", None)
+
+
+def test_course_intake_is_not_in_supplement_list(conn: sqlite3.Connection) -> None:
+    log_intake(conn, course_values(new_course(conn)), "med")
+    assert list_intake(conn, DAY, DAY) == []
+
+
+def test_supplement_intake_is_not_in_course_list(conn: sqlite3.Connection) -> None:
+    new_intake(conn, new_supplement(conn))
+    assert list_intake(conn, DAY, DAY, "med") == []
+
+
+def test_supplement_and_course_with_same_item_id_do_not_mix(conn: sqlite3.Connection) -> None:
+    sid = new_supplement(conn, "креатин")
+    cid = new_course(conn)
+    assert sid == cid
+    new_intake(conn, sid)
+    log_intake(conn, course_values(cid), "med")
+    assert [r["name"] for r in list_intake(conn, DAY, DAY)] == ["креатин"]
+    assert [r["name"] for r in list_intake(conn, DAY, DAY, "med")] == ["витамин d"]
+
+
+def test_deleted_course_is_still_listed_with_name(conn: sqlite3.Connection) -> None:
+    cid = new_course(conn)
+    log_intake(conn, course_values(cid), "med")
+    delete_med(conn, cid, LATER)
+    assert [r["name"] for r in list_intake(conn, DAY, DAY, "med")] == ["витамин d"]
+
+
+def test_delete_course_intake_with_med_kind(conn: sqlite3.Connection) -> None:
+    lid = log_intake(conn, course_values(new_course(conn)), "med")
+    assert delete_intake(conn, lid, LATER, "med") is True
+    assert list_intake(conn, DAY, DAY, "med") == []
+
+
+def test_delete_course_intake_as_supplement_is_refused(conn: sqlite3.Connection) -> None:
+    lid = log_intake(conn, course_values(new_course(conn)), "med")
+    assert delete_intake(conn, lid, LATER) is False
+    assert len(list_intake(conn, DAY, DAY, "med")) == 1
+
+
+def test_delete_supplement_intake_as_med_is_refused(conn: sqlite3.Connection) -> None:
+    lid = new_intake(conn, new_supplement(conn))
+    assert delete_intake(conn, lid, LATER, "med") is False
+    assert log_ids(conn) == [lid]

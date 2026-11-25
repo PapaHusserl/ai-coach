@@ -96,7 +96,7 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "нет - не отдаётся), "
         "habits_today (привычки на день самочувствия: name, unit, done true - сделано, false - "
         "отмечено «нет», null - не отмечена, amount; нет привычек - rows пуст), "
-        "meds_today (курсы на сегодня; "
+        "meds_today (курсы на сегодня, taken - приём сегодня отмечен; "
         "training_day/before/after - только в день тренировки; нет - не отдаётся), "
         "catalog (сколько протоколов, добавок, курсов в справочниках; 0 - пусто), "
         "agenda (события тренера в календаре: черновики и записанные, день назад и 7 вперёд). "
@@ -392,7 +392,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         tools.supplement_log,
         "Журнал приёма добавок за период (date_from, date_to - YYYY-MM-DD, до 92 дней): id, "
         "item_id, name, date, taken_at, dose (null - по норме добавки), unit, note. "
-        "Отмечает пользователь командами coach supplement take / untake.",
+        "kind = med - приёмы курсов (без kind - добавок). Добавки отмечает пользователь "
+        "командами coach supplement take / untake, курсы - только в пульте.",
     ),
     "get_meds": (
         tools.meds,
@@ -400,7 +401,8 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "(vitamin/mineral/electrolyte/otc), dose, unit, schedule, time_note, start_date, "
         "end_date (null - бессрочно), note. date - YYYY-MM-DD: только курсы этого дня "
         "(training_day/before/after - только если в этот день есть тренировка); без date - "
-        "все живые курсы, в т.ч. закончившиеся. "
+        "все живые курсы, в т.ч. закончившиеся. С date у каждого курса taken - за этот день есть "
+        "приём (отмечает пользователь в пульте). "
         "Меняет пользователь командами coach med.",
     ),
     "get_food_pending": (

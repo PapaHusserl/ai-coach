@@ -17,6 +17,7 @@ from ai_coach.web.day_marks import due, empty_marks, marks_for_day
 from ai_coach.web.food import meal_view, offers_view
 from ai_coach.web.forms import form_view
 from ai_coach.web.header import header_view
+from ai_coach.web.intake import intake_view
 from ai_coach.web.marks import COOKING
 from ai_coach.web.training import fact, plan_view
 from ai_coach.web.who5 import who5_view
@@ -76,6 +77,7 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
                     conn, day.isoformat(), current_profile(conn, day.isoformat())
                 )
                 meal = meal_view(conn, day.isoformat(), target)
+                meal["intake"] = intake_view(conn, day.isoformat())
             item["meal"] = {
                 **meal,
                 "food": mine["food"],

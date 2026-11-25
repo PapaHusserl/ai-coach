@@ -404,6 +404,18 @@ def test_settings_allow_has_no_edit_delete_or_wildcard() -> None:
     assert not [r for r in allow if r.startswith("Bash(uv run coach med") and ":*" not in r]
 
 
+def test_med_has_no_take_log_untake_commands() -> None:
+    commands = {c.name for c in main.med_app.registered_commands}
+    assert commands == {"add", "list", "show", "edit", "delete"}
+
+
+@pytest.mark.parametrize("name", ["take", "log", "untake"])
+def test_med_take_log_untake_are_not_in_help(name: str) -> None:
+    result = run("med", "--help")
+    assert result.exit_code == 0
+    assert f" {name} " not in result.output
+
+
 def test_settings_allow_keeps_step_17_rules() -> None:
     allow = json.loads(SETTINGS.read_text())["permissions"]["allow"]
     assert "Bash(uv run coach supplement add:*)" in allow

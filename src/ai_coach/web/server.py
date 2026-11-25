@@ -25,6 +25,7 @@ from ai_coach.web import syncer, training
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError, NoEvent
 from ai_coach.web.header import save_weight, sync_view
+from ai_coach.web.intake import save_intake
 from ai_coach.web.marks import save_mark
 from ai_coach.web.meeting import apply_meeting, meeting_view
 from ai_coach.web.pantry import pantry_view, save_pantry
@@ -90,6 +91,7 @@ POST_ROUTES: dict[str, Callable[[sqlite3.Connection, dict[str, Any], datetime], 
     "/api/event": apply_event,
     "/api/weight": save_weight,
     "/api/pantry": save_pantry,
+    "/api/intake": save_intake,
     "/api/todo": save_todo,
     "/api/meeting": apply_meeting,
 }

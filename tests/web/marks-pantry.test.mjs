@@ -44,7 +44,7 @@ const row = {
 	end_at: `${DAY}T09:00:00`,
 	due: false,
 	marks,
-	meal: { remaining: null, food: [], offers: [{ id: 7, name: "Рис", items: [ITEM] }] },
+	meal: { remaining: null, food: [], intake: [], offers: [{ id: 7, name: "Рис", items: [ITEM] }] },
 };
 const view = { date: DAY, now: `${DAY}T08:30:00` };
 

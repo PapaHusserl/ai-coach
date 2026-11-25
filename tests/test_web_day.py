@@ -11,7 +11,9 @@ from workload_fakes import coach_event
 from ai_coach.agenda.repeat import moved, on_day
 from ai_coach.profile.service import set_value
 from ai_coach.store.agenda import add_event
+from ai_coach.store.intake import log_intake
 from ai_coach.store.journal import add_food, add_slip, add_weight, add_wellbeing, add_who5
+from ai_coach.store.meds import add_med
 from ai_coach.store.workload import replace_calendar_window
 from ai_coach.web.day import day_view
 from ai_coach.web.errors import MarkError
@@ -574,6 +576,84 @@ def test_cooking_is_never_due(conn: sqlite3.Connection) -> None:
     cooking = meal(conn, title="Готовка")
     row = by_id(view(conn, "15:00"), cooking)
     assert row["due"] is False
+
+
+def add_course(conn: sqlite3.Connection, name: str = "Витамин D") -> int:
+    stamp = "2026-11-01 10:00:00"
+    course = add_med(
+        conn,
+        {
+            "name": name,
+            "kind": "vitamin",
+            "dose": 2000.0,
+            "unit": "iu",
+            "schedule": "daily",
+            "time_note": "утром",
+            "start_date": "2026-11-01",
+            "created_at": stamp,
+            "updated_at": stamp,
+        },
+    )
+    conn.commit()
+    return course
+
+
+def test_every_meal_item_has_same_intake_list(conn: sqlite3.Connection) -> None:
+    course = add_course(conn)
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    result = view(conn, "15:00")
+    expected = [
+        {
+            "kind": "med",
+            "id": course,
+            "name": "Витамин D",
+            "dose": 2000.0,
+            "unit": "iu",
+            "time_note": "утром",
+            "taken": False,
+        }
+    ]
+    assert by_id(result, breakfast)["meal"]["intake"] == expected
+    assert by_id(result, supper)["meal"]["intake"] == expected
+
+
+def test_cooking_has_no_intake(conn: sqlite3.Connection) -> None:
+    add_course(conn)
+    cooking = meal(conn, title="Готовка")
+    assert "meal" not in by_id(view(conn, "15:00"), cooking)
+
+
+def test_meal_intake_is_empty_without_courses_and_supplements(conn: sqlite3.Connection) -> None:
+    breakfast = meal(conn)
+    assert by_id(view(conn, "15:00"), breakfast)["meal"]["intake"] == []
+
+
+def test_meal_intake_shows_taken_in_every_item(conn: sqlite3.Connection) -> None:
+    course = add_course(conn)
+    breakfast = meal(conn)
+    supper = meal(conn, "13:00", "14:00", title="Ужин")
+    log_intake(conn, {"item_id": course, "date": D, "taken_at": f"{D} 09:00:00"}, "med")
+    conn.commit()
+    result = view(conn, "15:00")
+    assert by_id(result, breakfast)["meal"]["intake"][0]["taken"] is True
+    assert by_id(result, supper)["meal"]["intake"][0]["taken"] is True
+
+
+def test_untaken_course_does_not_make_past_meal_with_food_due(conn: sqlite3.Connection) -> None:
+    add_course(conn)
+    breakfast = meal(conn)
+    save_mark(conn, mark(breakfast, "food", text="омлет"), at("08:30"))
+    conn.commit()
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is False
+
+
+def test_taken_course_does_not_clear_due_of_meal_without_food(conn: sqlite3.Connection) -> None:
+    course = add_course(conn)
+    breakfast = meal(conn)
+    log_intake(conn, {"item_id": course, "date": D, "taken_at": f"{D} 09:00:00"}, "med")
+    conn.commit()
+    assert by_id(view(conn, "15:00"), breakfast)["due"] is True
 
 
 def test_cooking_has_no_meal_key_and_breakfast_has(conn: sqlite3.Connection) -> None:

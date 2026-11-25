@@ -3,6 +3,7 @@
     "allow": [
       "mcp__ai-coach",
       "Bash(uv run coach report:*)",
+      "Bash(cat .claude/agents/coach-nutrition/intake.md)",
       "Bash(cat .claude/agents/coach-wellbeing/recovery.md)",
       "Bash(cat .claude/agents/coach-wellbeing/rest.md)",
       "Bash(cat .claude/agents/coach-wellbeing/attention.md)",

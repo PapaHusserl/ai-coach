@@ -8,6 +8,8 @@ import pytest
 from typer.testing import CliRunner
 
 from ai_coach.cli import main
+from ai_coach.store.db import open_db
+from ai_coach.store.intake import log_intake
 
 runner = CliRunner()
 SETTINGS = Path(__file__).resolve().parent.parent / ".claude" / "settings.json"
@@ -309,6 +311,32 @@ def test_untake_marks_row_and_hides_from_log(isolated: Path) -> None:
     assert result.exit_code == 0
     assert intake_rows(isolated)[0]["deleted_at"] is not None
     assert "лишний" not in run("supplement", "log").output
+    assert "Приёмов нет." in run("supplement", "log").output
+
+
+def take_course(db: Path) -> int:
+    """Курс и его приём за сегодня, как из пульта (команды отметки у курса нет)."""
+    run("med", "add", "витамин D", "--kind", "vitamin", "--dose", "25", "--unit", "mcg")
+    conn = open_db(db)
+    try:
+        values = {"item_id": 1, "date": TODAY, "taken_at": f"{TODAY} 09:00:00"}
+        lid = log_intake(conn, values, "med")
+        conn.commit()
+    finally:
+        conn.close()
+    return lid
+
+
+def test_untake_refuses_course_intake_and_keeps_it(isolated: Path) -> None:
+    lid = take_course(isolated)
+    result = run("supplement", "untake", str(lid))
+    assert result.exit_code == 1
+    assert f"Приёма {lid} нет или он уже удалён." in result.output
+    assert intake_rows(isolated)[0]["deleted_at"] is None
+
+
+def test_supplement_log_does_not_show_course_intake(isolated: Path) -> None:
+    take_course(isolated)
     assert "Приёмов нет." in run("supplement", "log").output
 
 

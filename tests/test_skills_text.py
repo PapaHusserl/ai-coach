@@ -284,8 +284,12 @@ def test_agent_has_get_supplement_log_in_tools() -> None:
     assert "mcp__ai-coach__get_supplement_log" in agent_tools()
 
 
+INTAKE_FILE = ROOT / "agents" / "coach-nutrition" / "intake.md"
+COURSE_PHRASE = "Курс отмечается в пульте: окно приёма пищи, блок „Добавки к приёму“."
+
+
 def test_agent_describes_supplement_take_after_yes() -> None:
-    text = agent_text()
+    text = agent_text() + "\n" + INTAKE_FILE.read_text()
     assert "uv run coach supplement take" in text
     assert "get_supplement_log" in text
     assert "после «да»" in text
@@ -439,6 +443,54 @@ def test_meal_skill_allows_get_food_and_get_pantry() -> None:
 def test_food_skill_allows_get_pantry() -> None:
     head = (SKILLS / "coach-food" / "SKILL.md").read_text().split("---")[1]
     assert "mcp__ai-coach__get_pantry" in head
+
+
+# --- П8, партия 2: вынос приёма добавок и правило про курсы (Р15 = 1) ---
+
+
+def test_nutrition_points_to_intake_file() -> None:
+    text = (ROOT / "agents" / "coach-nutrition.md").read_text()
+    assert "coach-nutrition/intake.md" in text
+
+
+def test_nutrition_keeps_at_least_200_bytes_of_room() -> None:
+    from text_limits import AGENT_LIMITS
+
+    size = len((ROOT / "agents" / "coach-nutrition.md").read_bytes())
+    assert AGENT_LIMITS["coach-nutrition.md"] - size >= 200
+
+
+def test_intake_file_sends_course_marks_to_pult() -> None:
+    text = INTAKE_FILE.read_text()
+    assert COURSE_PHRASE in text
+    assert "get_meds" in text
+    assert "coach med take" not in text
+
+
+def test_intake_file_keeps_supplement_rules() -> None:
+    text = INTAKE_FILE.read_text()
+    assert "uv run coach supplement take" in text
+    assert "после «да»" in text
+    assert "get_supplement_log" in text
+
+
+def test_intake_file_is_within_side_limit() -> None:
+    assert len(INTAKE_FILE.read_bytes()) <= SIDE_FILE_LIMIT
+
+
+def test_allow_can_read_intake_file() -> None:
+    assert "Bash(cat .claude/agents/coach-nutrition/intake.md)" in ALLOW
+
+
+def test_morning_texts_have_course_phrase() -> None:
+    texts = [(SKILLS / "coach-morning" / "SKILL.md").read_text()]
+    texts += [p.read_text() for p in extra_files("coach-morning")]
+    assert any(COURSE_PHRASE in text for text in texts)
+
+
+def test_morning_skill_names_untaken_course() -> None:
+    text = (SKILLS / "coach-morning" / "SKILL.md").read_text()
+    assert "taken" in text
 
 
 def test_server_describes_first_run_today_in_snapshot() -> None:

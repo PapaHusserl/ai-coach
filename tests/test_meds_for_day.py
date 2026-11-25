@@ -5,6 +5,7 @@ import pytest
 
 from ai_coach.meds import public_meds, short_meds
 from ai_coach.sport_nutrition import day_nutrition, has_training
+from ai_coach.store.intake import delete_intake, log_intake
 from ai_coach.store.meds import add_med
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.sport_nutrition import add_supplement
@@ -171,6 +172,53 @@ def test_short_meds_filtered_like_public(conn: sqlite3.Connection) -> None:
     assert [r["name"] for r in short_meds(conn, DAY)] == ["дейли"]
     new_workout(conn)
     assert [r["name"] for r in short_meds(conn, DAY)] == ["дейли", "тренировочный"]
+
+
+def take(conn: sqlite3.Connection, med_id: int, day: str = DAY) -> int:
+    return log_intake(conn, {"item_id": med_id, "date": day, "taken_at": f"{day} 09:00:00"}, "med")
+
+
+def test_course_without_intake_is_not_taken(conn: sqlite3.Connection) -> None:
+    new_med(conn, "дейли")
+    assert public_meds(conn, DAY)[0]["taken"] is False
+
+
+def test_course_with_intake_on_day_is_taken(conn: sqlite3.Connection) -> None:
+    take(conn, new_med(conn, "дейли"))
+    assert public_meds(conn, DAY)[0]["taken"] is True
+
+
+def test_intake_of_other_day_does_not_make_course_taken(conn: sqlite3.Connection) -> None:
+    take(conn, new_med(conn, "дейли"), "2026-10-07")
+    assert public_meds(conn, DAY)[0]["taken"] is False
+
+
+def test_deleted_intake_does_not_make_course_taken(conn: sqlite3.Connection) -> None:
+    lid = take(conn, new_med(conn, "дейли"))
+    delete_intake(conn, lid, NOW, "med")
+    assert public_meds(conn, DAY)[0]["taken"] is False
+
+
+def test_taken_only_for_the_course_taken(conn: sqlite3.Connection) -> None:
+    take(conn, new_med(conn, "первый"))
+    new_med(conn, "второй")
+    assert {r["name"]: r["taken"] for r in public_meds(conn, DAY)} == {
+        "первый": True,
+        "второй": False,
+    }
+
+
+def test_supplement_intake_with_same_id_does_not_make_course_taken(
+    conn: sqlite3.Connection,
+) -> None:
+    med_id = new_med(conn, "дейли")
+    log_intake(conn, {"item_id": med_id, "date": DAY, "taken_at": f"{DAY} 09:00:00"})
+    assert public_meds(conn, DAY)[0]["taken"] is False
+
+
+def test_short_meds_has_taken(conn: sqlite3.Connection) -> None:
+    take(conn, new_med(conn, "дейли"))
+    assert short_meds(conn, DAY)[0]["taken"] is True
 
 
 def test_public_meds_has_no_service_fields(conn: sqlite3.Connection) -> None:

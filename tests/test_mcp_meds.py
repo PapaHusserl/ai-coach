@@ -4,6 +4,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_fakes import call, call_text, rows, tool_names
 
+from ai_coach.store.intake import delete_intake, log_intake
 from ai_coach.store.meds import add_med, delete_med
 
 DAY = "2026-10-08"
@@ -97,6 +98,35 @@ def test_get_is_capped(conn: sqlite3.Connection, date: str | None) -> None:
     result = call(conn, "get_meds") if date is None else call(conn, "get_meds", date=date)
     assert result["truncated"] is True
     assert len(result["rows"]) <= 60
+
+
+def take_med(conn: sqlite3.Connection, med_id: int, day: str = DAY) -> int:
+    values = {"item_id": med_id, "date": day, "taken_at": f"{day} 09:00:00"}
+    return log_intake(conn, values, "med")
+
+
+def test_get_meds_with_date_has_taken_flag(conn: sqlite3.Connection) -> None:
+    take_med(conn, new_med(conn, "принятый"))
+    new_med(conn, "нет")
+    found = {r["name"]: r["taken"] for r in rows(conn, "get_meds", date=DAY)}
+    assert found == {"принятый": True, "нет": False}
+
+
+def test_get_meds_taken_depends_on_date(conn: sqlite3.Connection) -> None:
+    take_med(conn, new_med(conn), "2026-10-07")
+    assert rows(conn, "get_meds", date=DAY)[0]["taken"] is False
+
+
+def test_get_meds_taken_is_false_after_untake(conn: sqlite3.Connection) -> None:
+    delete_intake(conn, take_med(conn, new_med(conn)), NOW, "med")
+    assert rows(conn, "get_meds", date=DAY)[0]["taken"] is False
+
+
+def test_snapshot_meds_today_has_taken_flag(conn: sqlite3.Connection) -> None:
+    take_med(conn, new_med(conn, "принятый"))
+    new_med(conn, "нет")
+    found = {r["name"]: r["taken"] for r in snapshot(conn)["meds_today"]["rows"]}
+    assert found == {"принятый": True, "нет": False}
 
 
 # --- snapshot ---

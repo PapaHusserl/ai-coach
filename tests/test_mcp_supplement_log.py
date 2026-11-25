@@ -7,6 +7,7 @@ from mcp_fakes import call, call_text, rows, tool_names
 from ai_coach.mcp_server.snapshot import SNAPSHOT_CHARS
 from ai_coach.mcp_server.tools import MAX_CHARS
 from ai_coach.store.intake import delete_intake, log_intake
+from ai_coach.store.meds import add_med
 from ai_coach.store.plans import add_planned_workout
 from ai_coach.store.sport_nutrition import add_supplement, delete_supplement
 
@@ -56,6 +57,50 @@ def log(conn: sqlite3.Connection, start: str = DAY, end: str = DAY) -> dict:
 
 def test_tool_exists(conn: sqlite3.Connection) -> None:
     assert "get_supplement_log" in tool_names(conn)
+
+
+def new_course(conn: sqlite3.Connection) -> int:
+    return add_med(
+        conn,
+        {
+            "name": "витамин d",
+            "kind": "vitamin",
+            "dose": 2000.0,
+            "unit": "iu",
+            "schedule": "daily",
+            "start_date": "2026-10-01",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+
+
+def take_course(conn: sqlite3.Connection, med_id: int) -> int:
+    values = {"item_id": med_id, "date": DAY, "taken_at": f"{DAY} 09:00:00"}
+    return log_intake(conn, values, "med")
+
+
+def test_get_with_kind_med_returns_course_intakes(conn: sqlite3.Connection) -> None:
+    lid = take_course(conn, new_course(conn))
+    take(conn, new_supplement(conn))
+    found = call(conn, "get_supplement_log", date_from=DAY, date_to=DAY, kind="med")["rows"]
+    assert [(r["id"], r["name"], r["unit"], r["kind"]) for r in found] == [
+        (lid, "витамин d", "iu", "med")
+    ]
+
+
+def test_get_with_foreign_kind_is_refused(conn: sqlite3.Connection) -> None:
+    take_course(conn, new_course(conn))
+    with pytest.raises(ToolError, match="kind: supplement или med."):
+        call(conn, "get_supplement_log", date_from=DAY, date_to=DAY, kind="protocol")
+
+
+def test_get_without_kind_has_only_supplements(conn: sqlite3.Connection) -> None:
+    take_course(conn, new_course(conn))
+    take(conn, new_supplement(conn))
+    assert [r["name"] for r in rows(conn, "get_supplement_log", date_from=DAY, date_to=DAY)] == [
+        "креатин"
+    ]
 
 
 def test_get_on_empty_database(conn: sqlite3.Connection) -> None:

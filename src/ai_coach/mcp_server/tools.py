@@ -333,11 +333,16 @@ def sport_nutrition_for(
     return day_nutrition(conn, date)
 
 
-def supplement_log(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict[str, Any]:
-    """Приёмы добавок за период (включительно): id, item_id, name, date, taken_at, dose (None -
-    по норме добавки), unit, note. Только чтение: приём отмечает пользователь."""
+def supplement_log(
+    conn: sqlite3.Connection, date_from: str, date_to: str, kind: str = "supplement"
+) -> dict[str, Any]:
+    """Приёмы добавок (kind supplement) или курсов (kind med) за период (включительно): id,
+    item_id, name, date, taken_at, dose (None - по норме), unit, note. Только чтение: приём
+    отмечает пользователь."""
     period(date_from, date_to)
-    return cap(list_intake(conn, date_from, date_to), newest=True)
+    if kind not in ("supplement", "med"):
+        raise ToolError("kind: supplement или med.")
+    return cap(list_intake(conn, date_from, date_to, kind), newest=True)
 
 
 def meds(

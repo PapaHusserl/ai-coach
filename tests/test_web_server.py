@@ -282,6 +282,83 @@ def test_post_text_food_mark_has_no_pantry_key(port: int, db_path: Path) -> None
     assert "pantry" not in json.loads(answer)
 
 
+def add_course_today(db_path: Path) -> int:
+    from ai_coach.store.meds import add_med
+
+    stamp = "2026-01-01 10:00:00"
+    conn = open_db(db_path)
+    try:
+        course = add_med(
+            conn,
+            {
+                "name": "Витамин D",
+                "kind": "vitamin",
+                "dose": 2000.0,
+                "unit": "iu",
+                "schedule": "daily",
+                "start_date": "2026-01-01",
+                "created_at": stamp,
+                "updated_at": stamp,
+            },
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return course
+
+
+def intake_body(course: int, taken: int) -> dict[str, Any]:
+    day = datetime.now().date().isoformat()
+    return {"kind": "med", "item_id": course, "date": day, "taken": taken}
+
+
+def intake_rows(db_path: Path) -> list[Any]:
+    conn = open_db(db_path)
+    try:
+        return conn.execute("SELECT * FROM intake_log WHERE deleted_at IS NULL").fetchall()
+    finally:
+        conn.close()
+
+
+def test_post_intake_writes_course_intake(port: int, db_path: Path) -> None:
+    course = add_course_today(db_path)
+    status, _ = post(port, intake_body(course, 1), path="/api/intake")
+    assert status == 200
+    [row] = intake_rows(db_path)
+    assert (row["kind"], row["item_id"], row["dose"]) == ("med", course, None)
+
+
+def test_post_intake_untaken_removes_it(port: int, db_path: Path) -> None:
+    course = add_course_today(db_path)
+    post(port, intake_body(course, 1), path="/api/intake")
+    assert post(port, intake_body(course, 0), path="/api/intake")[0] == 200
+    assert intake_rows(db_path) == []
+
+
+@pytest.mark.parametrize("origin", [None, "http://evil.example", "http://127.0.0.1:1"])
+def test_post_intake_without_own_origin_is_403_and_writes_nothing(
+    port: int, db_path: Path, origin: str | None
+) -> None:
+    course = add_course_today(db_path)
+    status, _ = post(port, intake_body(course, 1), path="/api/intake", origin=origin)
+    assert status == 403
+    assert intake_rows(db_path) == []
+
+
+@pytest.mark.parametrize("taken", [1, 0])
+def test_post_intake_replies_with_taken(port: int, db_path: Path, taken: int) -> None:
+    course = add_course_today(db_path)
+    status, body = post(port, intake_body(course, taken), path="/api/intake")
+    assert status == 200
+    assert json.loads(body) == {"taken": taken}
+
+
+def test_post_intake_of_foreign_item_is_400(port: int, db_path: Path) -> None:
+    add_course_today(db_path)
+    assert post(port, intake_body(999, 1), path="/api/intake")[0] == 400
+    assert intake_rows(db_path) == []
+
+
 def test_post_done_answers_null_id(port: int, db_path: Path) -> None:
     event_id = add_task(db_path, "practice")
     status, answer = post(port, mark_body(event_id, mark="done", done=1))

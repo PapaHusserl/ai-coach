@@ -1472,6 +1472,16 @@ def test_overload_recovery_card_confounders_do_not_name_sleep() -> None:
     assert "время года" in text
 
 
+def test_supplements_topic_sends_course_marks_to_pult() -> None:
+    text = topic("supplements.md")
+    assert "Добавки к приёму" in text
+    assert "coach med take" not in text
+
+
+def test_food_topic_mentions_intake_block() -> None:
+    assert "Добавки к приёму" in topic("food.md")
+
+
 def test_help_index_forms_and_weight_food_are_separate_lines() -> None:
     lines = index_topic_lines()
     forms = [ln for ln in lines if ln.startswith("- Формы - ")]

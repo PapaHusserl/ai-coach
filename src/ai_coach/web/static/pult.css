@@ -557,6 +557,17 @@ nav button[aria-selected="true"] {
 	color: var(--bg);
 }
 
+/* «Добавки к приёму»: вся строка — кнопка шириной в окно (П8, Р17). */
+.intake {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.intake button.intake-row {
+	text-align: left;
+}
+
 .hint {
 	color: var(--muted);
 }

@@ -21,6 +21,7 @@ import { el } from "./dom.js";
 import { formFields } from "./form-fields.js";
 import { formCanSave, formPayload, withFormTab } from "./form-model.js";
 import { flowField, hoursFields, scale } from "./marks-fields.js";
+import { intakeNodes, postIntake } from "./intake-pane.js";
 import { offersBlock } from "./offers-pane.js";
 import { pantryLines } from "./pantry-lines.js";
 import { toast } from "./toast.js";
@@ -30,7 +31,7 @@ import { who5Fields } from "./who5-fields.js";
 export * from "./marks-model.js";
 export { pantryLines };
 
-const state = { id: null, day: null, tab: null, future: false, past: false, forms: {}, reload: null, meal: null, offer: 0, pantry: [], training: null, who5: null, form: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, dayAhead: false, past: false, forms: {}, reload: null, meal: null, offer: 0, pantry: [], training: null, who5: null, form: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -61,15 +62,17 @@ function showError(text) {
 }
 
 // Пока запись уходит и список перезагружается, второй клик не создаёт вторую запись.
-async function send(tab, text, extra = {}) {
+async function guarded(action) {
 	if (state.busy) return;
 	state.busy = true;
 	try {
-		await sendNow(tab, text, extra);
+		await action();
 	} finally {
 		state.busy = false;
 	}
 }
+
+const send = (tab, text, extra = {}) => guarded(() => sendNow(tab, text, extra));
 
 async function sendNow(tab, text, extra) {
 	showError("");
@@ -108,6 +111,7 @@ function fillMeal() {
 	ui.saved.textContent = `Записано ✓ ${eaten}`;
 	ui.saved.hidden = eaten === "";
 	ui.pantry.replaceChildren(...state.pantry.map((line) => el("p", "bar-label", line)));
+	ui.intake.replaceChildren(...intakeNodes(state.meal, state.dayAhead ? null : toggleIntake)); // отметки нет только у будущего дня (Р12)
 	ui.left.textContent = remainingText(state.meal);
 	fillOffers();
 }
@@ -139,6 +143,9 @@ function takeOffer(offer) {
 	send("food", "", { offer_id: offer.id });
 }
 
+// Клик по строке «Добавки к приёму»: отметка или снятие (taken 1 | 0) за день окна, список перезагружается.
+const toggleIntake = (item, taken) => guarded(() => postIntake(item, taken, state.day, state.reload));
+
 // Кнопки «Сделал» / «Пропустил»: клик сразу отправляет.
 function doneChoices() {
 	const line = el("div", "choices");
@@ -162,11 +169,12 @@ function saveLabel(food, offers) {
 // Верх окна еды: «Записано ✓», остаток дня, варианты блюд.
 function mealHead(box) {
 	ui.saved = el("p", "saved");
+	ui.intake = el("div");
 	ui.pantry = el("div");
 	ui.left = el("p", "bar-label");
 	ui.offers = el("div");
 	fillMeal();
-	box.append(ui.saved, ui.pantry, ui.left, ui.offers);
+	box.append(ui.intake, ui.saved, ui.pantry, ui.left, ui.offers);
 }
 
 // Поля вкладки tab (шкалы, WHO-5, форма тренера, часы и погружение чек-ина); save — кнопка «Сохранить».
@@ -189,6 +197,7 @@ function buildForm() {
 	const box = ui.form;
 	box.replaceChildren();
 	ui.saved = null;
+	ui.intake = null;
 	ui.pantry = null;
 	ui.left = null;
 	ui.offers = null;
@@ -281,6 +290,7 @@ export function mountMarks(item, row, view) {
 	state.who5 = row.who5 ?? null;
 	state.form = row.form ?? null;
 	state.past = isPast(row, view.now);
+	state.dayAhead = view.date > view.now.slice(0, 10);
 	if (state.id !== row.id || state.day !== view.date) startPane(row, view);
 	const future = isFuture(row, view.now);
 	if (future !== state.future) {

@@ -47,7 +47,7 @@ def test_intake_kind_supplement_is_allowed(conn: sqlite3.Connection) -> None:
     conn.execute(intake(kind="'supplement'"))
 
 
-@pytest.mark.parametrize("kind", ["med", "protocol", ""])
+@pytest.mark.parametrize("kind", ["protocol", ""])
 def test_intake_bad_kind_is_refused(conn: sqlite3.Connection, kind: str) -> None:
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(intake(kind=f"'{kind}'"))
