@@ -162,6 +162,8 @@ docs/research-switching.md «Правила тренера»).
 - Р11 (1) — вывод `coach screen` не меняется.
 - Р12а (1), Р12б (1) — фразы дословно по «Развилкам»; Р12в (1) — две отдельные фразы.
 - Р13 (1) — разовый `uv run coach screen --days 45` после партии 1а, по «да» Влада.
+- Р14а (1) «лента не по числу периодов»; Р14б (1) «aw-server вернул событие ленты без времени» — Влад, окна
+  2026-11-25, рекомендация папы.
 
 ## Файлы
 
@@ -171,8 +173,8 @@ docs/research-switching.md «Правила тренера»).
 | Файл | Что | Видимое |
 |---|---|---|
 | `spikes/calibration/switching.py` (новый) | замер из «Замеров»: счёт дней сигнала по вариантам; только чтение, печать в терминал | нет (только счёт дней) |
-| `src/ai_coach/workload/timeline.py` (новый) | `switch_rate`, `longest_stretch` — новые, чистые; константы `MIN_EVENT_SECONDS`, `MIN_ACTIVE_HOURS`, `PAUSE_MINUTES` | что считается переключением — Р2, Р3; отрезком и паузой — Р6 |
-| `src/ai_coach/workload/screen.py` | `timeline_query`, `segment_class`, `AwReader.timeline` — новые; `ScreenReader` — второй метод; `read_screen` (:186) — два новых счётчика | значения полей дня — Р2, Р3, Р6 |
+| `src/ai_coach/workload/timeline.py` (новый) | `switch_rate`, `longest_stretch` — новые, чистые; `timeline_rows` — новая (строки двух счётчиков дня); `counter_row` и `SOURCE` — перенос из `screen.py` (риск 6); константы `MIN_EVENT_SECONDS`, `MIN_ACTIVE_HOURS`, `PAUSE_MINUTES` | что считается переключением — Р2, Р3; отрезком и паузой — Р6 |
+| `src/ai_coach/workload/screen.py` | `timeline_query`, `segment_class`, `AwReader.timeline` — новые; `ScreenReader` — второй метод; `read_screen` (:186) — два новых счётчика | значения полей дня — Р2, Р3, Р6; тексты двух ошибок ленты — Р14 |
 | `src/ai_coach/store/workload.py` | `COUNTER_KINDS` (:10) — `screen_switches_hour`, `screen_stretch_hours` | нет |
 | `src/ai_coach/workload/service.py` | `SCREEN_COUNTERS` (:27) — два вида; докстринг `workload_series` (:133) | имена полей `get_workload` — умолчание 2 |
 | `src/ai_coach/mcp_server/snapshot.py` | `WORKLOAD_SKIP` (:67) и `AHEAD_SKIP` (:75) — два новых вида | нет (в сводке — ключ `overload.attention`) |
@@ -204,7 +206,7 @@ docs/research-switching.md «Правила тренера»).
 `find_attention`, `attention_report`; коды `switching_high`, `long_stretch`; поля `screen_switches_hour`,
 `screen_stretch_hours`; слово `attention`.
 
-mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate`, `:longest_stretch` — новые;
+mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate`, `:longest_stretch`, `:timeline_rows` — новые;
 `ai_coach.workload.screen:timeline_query`, `:segment_class` — новые; `ai_coach.workload.screen:read_screen`;
 `ai_coach.load.attention:baseline`, `:find_attention`, `:attention_report` — новые;
 `ai_coach.load.overload:overload_report`. TESTS — `tests/test_workload_timeline.py` и `tests/test_load_attention.py`
@@ -250,6 +252,9 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
 
 - П0 на выходе (оркестратор, 2026-11-25): прогон скрипта совпал с «Замерами» (кабан, мама, свекровь — по
   разу); в диффе и выводе только счёт дней — `grep` по коду и выводу, названий приложений и окон нет.
+- П1а на выходе (оркестратор, 2026-11-25): `make check` OK (7459 passed, 12:39) на последней правке; по «да» Влада
+  `uv run coach screen --days 45` (Р13); `sqlite3 -readonly`: за 2026-10-12…11-24 дней с `screen_switches_hour` — 44,
+  с `screen_stretch_hours` — 44.
 
 ## Правки по ревью
 
@@ -257,6 +262,10 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
   (правка оркестратора по документу).
 - П0, свекровь к1: (1) та же строка — исправлено; (2) нет «Приёмки» — раздел добавлен; (3) BACKLOG 181–187
   заведены до партии 3 — отмечено в «Партиях» п. 3. Код не менялся.
+- П1а, мама к1: «можно мержить», замечаний нет. Свекровь к1: (1) «на выходе П1а» в «Приёмке» — после make check и
+  Р13; (2) Р14 в «Развилках» помечена «не решена» — исправлено (решение Влада в «Решениях»).
+- П1а, make check: 1 красный — `test_workload_service.py::test_all_six_screen_counters_are_in_the_row` ждал прежний
+  набор `screen_*`; доеба поправила тест (полный словарь девяти счётчиков с двумя новыми), код не менялся.
 
 **Партия 1: сигнатуры** (предложение; доеба вправе уточнить в тестах, расхождение — через папу).
 
@@ -274,8 +283,28 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
 - `longest_stretch(segments) -> float` (`timeline.py`) — самый длинный рабочий отрезок в часах: рабочие отрезки
   (классы `work`, `challenge`, `hindrance`) склеиваются, пока промежуток между ними короче `PAUSE_MINUTES`; длина — от
   начала первого до конца последнего. Рабочих отрезков нет — 0. Две сотых.
-- `read_screen`: второй вызов читателя — `reader.timeline(periods дня 04:00→04:00)`; на день с событиями —
-  `screen_stretch_hours` всегда, `screen_switches_hour` — когда не `None`.
+- `read_screen`: второй вызов читателя — `reader.timeline(periods дня 04:00→04:00)`; новые счётчики пишутся дню, у
+  которого есть и события `fetch`, и непустая лента: `screen_stretch_hours` всегда (рабочих отрезков в ленте нет —
+  0.0), `screen_switches_hour` — когда не `None`. День с событиями `fetch`, но с пустой лентой новых счётчиков не
+  получает, прежние пишутся как раньше: пустая лента — «не считалось» (`None` в `get_workload`), а не «отрезок 0 ч»;
+  на живом сервере такого дня быть не должно — у обоих запросов одна шапка `query_head`. Ошибкой это не считается
+  (решение папы по вопросу доебы, 2026-11-25, партия 1а; внутреннее, не видимое).
+- Решения папы по хэнд-бэку кабана, 2026-11-25, партия 1а (Read кода: `screen.py:165–178`, `:251–253`,
+  `timeline.py:35–54`):
+  - Проверка `len(timelines) != len(days)` → `ScreenError` в `read_screen` (`screen.py:252`) — принята: зеркало
+    проверки `fetch` (`screen.py:246`), следует из умолчания 10. Текст ошибки — Р14.
+  - `counter_row`, `SOURCE` и `timeline_rows` в `timeline.py` — приняты как смягчение риска 6 вместо записанного там
+    переноса `timeline_query` и `AwReader.timeline`: тем нужны `query_head` и `_post` из `screen.py`, а `screen.py`
+    уже импортирует `timeline.py` — вышел бы круг. `make smells` на дереве — 0 (прогон 2026-11-25).
+  - Событие ленты без читаемого `timestamp` (`screen.py:173`: сейчас `KeyError` / `ValueError`) — должно быть
+    `ScreenError` (умолчание 10): sync и `coach screen` ловят только его (`sync/workload_sync.py:117`,
+    `cli/main.py:408`), иначе падает весь sync. Правит кабан в 1а; текст — Р14.
+  - Три красных теста (`test_title_does_not_reach_rows_or_notes`, `test_sync_through_aw_reader_stores_no_window_titles`,
+    `test_synced_screen_has_no_window_titles_in_mcp_answers`) — правит доеба, код не трогать: подмена HTTP отдаёт один
+    и тот же ответ на любой POST, а запросов теперь два с разным числом периодов; живой сервер отвечает по числу
+    периодов запроса. Подмена отвечает по запросу (по `query` или по числу `timeperiods` в теле), а не по порядку
+    вызовов. Тесты не ослаблять: ответ на запрос ленты — непустой, с `timestamp` и с тем же секретным заголовком,
+    чтобы проверка «заголовок не дошёл до строк, базы и ответов MCP» шла и через ленту, и новые счётчики были записаны.
 - Константы (при Р6а = 1): `MIN_EVENT_SECONDS = 5`, `MIN_ACTIVE_HOURS = 1`, `PAUSE_MINUTES = 5`.
 - `baseline(values) -> float | None` (`attention.py`) — медиана значений без `None`; значений меньше `MIN_BASE_DAYS` —
   `None`.
@@ -314,11 +343,19 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
 - `longest_stretch`: рабочие отрезки 09:00–10:00 и 10:03–11:00 → 2.0 (пауза 3 мин не рвёт); 09:00–10:00 и 10:05–11:00
   → 1.0 (пауза ровно 5 мин рвёт); между рабочими отрезками 6 мин хобби → рвёт; 2 мин хобби → не рвёт; `hindrance` и
   `challenge` — рабочие, отрезок не рвут; рабочих отрезков нет → 0.
-- `read_screen`: день с событиями даёт `screen_switches_hour` и `screen_stretch_hours` рядом с прежними счётчиками;
-  день без событий — ни одного; день с активным экраном меньше 1 ч — `screen_stretch_hours` есть,
-  `screen_switches_hour` нет; прежние счётчики на тех же данных не изменились (существующие тесты
+- `read_screen`: день с событиями и непустой лентой даёт `screen_switches_hour` и `screen_stretch_hours` рядом с
+  прежними счётчиками; день без событий — ни одного; день с событиями, но с пустой лентой — только прежние счётчики
+  (5 строк, как до шага); лента непустая, рабочих отрезков нет (например, только `hobby`) — `screen_stretch_hours`
+  0.0 записан; день с активным экраном меньше 1 ч — `screen_stretch_hours` есть, `screen_switches_hour` нет; прежние счётчики на тех же данных не изменились (существующие тесты
   `test_workload_screen.py` зелёные без правок ожиданий); `ScreenError` ленты — как ошибка `fetch` (замечание «экран:
   …» в итоге sync, остальные источники пишутся).
+- Лента, ошибки и заголовки (добавлено 2026-11-25, партия 1а; ожидание, не проверено): читатель вернул лент не по
+  числу дней → `ScreenError`, строк нет; `AwReader.timeline` на событии без `timestamp` или с нечитаемым →
+  `ScreenError`, в тексте нет названия приложения и заголовка; тексты ошибок до ответа по Р14 не сверять — только тип.
+  Три теста «заголовок не дошёл» (`test_workload_screen.py`, `test_workload_sync.py`,
+  `test_mcp_snapshot_workload.py`): подмена HTTP отвечает по запросу, в ответе ленты — события с `timestamp` и
+  секретным заголовком; заголовка нет в строках, замечаниях, дампе базы, ответах `get_workload` и сводки, а
+  `screen_stretch_hours` за день записан.
 - `timeline_query`: без `merge_events_by_keys`; есть `sort_by_timestamp`; с приложениями созвонов — та же шапка, что у
   `screen_query` (`period_union`); с `[screen.title.*]` — `categorize` по каждому приложению.
 - `workload_series`: день отдаёт оба поля дробными, `None` — счётчика нет. Сводка: в `workload` и `workload_ahead`
@@ -446,6 +483,13 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
   изменится 1 день из 44, и тот внутри недели синка. (2) Без дозагрузки: `switching_high` молчит, пока не наберётся 14
   дней, `long_stretch` работает сразу. (3) Дозагрузка только новых счётчиков отдельным ключом команды — новый код.
   Рекомендую (1). Зависят: «Вне репо», «Партии» 1а, строка «На живой базе».
+- **Р14. Тексты двух ошибок ленты** (решена: Влад, а1 и б1, 2026-11-25 — «Решения»; из хэнд-бэка кабана 2026-11-25). Текст виден в итоге
+  sync как «экран: …» и в `coach screen` как «Экран: …». (а) Лент не по числу дней (у `AwReader` недостижимо — число
+  периодов раньше проверяет `_post`; только у другого читателя): (1) «лента не по числу периодов» — как у кабана,
+  по образцу «ответ не по числу периодов» (`screen.py:247`); (2) тот же текст, что у часов, без слова «лента».
+  Рекомендую (1). (б) Событие ленты без времени: (1) «aw-server вернул событие ленты без времени»; (2) общий
+  «aw-server вернул не JSON» (`screen.py:149`). Рекомендую (1). До ответа код — по (1), тесты сверяют только тип
+  ошибки. Зависят: `screen.py`, «Тесты» (строка «Лента, ошибки и заголовки»).
 
 ## Умолчания (внутреннее)
 
@@ -483,7 +527,9 @@ mutmut (по функциям шага): `ai_coach.workload.timeline:switch_rate
    уходит в `attention.md`, в `coach-wellbeing.md` остаётся одна отсылка.
 5. Второй запрос к aw-server на каждый синк. По замеру — 0,1 с на 8 дней. Смягчение: нет.
 6. `screen.py` после правки может дать smell по размеру или сложности (порог `make smells` — 0). Смягчение: счёт и
-   классы вынесены в `timeline.py` (умолчание 1); при smell — `timeline_query` и `AwReader.timeline` тоже туда.
+   классы вынесены в `timeline.py` (умолчание 1); при smell — туда же `counter_row`, `SOURCE` и `timeline_rows`
+   (сделано в 1а; прежний вариант — `timeline_query` и `AwReader.timeline` — снят: круг импортов, «Партия 1:
+   сигнатуры»).
 7. Сигнала в день проверки руками может не быть. Смягчение: долг в «Открыто» до первого такого дня, как в Н6 и Н7.
 
 ## Открытые вопросы

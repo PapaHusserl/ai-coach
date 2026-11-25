@@ -334,26 +334,21 @@ def test_demand_counters_are_float_and_none_without_data(conn: sqlite3.Connectio
 
 
 def test_all_six_screen_counters_are_in_the_row(conn: sqlite3.Connection) -> None:
-    for kind, value in (
-        ("screen_work_hours", 3.5),
-        ("screen_hobby_hours", 1.25),
-        ("screen_browser_hours", 0.75),
-        ("screen_evening_hours", 2.5),
-        ("screen_work_evening_hours", 1.75),
-        ("screen_challenge_hours", 1.5),
-        ("screen_hindrance_hours", 0.5),
-    ):
+    expected = {
+        "screen_work_hours": 3.5,
+        "screen_hobby_hours": 1.25,
+        "screen_browser_hours": 0.75,
+        "screen_evening_hours": 2.5,
+        "screen_work_evening_hours": 1.75,
+        "screen_challenge_hours": 1.5,
+        "screen_hindrance_hours": 0.5,
+        "screen_switches_hour": 6.5,
+        "screen_stretch_hours": 2.25,
+    }
+    for kind, value in expected.items():
         counter(conn, kind, value)
     day = workload_series(conn, WED, WED)[0]
-    assert [day[k] for k in sorted(day) if k.startswith("screen_")] == [
-        0.75,
-        1.5,
-        2.5,
-        0.5,
-        1.25,
-        1.75,
-        3.5,
-    ]
+    assert {k: v for k, v in day.items() if k.startswith("screen_")} == expected
 
 
 def test_work_evening_counter_is_a_float(conn: sqlite3.Connection) -> None:

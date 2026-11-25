@@ -1,12 +1,10 @@
-import json
 import sqlite3
-import urllib.request
 from datetime import date
 from pathlib import Path
 
 import pytest
 from mcp_fakes import call, call_text
-from workload_fakes import FakeCalendar, stored_event, write_config
+from workload_fakes import FakeCalendar, serve_aw, stored_event, write_config
 
 from ai_coach.mcp_server.snapshot import SNAPSHOT_MAX_CHARS
 from ai_coach.store.workload import replace_calendar_window, upsert_counter
@@ -194,6 +192,27 @@ def test_snapshot_workload_has_calendar_demand_hours_but_ahead_has_not(
         assert "hindrance_hours" not in r
 
 
+def test_snapshot_workload_rows_have_no_switches_and_stretch(conn: sqlite3.Connection) -> None:
+    put_screen(conn, "2026-10-05", "screen_work_hours", 3.5)
+    put_screen(conn, "2026-10-05", "screen_switches_hour", 6.5)
+    put_screen(conn, "2026-10-05", "screen_stretch_hours", 2.25)
+    rows = call(conn, "get_morning_snapshot", date=DAY)["workload"]["rows"]
+    row = {r["date"]: r for r in rows}["2026-10-05"]
+    assert row["screen_work_hours"] == 3.5
+    assert "screen_switches_hour" not in row
+    assert "screen_stretch_hours" not in row
+
+
+def test_snapshot_workload_ahead_has_no_switches_and_stretch(conn: sqlite3.Connection) -> None:
+    put_screen(conn, "2026-10-10", "screen_switches_hour", 6.5)
+    put_screen(conn, "2026-10-10", "screen_stretch_hours", 2.25)
+    ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
+    assert ahead
+    for r in ahead:
+        assert "screen_switches_hour" not in r
+        assert "screen_stretch_hours" not in r
+
+
 def test_snapshot_workload_ahead_has_no_screen_fields(conn: sqlite3.Connection) -> None:
     put_screen(conn, "2026-10-10", "screen_work_hours", 3.5)
     ahead = call(conn, "get_morning_snapshot", date=DAY)["workload_ahead"]["rows"]
@@ -206,21 +225,12 @@ def test_synced_screen_has_no_window_titles_in_mcp_answers(
     conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     secret = "СЕКРЕТНЫЙ_ЗАГОЛОВОК_ОКНА"
-    events = [
-        {"duration": 3600, "data": {"app": "Alpha Editor", "title": secret, "$category": ["work"]}}
-    ]
-
-    class Response:
-        def read(self) -> bytes:
-            return json.dumps([events] * 4).encode("utf-8")
-
-        def __enter__(self) -> "Response":
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Response())
+    data = {"app": "Alpha Editor", "title": secret, "$category": ["work"]}
+    serve_aw(
+        monkeypatch,
+        [{"duration": 3600, "data": data}],
+        [{"timestamp": f"{DAY}T10:00:00+00:00", "duration": 3600, "data": data}],
+    )
     paths = f'[paths]\ntodo = "{tmp_path / "no-todo.json"}"\nhb_watch = "{tmp_path / "no-hb"}"\n'
     config = load_config(
         write_config(tmp_path / "s.toml", paths + '[screen]\nwork = ["Alpha Editor"]\n')
@@ -236,6 +246,8 @@ def test_synced_screen_has_no_window_titles_in_mcp_answers(
     )
     assert secret not in "\n".join(conn.iterdump())
     assert call(conn, "get_workload", date_from=DAY, date_to=DAY)["rows"][0]["screen_work_hours"]
+    row = call(conn, "get_workload", date_from=DAY, date_to=DAY)["rows"][0]
+    assert row["screen_stretch_hours"] == 1.0
     assert secret not in call_text(conn, "get_workload", date_from=DAY, date_to=DAY, events=True)
     assert secret not in call_text(conn, "get_morning_snapshot", date=DAY)
 

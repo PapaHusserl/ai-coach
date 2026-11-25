@@ -15,8 +15,8 @@ from typing import Any, Protocol, cast
 from ai_coach.store.journal import EVENING_CUTOFF
 from ai_coach.workload.config import DEMANDS, TITLE_CATS, ScreenConfig, title_regex
 from ai_coach.workload.service import EVENING_FROM, SECONDS_IN_HOUR
+from ai_coach.workload.timeline import Segment, counter_row, timeline_rows
 
-SOURCE = "screen"
 QUERY_PATH = "/api/0/query/"
 TIMEOUT = 30
 UNMARKED_NOTE_FROM = 0.15  # доля неразмеченного, с которой sync пишет замечание
@@ -44,6 +44,8 @@ class ScreenReader(Protocol):
 
     def fetch(self, periods: list[Period]) -> list[PerApp]: ...
 
+    def timeline(self, periods: list[Period]) -> list[list[Segment]]: ...
+
 
 def _query_literal(value: Any) -> str:
     """Литерал для query2. Парсер query2 не снимает экранирование JSON: `\\\\w` дошло бы до regex
@@ -66,23 +68,13 @@ def query_head(config: ScreenConfig) -> list[str]:
     ]
 
 
-def screen_query(config: ScreenConfig) -> list[str]:
-    """Без [screen.title.*] - слияние по app. Приложения с разметкой по заголовку размечает сам
-    сервер (categorize) и сливает по (app, $category)."""
-    head = query_head(config)
-    if not config.title:
-        return [
-            *head,
-            'events = merge_events_by_keys(events, ["app"]);',
-            "RETURN = sort_by_duration(events);",
-        ]
+def _title_lines(config: ScreenConfig, merge: bool) -> list[str]:
+    """Строки запроса для приложений с разметкой по заголовку: categorize на сервере; merge -
+    слияние событий (для часов), без него события остаются как есть (для ленты)."""
     titled = json.dumps(list(config.title), ensure_ascii=False)
-    lines = [
-        *head,
-        f'rest = exclude_keyvals(events, "app", {titled});',
-        'rest = merge_events_by_keys(rest, ["app"]);',
-        "res = rest;",
-    ]
+    rest = f'rest = exclude_keyvals(events, "app", {titled});'
+    lines = [rest, 'rest = merge_events_by_keys(rest, ["app"]);'] if merge else [rest]
+    lines.append("res = rest;")
     for n, (app, cats) in enumerate(config.title.items()):
         classes = [
             [
@@ -95,11 +87,32 @@ def screen_query(config: ScreenConfig) -> list[str]:
         lines += [
             f't{n} = filter_keyvals(events, "app", {json.dumps([app], ensure_ascii=False)});',
             f"t{n} = categorize(t{n}, {_query_literal(classes)});",
-            f't{n} = merge_events_by_keys(t{n}, ["app", "$category"]);',
-            f"res = concat(res, t{n});",
         ]
-    lines.append("RETURN = sort_by_duration(res);")
+        if merge:
+            lines.append(f't{n} = merge_events_by_keys(t{n}, ["app", "$category"]);')
+        lines.append(f"res = concat(res, t{n});")
     return lines
+
+
+def screen_query(config: ScreenConfig) -> list[str]:
+    """Без [screen.title.*] - слияние по app. Приложения с разметкой по заголовку размечает сам
+    сервер (categorize) и сливает по (app, $category)."""
+    head = query_head(config)
+    if not config.title:
+        return [
+            *head,
+            'events = merge_events_by_keys(events, ["app"]);',
+            "RETURN = sort_by_duration(events);",
+        ]
+    return [*head, *_title_lines(config, True), "RETURN = sort_by_duration(res);"]
+
+
+def timeline_query(config: ScreenConfig) -> list[str]:
+    """Как screen_query, но без слияния: события по порядку времени."""
+    head = query_head(config)
+    if not config.title:
+        return [*head, "RETURN = sort_by_timestamp(events);"]
+    return [*head, *_title_lines(config, False), "RETURN = sort_by_timestamp(res);"]
 
 
 def _category_of(data: dict[str, Any]) -> str:
@@ -115,9 +128,9 @@ class AwReader:
     def __init__(self, config: ScreenConfig) -> None:
         self.config = config
 
-    def fetch(self, periods: list[Period]) -> list[PerApp]:
+    def _post(self, query: list[str], periods: list[Period]) -> list[list[dict[str, Any]]]:
         body = {
-            "query": screen_query(self.config),
+            "query": query,
             "timeperiods": [f"{a.isoformat()}/{b.isoformat()}" for a, b in periods],
         }
         request = urllib.request.Request(
@@ -136,8 +149,11 @@ class AwReader:
             raise ScreenError("aw-server вернул не JSON") from None
         if not isinstance(answer, list) or len(cast(list[Any], answer)) != len(periods):
             raise ScreenError("aw-server вернул ответ не по числу периодов")
+        return cast(list[list[dict[str, Any]]], answer)
+
+    def fetch(self, periods: list[Period]) -> list[PerApp]:
         result: list[PerApp] = []
-        for events in cast(list[list[dict[str, Any]]], answer):
+        for events in self._post(screen_query(self.config), periods):
             per_app: PerApp = {}
             for event in events:
                 data = cast(dict[str, Any], event.get("data") or {})
@@ -145,6 +161,21 @@ class AwReader:
                 per_app[key] = per_app.get(key, 0) + event.get("duration", 0)
             result.append(per_app)
         return result
+
+    def timeline(self, periods: list[Period]) -> list[list[Segment]]:
+        """Лента (начало, конец, класс) на каждый период; из событий читаются timestamp,
+        duration, app и $category, заголовки не читаются."""
+        answer = self._post(timeline_query(self.config), periods)
+        return [[self._segment(event) for event in events] for events in answer]
+
+    def _segment(self, event: dict[str, Any]) -> Segment:
+        data = cast(dict[str, Any], event.get("data") or {})
+        try:
+            start = datetime.fromisoformat(event["timestamp"])
+        except (KeyError, TypeError, ValueError):
+            raise ScreenError("aw-server вернул событие ленты без времени") from None
+        end = start + timedelta(seconds=event.get("duration", 0))
+        return (start, end, segment_class(data.get("app") or "", _category_of(data), self.config))
 
 
 def classify(app: str, config: ScreenConfig) -> str:
@@ -179,6 +210,13 @@ def by_category(per_app: PerApp, config: ScreenConfig) -> dict[str, float]:
     return out
 
 
+def segment_class(app: str, category: str, config: ScreenConfig) -> str:
+    """Класс окна ленты: hobby / browser / unmarked как у by_category, работа - challenge /
+    hindrance (по demand_of) или work."""
+    cls = category if category in TITLE_CATS else classify(app, config)
+    return (demand_of(app, config) or "work") if cls == "work" else cls
+
+
 def _at(day: date, moment: time) -> datetime:
     return datetime.combine(day, moment).astimezone()
 
@@ -193,8 +231,10 @@ def read_screen(
     screen_browser_hours и screen_evening_hours (всё за экраном 19:00→04:00) и
     screen_work_evening_hours (рабочая часть этого вечера) - часы с двумя
     знаками; при непустых challenge/hindrance в конфиге ещё screen_challenge_hours и
-    screen_hindrance_hours (части работы). Строки для upsert_counter: date, kind, value,
-    source='screen', raw_json None.
+    screen_hindrance_hours (части работы). Дню с событиями и непустой лентой - ещё
+    screen_stretch_hours (самый длинный рабочий отрезок, ч) и, если активного экрана не меньше
+    часа, screen_switches_hour (переключений в час). Строки для upsert_counter: date, kind,
+    value, source='screen', raw_json None.
     День без событий окон пропускается. Сумма за период больше его длины - ScreenError.
     Вторым значением - замечания для итога sync: неразмеченного больше 15 %."""
     days = [first + timedelta(days=i) for i in range((last - first).days + 1)]
@@ -208,6 +248,9 @@ def read_screen(
     for (start, end), per_app in zip(periods, results, strict=True):
         if sum(per_app.values()) > (end - start).total_seconds() + SLACK_SECONDS:
             raise ScreenError("сервер не обрезал события по границам периода")
+    timelines = reader.timeline(periods[::2])
+    if len(timelines) != len(days):
+        raise ScreenError("лента не по числу периодов")
     rows: list[dict[str, Any]] = []
     marked = bool(config.challenge or config.hindrance)
     unmarked = total = 0.0
@@ -228,17 +271,8 @@ def read_screen(
         if marked:
             hours["screen_challenge_hours"] = cats["challenge"]
             hours["screen_hindrance_hours"] = cats["hindrance"]
-        for kind, seconds in hours.items():
-            value = round(seconds / SECONDS_IN_HOUR, 2)
-            rows.append(
-                {
-                    "date": day.isoformat(),
-                    "kind": kind,
-                    "value": value,
-                    "source": SOURCE,
-                    "raw_json": None,
-                }
-            )
+        rows += [counter_row(day, k, round(sec / SECONDS_IN_HOUR, 2)) for k, sec in hours.items()]
+        rows += timeline_rows(day, timelines[n])
     notes: list[str] = []
     if total and unmarked / total > UNMARKED_NOTE_FROM:
         notes.append(f"экран: неразмеченное {round(unmarked / total * 100)} %")

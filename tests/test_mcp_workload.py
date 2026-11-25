@@ -107,6 +107,27 @@ def test_workload_row_has_screen_hours(conn: sqlite3.Connection) -> None:
     assert [row[k] for k in SCREEN_KINDS] == [1.25, 2.25, 3.25, 4.25, 5.25]
 
 
+def test_workload_row_has_switches_and_stretch_as_fractions(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_switches_hour", 6.5)
+    screen(conn, DAY, "screen_stretch_hours", 2.25)
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["screen_switches_hour"] == 6.5
+    assert row["screen_stretch_hours"] == 2.25
+
+
+def test_workload_switches_and_stretch_are_none_without_counters(conn: sqlite3.Connection) -> None:
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["screen_switches_hour"] is None
+    assert row["screen_stretch_hours"] is None
+
+
+def test_workload_stretch_zero_stays_zero(conn: sqlite3.Connection) -> None:
+    screen(conn, DAY, "screen_stretch_hours", 0)
+    row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
+    assert row["screen_stretch_hours"] == 0
+    assert row["screen_switches_hour"] is None
+
+
 def test_workload_screen_fields_are_none_without_data(conn: sqlite3.Connection) -> None:
     row = rows(conn, "get_workload", date_from=DAY, date_to=DAY)[0]
     assert all(row[k] is None for k in SCREEN_KINDS)

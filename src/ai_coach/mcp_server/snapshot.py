@@ -64,7 +64,7 @@ WELLBEING_FIELDS = (
 )
 AGENDA_FIELDS = ("id", "kind", "title", "start_at", "end_at", "status", "repeat", "workout_id")
 WORKLOAD_CHARS = 5000
-WORKLOAD_SKIP = CLAUDE_COUNTERS
+WORKLOAD_SKIP = CLAUDE_COUNTERS + ("screen_switches_hour", "screen_stretch_hours")
 CLAUDE_KEYS = {
     "prompts": "claude_prompts",
     "evening": "claude_prompts_evening",
@@ -84,6 +84,8 @@ AHEAD_SKIP = CLAUDE_COUNTERS + (
     "screen_work_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
+    "screen_switches_hour",
+    "screen_stretch_hours",
     "challenge_hours",
     "hindrance_hours",
 )

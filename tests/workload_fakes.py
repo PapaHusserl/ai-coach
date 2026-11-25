@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -211,10 +212,24 @@ class FakeAw:
         days: dict[str, tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]]
         | None = None,
         error: Exception | None = None,
+        timelines: dict[str, list[tuple[datetime, datetime, str]]] | None = None,
+        timeline_error: Exception | None = None,
     ):
         self.days = days or {}
         self.error = error
+        self.timelines = timelines or {}
+        self.timeline_error = timeline_error
         self.calls: list[list[tuple[datetime, datetime]]] = []
+        self.timeline_calls: list[list[tuple[datetime, datetime]]] = []
+
+    def timeline(
+        self, periods: list[tuple[datetime, datetime]]
+    ) -> list[list[tuple[datetime, datetime, str]]]:
+        """Лента отрезков (начало, конец, класс) на каждый период; нет дня в timelines - пусто."""
+        self.timeline_calls.append(list(periods))
+        if self.timeline_error is not None:
+            raise self.timeline_error
+        return [list(self.timelines.get(start.date().isoformat(), [])) for start, _ in periods]
 
     def fetch(self, periods: list[tuple[datetime, datetime]]) -> list[dict[tuple[str, str], float]]:
         self.calls.append(list(periods))
@@ -242,3 +257,37 @@ class FlakyCommitConn:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._conn, name)
+
+
+class _AwResponse:
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+
+    def read(self) -> bytes:
+        return self.payload
+
+    def __enter__(self) -> "_AwResponse":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+
+def serve_aw(
+    monkeypatch: Any,
+    fetch_events: list[dict[str, Any]],
+    timeline_events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Подмена urlopen: ответ по запросу, не по порядку вызовов. Запрос ленты (sort_by_timestamp)
+    получает timeline_events на каждый период, остальные - fetch_events. Возвращает тела POST."""
+    bodies: list[dict[str, Any]] = []
+
+    def urlopen(request: Any, **_: Any) -> _AwResponse:
+        body = json.loads(request.data)
+        bodies.append(body)
+        is_timeline = any("sort_by_timestamp" in line for line in body["query"])
+        events = timeline_events if is_timeline else fetch_events
+        return _AwResponse(json.dumps([events] * len(body["timeperiods"])).encode("utf-8"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return bodies

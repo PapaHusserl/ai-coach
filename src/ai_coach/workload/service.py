@@ -32,6 +32,8 @@ SCREEN_COUNTERS = (
     "screen_work_evening_hours",
     "screen_challenge_hours",
     "screen_hindrance_hours",
+    "screen_switches_hour",
+    "screen_stretch_hours",
 )
 COUNTERS = INT_COUNTERS + SCREEN_COUNTERS
 EVENT_FIELDS = (
@@ -141,7 +143,9 @@ def workload_series(conn: sqlite3.Connection, start: str, end: str) -> list[dict
     screen_work/hobby/browser/evening_hours (часы экрана 04:00→04:00, вечер 19:00→04:00;
     None - нет данных экрана за день), screen_work_evening_hours (рабочая часть вечера экрана),
     screen_challenge/hindrance_hours (вызов и помехи внутри
-    screen_work_hours; None - не размечено)."""
+    screen_work_hours; None - не размечено), screen_switches_hour (переключений между окнами
+    разных классов в час активного экрана; None - не считалось или экрана меньше часа),
+    screen_stretch_hours (самый длинный рабочий отрезок без паузы от 5 минут, часы)."""
     return _rows(conn, date.fromisoformat(start), date.fromisoformat(end))
 
 

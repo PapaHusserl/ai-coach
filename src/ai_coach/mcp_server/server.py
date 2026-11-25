@@ -123,9 +123,10 @@ TOOLS: dict[str, tuple[Callable[..., Any], str]] = {
         "в нагрузку идут work и hobby, они главнее календарных, ручные - главнее экрана); "
         "screen_challenge/hindrance_hours - вызов и помехи внутри экранной работы "
         "(null - не размечено); challenge/hindrance_hours - вызов и помехи внутри work_hours "
-        "календаря (рабочая встреча без правила - помеха). "
-        + CLAUDE_WORKLOAD
-        + "events=true - только на один день "
+        "календаря (рабочая встреча без правила - помеха); screen_switches_hour - переключений "
+        "между окнами разных классов в час активного экрана (null - не считалось или экрана "
+        "меньше часа); screen_stretch_hours - самый длинный рабочий отрезок без паузы от "
+        "5 минут, часы. " + CLAUDE_WORKLOAD + "events=true - только на один день "
         "(date_from = date_to): ещё и events с названиями и claude_repos_names (каталоги "
         "Claude Code дня). Пишет coach sync (и coach screen, coach claude).",
     ),

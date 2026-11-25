@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from workload_fakes import FakeAw, write_config
+from workload_fakes import FakeAw, serve_aw, write_config
 
 from ai_coach.workload.config import ScreenConfig, load_config
 from ai_coach.workload.screen import (
@@ -22,6 +22,7 @@ from ai_coach.workload.screen import (
     ScreenError,
     by_category,
     classify,
+    query_head,
     read_screen,
     screen_query,
 )
@@ -150,6 +151,43 @@ def test_query_title_and_meeting_combine(tmp_path: Path) -> None:
     assert "categorize(" in joined
 
 
+# --- timeline_query ---
+
+
+def test_timeline_query_has_no_merge_and_sorts_by_timestamp() -> None:
+    from ai_coach.workload.screen import timeline_query
+
+    query = timeline_query(ScreenConfig(work=frozenset({"a"})))
+    assert "merge_events_by_keys" not in "\n".join(query)
+    assert "sort_by_timestamp" in query[-1]
+    assert query[-1].startswith("RETURN")
+
+
+def test_timeline_query_starts_with_the_same_head_as_screen_query() -> None:
+    from ai_coach.workload.screen import timeline_query
+
+    assert timeline_query(ScreenConfig())[: len(QUERY_HEAD)] == QUERY_HEAD
+    assert timeline_query(CONFIG)[: len(query_head(CONFIG))] == query_head(CONFIG)
+
+
+def test_timeline_query_with_meeting_has_period_union() -> None:
+    from ai_coach.workload.screen import timeline_query
+
+    joined = "\n".join(timeline_query(CONFIG))
+    assert "period_union" in joined
+    assert "events = filter_period_intersect(window, afk);" not in joined
+
+
+def test_timeline_query_categorizes_each_title_app(tmp_path: Path) -> None:
+    from ai_coach.workload.screen import timeline_query
+
+    text = '[screen.title.alphaedit]\nwork = ["a"]\n[screen.title.betaedit]\nhobby = ["b"]\n'
+    query = timeline_query(screen_of(tmp_path, text))
+    assert sum("categorize(" in x for x in query) == 2
+    assert "merge_events_by_keys" not in "\n".join(query)
+    assert "sort_by_timestamp" in query[-1]
+
+
 # --- classify / by_category ---
 
 
@@ -242,6 +280,58 @@ def test_by_category_work_title_class_of_challenge_app_is_challenge() -> None:
 
 def test_by_category_demand_app_name_ignores_case() -> None:
     assert by_category({("A", ""): 60}, DEMAND)["challenge"] == 60
+
+
+SEGMENTS = ScreenConfig(
+    work=frozenset({"a", "b", "h"}),
+    hobby=frozenset({"betagame"}),
+    browser=frozenset({"gamma browser"}),
+    meeting=frozenset({"deltacall"}),
+    challenge=frozenset({"a"}),
+    hindrance=frozenset({"b"}),
+)
+
+
+def test_segment_class_challenge_app() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("a", "", SEGMENTS) == "challenge"
+
+
+def test_segment_class_hindrance_app() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("b", "", SEGMENTS) == "hindrance"
+
+
+def test_segment_class_plain_work_app_is_work() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("h", "", SEGMENTS) == "work"
+
+
+def test_segment_class_hobby_title_category_of_work_app_is_hobby() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("a", "hobby", SEGMENTS) == "hobby"
+
+
+def test_segment_class_browser_app() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("gamma browser", "", SEGMENTS) == "browser"
+
+
+def test_segment_class_unknown_app_is_unmarked() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("zeta tool", "", SEGMENTS) == "unmarked"
+
+
+def test_segment_class_meeting_app_without_other_marks_is_work() -> None:
+    from ai_coach.workload.screen import segment_class
+
+    assert segment_class("deltacall", "", SEGMENTS) == "work"
 
 
 def test_periods_are_day_and_evening_for_each_day_in_order() -> None:
@@ -532,6 +622,119 @@ def test_days_are_filled_independently() -> None:
     assert rows_of(rows, D2)["screen_evening_hours"] == 1.0
 
 
+# --- read_screen: переключения и отрезки ---
+
+
+def timed(*pairs: tuple[int, int, str]) -> list[tuple[datetime, datetime, str]]:
+    """Отрезки дня D1: (час начала, час конца, класс)."""
+    return [(at(D1, a), at(D1, b), cls) for a, b, cls in pairs]
+
+
+def with_timeline(segments: list[tuple[datetime, datetime, str]]) -> FakeAw:
+    return FakeAw(
+        {D1.isoformat(): ({("alpha editor", ""): 2 * HOUR}, {})},
+        timelines={D1.isoformat(): segments},
+    )
+
+
+def test_read_screen_day_with_events_has_switches_and_stretch() -> None:
+    aw = with_timeline(timed((10, 11, "challenge"), (11, 12, "hindrance")))
+    rows, _ = read_screen(aw, CONFIG, D1, D1)
+    values = rows_of(rows, D1)
+    assert values["screen_switches_hour"] == 0.5
+    assert values["screen_stretch_hours"] == 2.0
+    assert values["screen_work_hours"] == 2.0
+
+
+def test_read_screen_new_counters_have_row_shape_of_screen_source() -> None:
+    aw = with_timeline(timed((10, 11, "challenge"), (11, 12, "hindrance")))
+    rows, _ = read_screen(aw, CONFIG, D1, D1)
+    new = [r for r in rows if r["kind"] in ("screen_switches_hour", "screen_stretch_hours")]
+    assert len(new) == 2
+    for row in new:
+        assert row["source"] == "screen"
+        assert row["raw_json"] is None
+        assert row["date"] == D1.isoformat()
+
+
+def test_read_screen_day_without_events_has_no_new_counters() -> None:
+    rows, _ = read_screen(FakeAw(), CONFIG, D1, D2)
+    assert rows == []
+
+
+def test_read_screen_day_without_timeline_events_has_no_new_counters() -> None:
+    aw = FakeAw({D1.isoformat(): ({("alpha editor", ""): HOUR}, {})})
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert "screen_switches_hour" not in values
+    assert "screen_stretch_hours" not in values
+
+
+def test_read_screen_under_one_active_hour_has_stretch_but_no_switches() -> None:
+    aw = FakeAw(
+        {D1.isoformat(): ({("alpha editor", ""): HOUR // 2}, {})},
+        timelines={
+            D1.isoformat(): [
+                (at(D1, 10), at(D1, 10) + timedelta(minutes=30), "work"),
+            ]
+        },
+    )
+    values = rows_of(read_screen(aw, CONFIG, D1, D1)[0], D1)
+    assert values["screen_stretch_hours"] == 0.5
+    assert "screen_switches_hour" not in values
+
+
+def test_read_screen_hobby_only_timeline_has_zero_stretch_row() -> None:
+    aw = with_timeline(timed((10, 12, "hobby")))
+    rows, _ = read_screen(aw, CONFIG, D1, D1)
+    values = rows_of(rows, D1)
+    assert "screen_stretch_hours" in values
+    assert values["screen_stretch_hours"] == 0.0
+    assert values["screen_switches_hour"] == 0.0
+
+
+def test_read_screen_old_counters_do_not_change_with_timeline() -> None:
+    whole: dict[tuple[str, str], float] = {("alpha editor", ""): 2 * HOUR}
+    plain = read_screen(FakeAw({D1.isoformat(): (whole, {})}), CONFIG, D1, D1)[0]
+    aw = with_timeline(timed((10, 11, "challenge"), (11, 12, "hindrance")))
+    rows, _ = read_screen(aw, CONFIG, D1, D1)
+    old = [r for r in rows if r["kind"] not in ("screen_switches_hour", "screen_stretch_hours")]
+    assert old == plain
+
+
+def test_read_screen_asks_timeline_once_for_day_periods_only() -> None:
+    aw = FakeAw()
+    read_screen(aw, CONFIG, D1, D2)
+    assert aw.timeline_calls == [
+        [(at(D1, 4), at(D2, 4)), (at(D2, 4), at(D2 + timedelta(days=1), 4))]
+    ]
+
+
+def test_read_screen_days_get_their_own_timeline() -> None:
+    aw = FakeAw(
+        {
+            D1.isoformat(): ({("alpha editor", ""): 2 * HOUR}, {}),
+            D2.isoformat(): ({("alpha editor", ""): 2 * HOUR}, {}),
+        },
+        timelines={
+            D1.isoformat(): timed((10, 11, "work"), (11, 12, "hobby")),
+            D2.isoformat(): [(at(D2, 10), at(D2, 12), "work")],
+        },
+    )
+    rows, _ = read_screen(aw, CONFIG, D1, D2)
+    assert rows_of(rows, D1)["screen_stretch_hours"] == 1.0
+    assert rows_of(rows, D2)["screen_stretch_hours"] == 2.0
+    assert rows_of(rows, D2)["screen_switches_hour"] == 0.0
+
+
+def test_read_screen_timeline_error_is_passed_up() -> None:
+    aw = FakeAw(
+        {D1.isoformat(): ({("alpha editor", ""): HOUR}, {})},
+        timeline_error=ScreenError("лента не прочитана"),
+    )
+    with pytest.raises(ScreenError, match="лента не прочитана"):
+        read_screen(aw, CONFIG, D1, D1)
+
+
 # --- read_screen: ошибки и замечания ---
 
 
@@ -562,6 +765,9 @@ def test_wrong_number_of_answers_is_screen_error() -> None:
     class Short:
         def fetch(self, periods: list[Any]) -> list[dict[tuple[str, str], float]]:
             return [{}]
+
+        def timeline(self, periods: list[Any]) -> list[list[Any]]:
+            return [[]]
 
     with pytest.raises(ScreenError):
         read_screen(Short(), CONFIG, D1, D1)
@@ -670,12 +876,45 @@ def test_aw_reader_never_returns_titles(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_title_does_not_reach_rows_or_notes(monkeypatch: pytest.MonkeyPatch) -> None:
-    answer = [[event("alpha editor", 3600), event("zeta tool", 3600)], [event("zeta tool", 60)]]
-    serve(monkeypatch, answer)
+    fetch_events = [event("alpha editor", 3600), event("zeta tool", 3600)]
+    timeline_events = [
+        tl_event("alpha editor", "2026-10-07T10:00:00+00:00", 3600),
+        tl_event("zeta tool", "2026-10-07T11:00:00+00:00", 3600),
+    ]
+    serve_aw(monkeypatch, fetch_events, timeline_events)
     rows, notes = read_screen(AwReader(CONFIG), CONFIG, D1, D1)
+    assert rows_of(rows, D1)["screen_stretch_hours"] == 1.0
     assert SECRET_TITLE not in json.dumps(rows, ensure_ascii=False)
     assert SECRET_TITLE not in json.dumps(notes, ensure_ascii=False)
     assert all(r["raw_json"] is None for r in rows)
+
+
+def test_read_screen_timelines_not_by_day_count_is_screen_error() -> None:
+    class Short:
+        def fetch(
+            self, periods: list[tuple[datetime, datetime]]
+        ) -> list[dict[tuple[str, str], float]]:
+            return [{("alpha editor", ""): 3600.0} for _ in periods]
+
+        def timeline(
+            self, periods: list[tuple[datetime, datetime]]
+        ) -> list[list[tuple[datetime, datetime, str]]]:
+            return []
+
+    with pytest.raises(ScreenError):
+        read_screen(Short(), CONFIG, D1, D2)
+
+
+@pytest.mark.parametrize("bad", [{}, {"timestamp": "не время"}])
+def test_aw_reader_timeline_event_without_readable_timestamp_is_screen_error(
+    monkeypatch: pytest.MonkeyPatch, bad: dict[str, Any]
+) -> None:
+    broken = {"duration": 60, "data": {"app": "alpha editor", "title": SECRET_TITLE}, **bad}
+    serve(monkeypatch, [[broken], []])
+    with pytest.raises(ScreenError) as info:
+        AwReader(CONFIG).timeline(PERIODS)
+    assert "alpha editor" not in str(info.value)
+    assert SECRET_TITLE not in str(info.value)
 
 
 def test_app_names_do_not_reach_demand_rows_or_notes() -> None:
@@ -719,6 +958,80 @@ def test_aw_reader_answer_not_by_period_count_is_screen_error(
     serve(monkeypatch, answer)
     with pytest.raises(ScreenError):
         AwReader(CONFIG).fetch(PERIODS)
+
+
+def tl_event(
+    app: str, start: str, seconds: float, category: list[str] | None = None
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"app": app, "title": SECRET_TITLE}
+    if category is not None:
+        data["$category"] = category
+    return {"timestamp": start, "duration": seconds, "data": data}
+
+
+def test_aw_reader_timeline_posts_timeline_query_and_periods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ai_coach.workload.screen import timeline_query
+
+    seen = serve(monkeypatch, [[], []])
+    AwReader(CONFIG).timeline(PERIODS)
+    assert len(seen) == 1
+    request, kwargs = seen[0]
+    assert request.full_url == "http://127.0.0.1:5600/api/0/query/"
+    assert request.get_method() == "POST"
+    body = json.loads(request.data)
+    assert body["query"] == timeline_query(CONFIG)
+    assert body["timeperiods"] == [f"{a.isoformat()}/{b.isoformat()}" for a, b in PERIODS]
+    assert kwargs.get("timeout")
+
+
+def test_aw_reader_timeline_returns_segments_per_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    answer = [
+        [
+            tl_event("a", "2026-10-07T10:00:00+00:00", 600),
+            tl_event("betagame", "2026-10-07T10:10:00+00:00", 60),
+        ],
+        [],
+    ]
+    serve(monkeypatch, answer)
+    got = AwReader(SEGMENTS).timeline(PERIODS)
+    start = datetime.fromisoformat("2026-10-07T10:00:00+00:00")
+    assert got == [
+        [
+            (start, start + timedelta(seconds=600), "challenge"),
+            (start + timedelta(seconds=600), start + timedelta(seconds=660), "hobby"),
+        ],
+        [],
+    ]
+
+
+def test_aw_reader_timeline_title_category_decides_class(monkeypatch: pytest.MonkeyPatch) -> None:
+    serve(monkeypatch, [[tl_event("gamma browser", "2026-10-07T10:00:00+00:00", 60, ["work"])], []])
+    got = AwReader(SEGMENTS).timeline(PERIODS)
+    assert [s[2] for s in got[0]] == ["work"]
+
+
+def test_aw_reader_timeline_never_returns_titles(monkeypatch: pytest.MonkeyPatch) -> None:
+    serve(monkeypatch, [[tl_event("a", "2026-10-07T10:00:00+00:00", 60, ["hobby"])], []])
+    assert SECRET_TITLE not in repr(AwReader(SEGMENTS).timeline(PERIODS))
+
+
+def test_aw_reader_timeline_connection_refused_is_screen_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    serve(monkeypatch, urllib.error.URLError(ConnectionRefusedError()))
+    with pytest.raises(ScreenError):
+        AwReader(CONFIG).timeline(PERIODS)
+
+
+@pytest.mark.parametrize("answer", [{"a": 1}, [[]], [[], [], []]])
+def test_aw_reader_timeline_answer_not_by_period_count_is_screen_error(
+    monkeypatch: pytest.MonkeyPatch, answer: Any
+) -> None:
+    serve(monkeypatch, answer)
+    with pytest.raises(ScreenError):
+        AwReader(CONFIG).timeline(PERIODS)
 
 
 def test_screen_error_text_has_no_query_or_titles(monkeypatch: pytest.MonkeyPatch) -> None:

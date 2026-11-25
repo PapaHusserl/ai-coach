@@ -1,8 +1,7 @@
 import json
 import os
 import sqlite3
-import urllib.request
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -10,6 +9,7 @@ from workload_fakes import (
     FakeAw,
     FakeCalendar,
     raw_event,
+    serve_aw,
     stored_event,
     todo_item,
     tree_state,
@@ -398,6 +398,44 @@ def test_sync_screen_error_is_noted_other_sources_are_written(
     assert screen_counters(conn) == []
 
 
+def screen_timeline() -> dict[str, list[tuple[datetime, datetime, str]]]:
+    def moment(day: str, hour: int) -> datetime:
+        return datetime.fromisoformat(f"{day}T{hour:02d}:00:00").astimezone()
+
+    return {
+        "2026-10-08": [
+            (moment("2026-10-08", 10), moment("2026-10-08", 11), "challenge"),
+            (moment("2026-10-08", 11), moment("2026-10-08", 12), "hindrance"),
+        ]
+    }
+
+
+def test_sync_writes_switches_and_stretch_counters(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    aw = FakeAw(screen_day(), timelines=screen_timeline())
+    run_screen(conn, with_screen(env, tmp_path), aw)
+    found = screen_counters(conn)
+    assert ("2026-10-08", "screen_switches_hour", 0.5, "screen") in found
+    assert ("2026-10-08", "screen_stretch_hours", 2.0, "screen") in found
+    assert not [c for c in found if c[0] == "2026-10-07" and c[1] == "screen_switches_hour"]
+
+
+def test_sync_timeline_error_is_noted_and_other_sources_are_written(
+    conn: sqlite3.Connection, env: Env, tmp_path: Path
+) -> None:
+    aw = FakeAw(screen_day(), timeline_error=ScreenError("лента не прочитана"))
+    reader = FakeCalendar([raw_event(uid="a")])
+    message = sync_workload(
+        conn, reader=reader, config=with_screen(env, tmp_path), days=DAYS, today=TODAY, screen=aw
+    )
+    assert "экран: лента не прочитана" in message
+    assert log_rows(conn) == [("workload", "error")]
+    assert [e["uid"] for e in list_calendar_events(conn, *ALL)] == ["a"]
+    assert kinds(conn)["todo_open"] == 1
+    assert screen_counters(conn) == []
+
+
 def test_sync_screen_error_keeps_previous_screen_counters(
     conn: sqlite3.Connection, env: Env, tmp_path: Path
 ) -> None:
@@ -513,27 +551,17 @@ def test_sync_with_screen_does_not_touch_todo_and_hb_watch(
 def test_sync_through_aw_reader_stores_no_window_titles(
     conn: sqlite3.Connection, env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class Response:
-        def read(self) -> bytes:
-            events = [
-                {
-                    "duration": 3600,
-                    "data": {"app": "Alpha Editor", "title": SCREEN_TITLE, "$category": ["work"]},
-                }
-            ]
-            return json.dumps([events] * 2 * (DAYS + 1)).encode("utf-8")
-
-        def __enter__(self) -> "Response":
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Response())
+    data = {"app": "Alpha Editor", "title": SCREEN_TITLE, "$category": ["work"]}
+    serve_aw(
+        monkeypatch,
+        [{"duration": 3600, "data": data}],
+        [{"timestamp": "2026-10-07T10:00:00+00:00", "duration": 3600, "data": data}],
+    )
     config = with_screen(env, tmp_path)
     assert config.screen is not None
     message = run_screen(conn, config, AwReader(config.screen))
     assert screen_counters(conn)
+    assert ("2026-10-07", "screen_stretch_hours", 1.0, "screen") in screen_counters(conn)
     assert SCREEN_TITLE not in "\n".join(conn.iterdump())
     assert SCREEN_TITLE not in message
 
