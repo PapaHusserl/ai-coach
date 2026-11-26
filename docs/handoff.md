@@ -50,5 +50,5 @@
 ## Ссылки
 
 - Документ шага: [plan-n48.md](plan-n48.md); журнал — [pipeline.md](pipeline.md).
-- Последний коммит: пока нет («Н48: закрытие»); факт по metrics.py на коммите: пока нет.
-  Отклик: semia-kabanov — пока нет. Правила: AGENTS.md, docs/RULES.md.
+- Последний коммит: 71d343a «Н48: закрытие»; факт по metrics.py на коммите: 11.61 $
+  (`--from 2026-11-25T19:56 --to 2026-11-26T07:04`). Отклик: otkliki/orkestrator/ai-coach/2026-11-26-n48.md. Правила: AGENTS.md, docs/RULES.md.
