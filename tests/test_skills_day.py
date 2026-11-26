@@ -61,7 +61,6 @@ def test_day_trigger_stands_between_9v_and_9g() -> None:
         "get_agenda",
         "skipped",
         "already_planned",
-        "event remove",
         "«Да»",
         "AskUserQuestion",
         "без `event cancel`",
@@ -208,3 +207,32 @@ def test_day_file_does_not_read_todo() -> None:
 def test_help_todo_topic_says_day_plan_does_not_touch_todo() -> None:
     text = (AGENTS / "coach-help" / "todo.md").read_text()
     assert "План дня туду не читает и пункты в день не ставит" in text
+
+
+# --- Н48: абзацы про already_planned и пустой drafts вынесены в coach-day/replan.md (Р1 = 1) ---
+
+REPLAN = AGENTS / "coach-day" / "replan.md"
+
+
+def test_day_file_reads_replan_file_by_cat() -> None:
+    assert "cat .claude/agents/coach-day/replan.md" in day_text()
+
+
+def test_day_file_keeps_already_planned_needle() -> None:
+    assert "already_planned" in day_text()
+
+
+@pytest.mark.parametrize(
+    "word", ["event remove", "только после «да»", "`drafts` пустой", "already_planned"]
+)
+def test_replan_file_has_word(word: str) -> None:
+    assert word in REPLAN.read_text()
+
+
+@pytest.mark.parametrize("word", ["event remove", "Покажи события"])
+def test_day_file_does_not_duplicate_replan_paragraphs(word: str) -> None:
+    assert word not in day_text()
+
+
+def test_replan_file_is_allowed_by_cat() -> None:
+    assert "Bash(cat .claude/agents/coach-day/replan.md)" in ALLOW

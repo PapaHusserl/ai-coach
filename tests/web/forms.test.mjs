@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formCanSave, formLine, formPayload } from "../../src/ai_coach/web/static/form-model.js";
+import { formCanSave, formLine, formPayload, withFormTab } from "../../src/ai_coach/web/static/form-model.js";
 
 const SCORE = { key: "score", type: "scale", label: "Самочувствие" };
 const TEMPERATURE = { key: "temperature", type: "number", label: "Температура", unit: "°C" };
@@ -101,6 +101,18 @@ test("formLine: подпись с заглавными внутри — вся �
 
 test("formLine: пропущенное необязательное поле в строку не попадает", () => {
 	assert.equal(formLine(FIELDS, { temperature: 36.6 }), "36.6 °C");
+});
+
+test("withFormTab: без определения формы вкладка form уходит", () => {
+	assert.deepEqual(withFormTab(["rating", "form"], null), ["rating"]);
+});
+
+test("withFormTab: с формой список без изменений", () => {
+	assert.deepEqual(withFormTab(["rating", "form"], { title: "Т", fields: [] }), ["rating", "form"]);
+});
+
+test("withFormTab: единственная вкладка form без формы — пусто", () => {
+	assert.deepEqual(withFormTab(["form"], null), []);
 });
 
 function fakeNode(tag) {

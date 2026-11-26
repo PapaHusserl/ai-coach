@@ -222,31 +222,6 @@ updated: 2026-11-15
 болезни (пульс, HRV, сон, шаги, часы работы, настроение чек-инов) и, если картина повторяется, предупреждает
 заранее.
 
-## 127. DOM-код форм пульта без юнит-тестов
-status: idea
-priority: low
-updated: 2026-11-15
-
-Находка архитектора при закрытии П12 (docs/plan-p12.md, «Открыто: стенд», партия 3; риск 8): отсев вкладки формы
-в `marks.js`, `tabFields`, `tabReady` юнит-тестами не покрыты. Смежно с BACKLOG 113.
-
-## 128. Тесты границ форм Р18 без красной проверки
-status: idea
-priority: low
-updated: 2026-11-15
-
-Находка архитектора при закрытии П12 (docs/plan-p12.md, «Открыто: стенд», партия 2): 12 тестов границ Р18
-(24/40/24/8) написаны после кода; mutmut шага П12 не прогонялся — проверить мутантом `agenda/forms.py:check_form`.
-
-## 129. Запас coach-nutrition.md и coach-day.md меньше 200 Б
-status: idea
-priority: low
-updated: 2026-11-15
-
-Находка архитектора при закрытии П12 (`wc -c` против `tests/text_limits.py`): `coach-nutrition.md` 6033 из 6144
-(запас 111 Б), `coach-day.md` 6008 из 6144 (136 Б) — ниже 200 Б из местного правила AGENTS.md; следующий шаг,
-что их правит, выносит текст в боковой файл.
-
 ## 130. Тренер предлагает привычку черновиком
 status: idea
 priority: medium
@@ -857,3 +832,37 @@ updated: 2026-11-25
 После П8 у `.claude/agents/coach-help/food.md` запас до лимита около 230 Б: следующая правка почти наверняка
 опустит его ниже 200 Б (правило AGENTS.md). Вынести часть текста в боковой файл заранее. Находка папы в П8
 (docs/plan-p8.md, «Правки по ревью», партия 2).
+
+## 194. Общий FakeNode для тестов пульта
+status: idea
+priority: low
+updated: 2026-11-26
+
+`FakeNode` скопирован в `tests/web/marks-intake.test.mjs` и `marks-pantry.test.mjs`, Н48 добавит третью
+копию — вынести в общий помощник тестов пульта. Находка плана Н48 (docs/plan-n48.md, «Побочные находки», 1).
+
+## 195. Строка экрана падает на ответе /api/screen без work и hobby
+status: idea
+priority: low
+updated: 2026-11-26
+
+`screen-hint.js` (`load`): ответ `/api/screen` без полей `work` и `hobby` (например `{}`) роняет `hoursText`
+(`marks-model.js`) необработанным отклонением, строка остаётся «экран: …». Отдаёт ли сервер такой ответ — не
+проверено. Находка плана Н48 (docs/plan-n48.md, «Побочные находки», 2).
+
+## 196. Общий сторож запаса для всех файлов AGENT_LIMITS
+status: idea
+priority: low
+updated: 2026-11-26
+
+`coach-help.md` (299 Б) и `coach-week.md` (272 Б) у порога; сторожа запаса нет у `coach-decisions.md`,
+`coach-onboarding.md`. Общий тест «запас ≥ 200 у каждого файла `AGENT_LIMITS`» вместо поштучных. Находка плана
+Н48 (docs/plan-n48.md, «Побочные находки», 3).
+
+## 197. mutmut по остальным функциям agenda/forms.py
+status: idea
+priority: low
+updated: 2026-11-26
+
+`_options`, `_number_limits`, `_ident`, `_answer`, `check_answers` — 139 мутантов `not checked`, вне Р18 и вне
+Н48. Находка плана Н48 (docs/plan-n48.md, «Побочные находки», 4).

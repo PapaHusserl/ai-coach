@@ -460,6 +460,13 @@ def test_nutrition_keeps_at_least_200_bytes_of_room() -> None:
     assert AGENT_LIMITS["coach-nutrition.md"] - size >= 200
 
 
+def test_day_keeps_at_least_200_bytes_of_room() -> None:
+    from text_limits import AGENT_LIMITS
+
+    size = len((ROOT / "agents" / "coach-day.md").read_bytes())
+    assert AGENT_LIMITS["coach-day.md"] - size >= 200
+
+
 def test_intake_file_sends_course_marks_to_pult() -> None:
     text = INTAKE_FILE.read_text()
     assert COURSE_PHRASE in text

@@ -237,6 +237,41 @@ def test_required_not_boolean_is_refused(required: Any) -> None:
         check_form(form(fields=[TEMPERATURE | {"required": required}]))
 
 
+# тексты отказов: какое правило и в каком поле сработало (Н48, выжившие мутанты)
+
+NO_TYPE = {"key": "mood", "type": "text", "label": "Настроение"}
+
+
+@pytest.mark.parametrize(
+    ("bad", "message"),
+    [
+        (form(name="my temp"), "name формы: латиница"),
+        (form(name="feel"), "готового опросника"),
+        (form(title=" "), "title формы: непустой текст до 24 знаков"),
+        (form(fields=[]), "В форме от 1 до 8 полей"),
+        (form(fields=None), "В форме от 1 до 8 полей"),
+        (form(fields=[TEMPERATURE, TEMPERATURE]), "^Ключи полей не должны повторяться[.]$"),
+        (form(fields=["temp"]), "Поле формы - объект"),
+        (form(fields=[SCORE | {"key": "1"}]), "key поля: латиница"),
+        (form(fields=[NO_TYPE]), r"mood: type из \['number'.*получено: 'text'"),
+        (form(fields=[SCORE | {"type": "number"}]), "score: готовый вопрос, только type=scale"),
+        (form(fields=[TEMPERATURE | {"label": " "}]), "temperature: label: непустой текст до 40"),
+        (form(fields=[TEMPERATURE | {"required": "да"}]), "temperature: required - true или false"),
+        (form(fields=[TEMPERATURE | {"unit": " "}]), "temperature: unit: непустой текст до 8"),
+        (form(fields=[STOOL | {"unit": "шт"}]), "stool: unit только у number"),
+        (form(fields=[SCORE | {"low": "а"}]), "score: low и high только у шкалы не score"),
+        (
+            form(fields=[{"key": "mood", "type": "scale", "label": "Настроение"}]),
+            "mood: у шкалы нужны полюса low и high",
+        ),
+        (form(fields=[MOOD | {"low": " "}]), "mood: low: непустой текст до 24"),
+    ],
+)
+def test_refusal_names_the_broken_rule(bad: dict[str, Any], message: str) -> None:
+    with pytest.raises(AgendaError, match=message):
+        check_form(bad)
+
+
 # check_answers
 
 
