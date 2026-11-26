@@ -26,11 +26,11 @@ def marks_of(survey: str | None) -> tuple[str, ...]:
 def checkin_due(
     survey: str | None, marks: dict[str, Any], evening: bool, who5: bool = False
 ) -> bool:
-    """Прошедший чек-ин без отметки своего опросника: вечерний - нет чек-ина вечера за день,
-    feel - нет самочувствия пункта, focus - нет оценки, none - нет «сделал / пропустил»,
-    who5 - нет замера WHO-5 за день (who5 - он есть)."""
+    """Прошедший чек-ин без отметки своего опросника: вечерний - нет ни своей анкеты, ни чек-ина
+    вечера за день, feel - нет самочувствия пункта, focus - нет оценки,
+    none - нет «сделал / пропустил», who5 - нет замера WHO-5 за день (who5 - он есть)."""
     missing = {
-        "evening": not evening,
+        "evening": not evening and not marks["feel"],
         "feel": not marks["feel"],
         "focus": not marks["ratings"],
         "none": marks["done"] is None,

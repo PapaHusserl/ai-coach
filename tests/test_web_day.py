@@ -225,9 +225,9 @@ def test_past_feel_checkin_is_due_until_own_feel_mark(conn: sqlite3.Connection) 
 
 def test_evening_done_does_not_clear_feel_checkin(conn: sqlite3.Connection) -> None:
     checkin = item(conn, "15:00", "15:15", kind="checkin", category=None, survey="feel")
-    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 20:30:00", "score": 3, "mood": 3})
+    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 22:30:00", "score": 3, "mood": 3})
     conn.commit()
-    assert by_id(view(conn, "21:00"), checkin)["due"] is True
+    assert by_id(view(conn, "23:00"), checkin)["due"] is True
 
 
 def test_past_focus_checkin_is_due_until_rating(conn: sqlite3.Connection) -> None:
@@ -350,10 +350,10 @@ def test_practice_done_zero_is_not_due(conn: sqlite3.Connection) -> None:
 
 def test_checkin_due_follows_evening_done_even_without_event_id(conn: sqlite3.Connection) -> None:
     checkin = item(conn, "20:00", "20:15", kind="checkin")
-    assert by_id(view(conn, "21:00"), checkin)["due"] is True
-    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 20:30:00", "score": 3, "mood": 3})
+    assert by_id(view(conn, "23:00"), checkin)["due"] is True
+    add_wellbeing(conn, {"date": D, "logged_at": f"{D} 22:30:00", "score": 3, "mood": 3})
     conn.commit()
-    assert by_id(view(conn, "21:00"), checkin)["due"] is False
+    assert by_id(view(conn, "23:00"), checkin)["due"] is False
 
 
 def test_marks_hold_only_own_item_and_day(conn: sqlite3.Connection) -> None:
@@ -1093,3 +1093,164 @@ def test_meal_remaining_counts_calories_burned_that_day(conn: sqlite3.Connection
     activity(conn, 1, calories=600.0)
     after = by_id(view(conn, "15:00"), breakfast)["meal"]["remaining"]
     assert after["kcal"] > before["kcal"]
+
+
+# --- П10: «красное» вечернего пункта по новому правилу, часы дня ---
+
+CHECKIN_BODY = {"score": 4, "mood": 3, "stress": 2}
+
+
+def evening_item(conn: sqlite3.Connection, start: str, end: str, **fields: Any) -> int:
+    return item(conn, start, end, kind="checkin", category=None, survey="evening", **fields)
+
+
+def entry(conn: sqlite3.Connection, logged_at: str, **fields: Any) -> None:
+    values = {"date": D, "logged_at": f"{D} {logged_at}", "score": 3, "text": ""} | fields
+    add_wellbeing(conn, values)
+    conn.commit()
+
+
+def test_early_evening_item_with_own_entry_is_not_due_and_keeps_the_entry(
+    conn: sqlite3.Connection,
+) -> None:
+    checkin = evening_item(conn, "09:30", "09:45")
+    save_mark(conn, mark(checkin, "checkin", **CHECKIN_BODY), at("09:35"))
+    conn.commit()
+    row = by_id(view(conn, "10:00"), checkin)
+    assert row["due"] is False
+    assert len(row["marks"]["feel"]) == 1
+
+
+def test_item_across_2200_with_early_entry_is_not_due(conn: sqlite3.Connection) -> None:
+    checkin = evening_item(conn, "21:50", "22:10")
+    save_mark(conn, mark(checkin, "checkin", **CHECKIN_BODY), at("21:55"))
+    conn.commit()
+    assert by_id(view(conn, "22:20"), checkin)["due"] is False
+
+
+def test_item_after_midnight_with_own_entry_is_not_due(conn: sqlite3.Connection) -> None:
+    next_day = "2026-11-08"
+    checkin = evening_item(conn, "00:30", "00:45", day=next_day)
+    body = {"event_id": checkin, "date": next_day, "mark": "checkin", **CHECKIN_BODY}
+    save_mark(conn, body, datetime.fromisoformat(f"{next_day}T00:35:00"))
+    conn.commit()
+    result = day_view(conn, date(2026, 11, 8), datetime.fromisoformat(f"{next_day}T01:00:00"))
+    assert by_id(result, checkin)["due"] is False
+
+
+def test_old_score_only_pult_entry_makes_item_not_due(conn: sqlite3.Connection) -> None:
+    checkin = evening_item(conn, "22:30", "22:45")
+    entry(conn, "23:00:00", event_id=checkin)
+    assert by_id(view(conn, "23:50"), checkin)["due"] is False
+
+
+def test_item_with_late_entry_made_by_pult_is_not_due(conn: sqlite3.Connection) -> None:
+    checkin = evening_item(conn, "20:00", "20:15")
+    save_mark(conn, mark(checkin, "checkin", **CHECKIN_BODY), at("20:05"))
+    conn.commit()
+    assert by_id(view(conn, "20:30"), checkin)["due"] is False
+
+
+def test_item_without_entry_is_due_while_only_early_command_entry_exists(
+    conn: sqlite3.Connection,
+) -> None:
+    checkin = evening_item(conn, "21:00", "21:15")
+    entry(conn, "21:30:00", mood=3)
+    assert by_id(view(conn, "21:45"), checkin)["due"] is True
+
+
+def test_item_without_entry_is_not_due_after_command_entry_at_2210(
+    conn: sqlite3.Connection,
+) -> None:
+    checkin = evening_item(conn, "21:00", "21:15")
+    entry(conn, "22:10:00", mood=3)
+    assert by_id(view(conn, "22:30"), checkin)["due"] is False
+
+
+def test_two_items_morning_entry_leaves_evening_item_due(conn: sqlite3.Connection) -> None:
+    morning = evening_item(conn, "09:30", "09:45")
+    late = evening_item(conn, "23:30", "23:45")
+    assert by_id(view(conn, "12:00"), morning)["due"] is True
+    save_mark(conn, mark(morning, "checkin", **CHECKIN_BODY), at("09:35"))
+    conn.commit()
+    assert by_id(view(conn, "12:00"), morning)["due"] is False
+    result = view(conn, "23:50")
+    assert (by_id(result, morning)["due"], by_id(result, late)["due"]) == (False, True)
+
+
+def test_two_items_own_late_entry_clears_both(conn: sqlite3.Connection) -> None:
+    morning = evening_item(conn, "09:30", "09:45")
+    late = evening_item(conn, "23:30", "23:45")
+    save_mark(conn, mark(late, "checkin", **CHECKIN_BODY), at("23:40"))
+    conn.commit()
+    result = view(conn, "23:50")
+    assert (by_id(result, morning)["due"], by_id(result, late)["due"]) == (False, False)
+
+
+def test_two_items_command_entry_at_2340_clears_both(conn: sqlite3.Connection) -> None:
+    morning = evening_item(conn, "09:30", "09:45")
+    late = evening_item(conn, "23:30", "23:45")
+    entry(conn, "23:40:00", mood=3)
+    result = view(conn, "23:50")
+    assert (by_id(result, morning)["due"], by_id(result, late)["due"]) == (False, False)
+
+
+def put_counter(conn: sqlite3.Connection, kind: str, value: float, **fields: Any) -> None:
+    from ai_coach.store.workload import upsert_counter
+
+    values = {
+        "date": D,
+        "kind": kind,
+        "value": value,
+        "source": "manual",
+        "synced_at": f"{D} 09:00:00",
+    } | fields
+    upsert_counter(conn, values)
+
+
+def test_manual_hours_has_only_recorded_manual_counters_of_the_day(
+    conn: sqlite3.Connection,
+) -> None:
+    from ai_coach.web.day_marks import manual_hours
+
+    put_counter(conn, "work_hours", 6)
+    put_counter(conn, "hobby_hours", 1.5)
+    put_counter(conn, "screen_work_hours", 4, source="activitywatch")
+    put_counter(conn, "rest_hours", 3, date="2026-11-06")
+    assert manual_hours(conn, D) == {"work": 6.0, "hobby": 1.5}
+
+
+def test_manual_hours_without_counters_is_empty(conn: sqlite3.Connection) -> None:
+    from ai_coach.web.day_marks import manual_hours
+
+    assert manual_hours(conn, D) == {}
+
+
+@pytest.mark.parametrize("survey", ["evening", None])
+def test_evening_checkin_item_has_hours(conn: sqlite3.Connection, survey: str | None) -> None:
+    checkin = item(conn, "22:30", "22:45", kind="checkin", category=None, survey=survey)
+    put_counter(conn, "work_hours", 6)
+    assert by_id(view(conn, "22:40"), checkin)["hours"] == {"work": 6.0}
+
+
+@pytest.mark.parametrize("survey", ["feel", "who5", "focus", "none", "form:temp"])
+def test_other_checkin_items_have_no_hours_key(conn: sqlite3.Connection, survey: str) -> None:
+    checkin = item(conn, "22:30", "22:45", kind="checkin", category=None, survey=survey)
+    assert "hours" not in by_id(view(conn, "22:40"), checkin)
+
+
+def test_task_item_has_no_hours_key(conn: sqlite3.Connection) -> None:
+    task = item(conn, "09:00", "10:00")
+    assert "hours" not in by_id(view(conn, "09:30"), task)
+
+
+def test_saved_evening_hours_show_in_next_day_view_and_are_replaced(
+    conn: sqlite3.Connection,
+) -> None:
+    checkin = evening_item(conn, "22:30", "22:45")
+    save_mark(conn, mark(checkin, "checkin", **CHECKIN_BODY, work=6), at("22:40"))
+    conn.commit()
+    assert by_id(view(conn, "22:41"), checkin)["hours"] == {"work": 6.0}
+    save_mark(conn, mark(checkin, "checkin", **CHECKIN_BODY, work=7), at("22:42"))
+    conn.commit()
+    assert by_id(view(conn, "22:43"), checkin)["hours"] == {"work": 7.0}

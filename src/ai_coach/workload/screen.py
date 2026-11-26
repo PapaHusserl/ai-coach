@@ -125,8 +125,9 @@ class AwReader:
     """Читает aw-server по HTTP: один POST на все периоды. Из ответа берутся только app и
     $category и длительность; заголовки окон не читаются и не хранятся."""
 
-    def __init__(self, config: ScreenConfig) -> None:
+    def __init__(self, config: ScreenConfig, timeout: float = TIMEOUT) -> None:
         self.config = config
+        self.timeout = timeout
 
     def _post(self, query: list[str], periods: list[Period]) -> list[list[dict[str, Any]]]:
         body = {
@@ -139,7 +140,7 @@ class AwReader:
             headers={"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 answer = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             raise ScreenError(f"aw-server: HTTP {e.code} на запрос query") from None

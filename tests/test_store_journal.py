@@ -304,6 +304,163 @@ def test_first_wellbeing_day_without_marks_is_none(conn: sqlite3.Connection) -> 
     assert first_wellbeing_day(conn) is None
 
 
+# --- П10: вечерний чек-ин (evening_done) — по времени записи и источнику ---
+
+DAY = "2026-11-08"
+NEXT = "2026-11-09"
+
+
+def feel_row(conn: sqlite3.Connection, logged_at: str, day: str = DAY, **fields: Any) -> None:
+    from ai_coach.store.journal import add_wellbeing
+
+    values = {"date": day, "logged_at": logged_at, "score": 3, "text": ""} | fields
+    add_wellbeing(conn, values)
+
+
+def evening_event(conn: sqlite3.Connection, **fields: Any) -> int:
+    from workload_fakes import coach_event
+
+    from ai_coach.store.agenda import add_event
+
+    values = coach_event(
+        kind="checkin",
+        date=DAY,
+        start_at=f"{DAY}T22:30:00",
+        end_at=f"{DAY}T22:45:00",
+        category=None,
+        **fields,
+    )
+    return add_event(conn, values)
+
+
+def test_evening_done_entry_without_event_at_noon_is_not_evening(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import evening_done
+
+    feel_row(conn, f"{DAY} 12:00:00", mood=3)
+    assert evening_done(conn, DAY) is False
+
+
+def test_evening_done_boundary_2159_no_and_2200_yes(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import evening_done
+
+    feel_row(conn, f"{DAY} 21:59:59", mood=3)
+    assert evening_done(conn, DAY) is False
+    feel_row(conn, f"{DAY} 22:00:00", mood=3)
+    assert evening_done(conn, DAY) is True
+
+
+@pytest.mark.parametrize("at", ["18:00:00", "20:00:00"])
+def test_evening_done_daytime_entries_before_22_are_not_evening(
+    conn: sqlite3.Connection, at: str
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    feel_row(conn, f"{DAY} {at}", mood=3)
+    assert evening_done(conn, DAY) is False
+
+
+@pytest.mark.parametrize("at", ["01:30:00", "03:59:59"])
+def test_evening_done_entry_after_midnight_belongs_to_previous_day(
+    conn: sqlite3.Connection, at: str
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    feel_row(conn, f"{NEXT} {at}", stress=2)
+    assert evening_done(conn, DAY) is True
+    assert evening_done(conn, NEXT) is False
+
+
+def test_evening_done_entry_dated_next_day_at_0400_is_nobodys_evening(
+    conn: sqlite3.Connection,
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    feel_row(conn, f"{NEXT} 04:00:00", day=NEXT, mood=3)
+    assert evening_done(conn, DAY) is False
+    assert evening_done(conn, NEXT) is False
+
+
+@pytest.mark.parametrize("field", ["fatigue", "work_thoughts", "flow"])
+def test_evening_done_other_scales_alone_do_not_close_evening(
+    conn: sqlite3.Connection, field: str
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    scales: dict[str, Any] = {field: 1}
+    feel_row(conn, f"{DAY} 23:00:00", **scales)
+    assert evening_done(conn, DAY) is False
+
+
+def test_evening_done_old_pult_entry_with_score_only_is_not_evening(
+    conn: sqlite3.Connection,
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    event_id = evening_event(conn, survey="evening")
+    feel_row(conn, f"{DAY} 23:00:00", event_id=event_id)
+    assert evening_done(conn, DAY) is False
+
+
+@pytest.mark.parametrize(("at", "expected"), [("23:00:00", True), ("15:00:00", False)])
+def test_evening_done_pult_entry_with_mood_without_stress_follows_time(
+    conn: sqlite3.Connection, at: str, expected: bool
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    event_id = evening_event(conn, survey="evening")
+    feel_row(conn, f"{DAY} {at}", event_id=event_id, mood=3)
+    assert evening_done(conn, DAY) is expected
+
+
+@pytest.mark.parametrize("survey", ["evening", None])
+def test_evening_done_entry_of_evening_or_legacy_checkin_counts(
+    conn: sqlite3.Connection, survey: str | None
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    event_id = evening_event(conn, survey=survey)
+    feel_row(conn, f"{DAY} 23:00:00", event_id=event_id, mood=3, stress=2)
+    assert evening_done(conn, DAY) is True
+
+
+@pytest.mark.parametrize("survey", ["feel", "form:temp"])
+def test_evening_done_entry_of_other_survey_checkin_does_not_count(
+    conn: sqlite3.Connection, survey: str
+) -> None:
+    from ai_coach.store.journal import evening_done
+
+    event_id = evening_event(conn, survey=survey)
+    feel_row(conn, f"{DAY} 23:00:00", event_id=event_id, mood=3)
+    assert evening_done(conn, DAY) is False
+
+
+def test_evening_done_entry_of_task_does_not_count(conn: sqlite3.Connection) -> None:
+    from workload_fakes import coach_event
+
+    from ai_coach.store.agenda import add_event
+    from ai_coach.store.journal import evening_done
+
+    task = add_event(conn, coach_event(date=DAY, start_at=f"{DAY}T10:00:00"))
+    feel_row(conn, f"{DAY} 23:00:00", event_id=task, mood=3)
+    assert evening_done(conn, DAY) is False
+
+
+def test_evening_done_entry_of_missing_event_does_not_count(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import evening_done
+
+    conn.execute("PRAGMA foreign_keys = OFF")
+    feel_row(conn, f"{DAY} 23:00:00", event_id=9999, mood=3)
+    assert evening_done(conn, DAY) is False
+
+
+def test_evening_done_entry_of_removed_evening_checkin_counts(conn: sqlite3.Connection) -> None:
+    from ai_coach.store.journal import evening_done
+
+    event_id = evening_event(conn, survey="evening", status="removed")
+    feel_row(conn, f"{DAY} 23:00:00", event_id=event_id, mood=3)
+    assert evening_done(conn, DAY) is True
+
+
 def test_last_sync_log_skips_weather_archive_row(conn: sqlite3.Connection) -> None:
     add_sync_log(conn, {"started_at": "2026-11-22T10:00:00", "kind": "sync", "status": "ok"})
     add_sync_log(

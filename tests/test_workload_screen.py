@@ -851,6 +851,24 @@ def test_aw_reader_posts_query_and_periods(monkeypatch: pytest.MonkeyPatch) -> N
     assert kwargs.get("timeout")
 
 
+def test_aw_reader_sends_json_content_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = serve(monkeypatch, [[], []])
+    AwReader(CONFIG).fetch(PERIODS)
+    assert seen[0][0].get_header("Content-type") == "application/json"
+
+
+def test_aw_reader_default_timeout_is_30_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = serve(monkeypatch, [[], []])
+    AwReader(CONFIG).fetch(PERIODS)
+    assert seen[0][1]["timeout"] == 30
+
+
+def test_aw_reader_takes_its_own_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = serve(monkeypatch, [[], []])
+    AwReader(CONFIG, 3).fetch(PERIODS)
+    assert seen[0][1]["timeout"] == 3
+
+
 def test_aw_reader_uses_config_url_without_double_slash(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = serve(monkeypatch, [[], []])
     AwReader(ScreenConfig(url="http://127.0.0.1:5999/")).fetch(PERIODS)
@@ -928,27 +946,31 @@ def test_app_names_do_not_reach_demand_rows_or_notes() -> None:
 
 def test_aw_reader_connection_refused_is_screen_error(monkeypatch: pytest.MonkeyPatch) -> None:
     serve(monkeypatch, urllib.error.URLError(ConnectionRefusedError()))
-    with pytest.raises(ScreenError):
+    with pytest.raises(ScreenError) as info:
         AwReader(CONFIG).fetch(PERIODS)
+    assert str(info.value) == "aw-server не отвечает - запущен ли ActivityWatch?"
 
 
 def test_aw_reader_timeout_is_screen_error(monkeypatch: pytest.MonkeyPatch) -> None:
     serve(monkeypatch, TimeoutError())
-    with pytest.raises(ScreenError):
+    with pytest.raises(ScreenError) as info:
         AwReader(CONFIG).fetch(PERIODS)
+    assert str(info.value) == "aw-server не отвечает - запущен ли ActivityWatch?"
 
 
 def test_aw_reader_http_error_is_screen_error_with_code(monkeypatch: pytest.MonkeyPatch) -> None:
     error = urllib.error.HTTPError("u", 400, "bad", None, io.BytesIO(b"x"))  # type: ignore[arg-type]
     serve(monkeypatch, error)
-    with pytest.raises(ScreenError, match="400"):
+    with pytest.raises(ScreenError) as info:
         AwReader(CONFIG).fetch(PERIODS)
+    assert str(info.value) == "aw-server: HTTP 400 на запрос query"
 
 
 def test_aw_reader_not_json_is_screen_error(monkeypatch: pytest.MonkeyPatch) -> None:
     serve(monkeypatch, b"<html>not json</html>")
-    with pytest.raises(ScreenError):
+    with pytest.raises(ScreenError) as info:
         AwReader(CONFIG).fetch(PERIODS)
+    assert str(info.value) == "aw-server вернул не JSON"
 
 
 @pytest.mark.parametrize("answer", [{"a": 1}, [[]], [[], [], []]])
@@ -956,8 +978,9 @@ def test_aw_reader_answer_not_by_period_count_is_screen_error(
     monkeypatch: pytest.MonkeyPatch, answer: Any
 ) -> None:
     serve(monkeypatch, answer)
-    with pytest.raises(ScreenError):
+    with pytest.raises(ScreenError) as info:
         AwReader(CONFIG).fetch(PERIODS)
+    assert str(info.value) == "aw-server вернул ответ не по числу периодов"
 
 
 def tl_event(

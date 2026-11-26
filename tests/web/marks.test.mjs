@@ -356,7 +356,7 @@ test("TAB_FIELDS.checkin: усталость и раздражительност
 		"hindrance",
 		"valuable",
 	]);
-	assert.deepEqual(REQUIRED.checkin, ["score"]);
+	assert.deepEqual(REQUIRED.checkin, ["score", "mood", "stress"]);
 });
 
 test("FIELDS.irritability: подпись и полюса (Р2)", () => {
@@ -393,23 +393,40 @@ test("historyRows: усталость и раздражительность в �
 	assert.equal(historyRows(feel({ fatigue: 4 }))[0].text, "Самочувствие 4, усталость 4");
 });
 
-test("canSave чек-ина: нужно только самочувствие", () => {
+test("canSave чек-ина: нужны самочувствие, настроение и стресс", () => {
 	assert.equal(canSave("checkin", { mood: 3 }), false);
-	assert.equal(canSave("checkin", { score: 4 }), true);
+	assert.equal(canSave("checkin", { score: 4 }), false);
+	assert.equal(canSave("checkin", { score: 4, mood: 3 }), false);
+	assert.equal(canSave("checkin", { score: 4, mood: 3, stress: 2 }), true);
+});
+
+test("buildPayload checkin: три обязательные шкалы шлются числами, пустая необязательная — нет", () => {
+	const form = { event_id: 9, date: "2026-11-08", score: 4, mood: 5, stress: 2, fatigue: null };
+	const payload = buildPayload("checkin", form);
+	assert.equal(payload.score, 4);
+	assert.equal(payload.mood, 5);
+	assert.equal(payload.stress, 2);
+	assert.equal("fatigue" in payload, false);
+});
+
+test("errorText: отказ сервера по настроению — ошибка пульта (код 400)", () => {
+	assert.equal(errorText(400, "mood: от 1 до 5."), "Не сохранилось, ошибка пульта (код 400).");
 });
 
 test("buildPayload checkin: пустые поля не уходят, часы — число", () => {
 	const base = { event_id: 9, date: "2026-11-08" };
-	assert.deepEqual(buildPayload("checkin", { ...base, score: 4, text: "" }), {
+	assert.deepEqual(buildPayload("checkin", { ...base, score: 4, mood: 3, stress: 2, text: "" }), {
 		...base,
 		mark: "checkin",
 		score: 4,
+		mood: 3,
+		stress: 2,
 	});
 	const full = buildPayload("checkin", {
 		...base,
 		score: 4,
 		mood: 5,
-		stress: null,
+		stress: 2,
 		thoughts: 2,
 		work: "6,5",
 		hobby: "0",
@@ -422,13 +439,13 @@ test("buildPayload checkin: пустые поля не уходят, часы �
 		mark: "checkin",
 		score: 4,
 		mood: 5,
+		stress: 2,
 		thoughts: 2,
 		work: 6.5,
 		hobby: 0,
 		flow: 0,
 		text: "ок",
 	});
-	assert.equal("stress" in full, false);
 	assert.equal("rest" in full, false);
 	assert.equal("work" in buildPayload("checkin", { ...base, score: 3, work: "abc" }), false);
 	assert.equal("flow" in buildPayload("checkin", { ...base, score: 3, flow: null }), false);

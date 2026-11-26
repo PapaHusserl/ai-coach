@@ -1,6 +1,7 @@
 // Пульт: поля формы отметки (шкалы, часы, погружение), только DOM (зовётся в браузере).
 // Значения живут в форме вкладки; таблицы и чистые функции — marks-model.js.
 import { el } from "./dom.js";
+import { hoursLine } from "./hours-model.js";
 import { FIELDS, FLOW_CHOICES, HOURS, REQUIRED, canSave } from "./marks-model.js";
 import { screenLine } from "./screen-hint.js";
 
@@ -40,11 +41,13 @@ export function scaleRow(field, optional, form, name, changed) {
 	return wrap;
 }
 
-// Часы дня чек-ина: строка экрана за день day и поля ввода, значение живёт в форме вкладки.
-export function hoursFields(form, day) {
+// Часы дня чек-ина: строка экрана за день day, строка уже записанных часов и поля ввода,
+// значение живёт в форме вкладки.
+export function hoursFields(form, day, recorded) {
 	const box = el("div", "hoursbox");
 	const line = el("div", "hours");
 	const inputs = {};
+	const note = hoursLine(recorded);
 	box.append(
 		screenLine(day, (fill) => {
 			for (const [name, value] of Object.entries(fill)) {
@@ -52,6 +55,7 @@ export function hoursFields(form, day) {
 				inputs[name].value = value;
 			}
 		}),
+		...(note ? [el("div", "hline hint", note)] : []),
 		line,
 	);
 	for (const [name, label] of Object.entries(HOURS)) {

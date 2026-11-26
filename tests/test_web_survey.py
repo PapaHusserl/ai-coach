@@ -78,6 +78,21 @@ def test_evening_and_null_follow_evening_flag(survey: str | None) -> None:
     assert checkin_due(survey, marks(), evening=True) is False
 
 
+@pytest.mark.parametrize("survey", ["evening", None])
+@pytest.mark.parametrize("evening", [False, True])
+def test_evening_and_null_are_not_due_with_own_entry(survey: str | None, evening: bool) -> None:
+    assert checkin_due(survey, marks(feel=[FEEL]), evening=evening) is False
+
+
+def test_due_checkin_without_survey_with_own_entry_is_not_due() -> None:
+    assert due("checkin", marks(feel=[FEEL]), False, True) is False
+    assert due("checkin", marks(feel=[FEEL]), False, False) is False
+
+
+def test_who5_is_due_without_own_measure_even_with_feel_and_evening() -> None:
+    assert checkin_due("who5", marks(feel=[FEEL]), evening=True) is True
+
+
 def test_due_checkin_uses_survey_and_only_when_past() -> None:
     assert due("checkin", marks(), True, True, survey="feel") is True
     assert due("checkin", marks(feel=[FEEL]), False, True, survey="feel") is False

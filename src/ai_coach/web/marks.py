@@ -27,9 +27,7 @@ COOKING = "Готовка"  # пункт meal из agenda/day_layout.py: окн�
 MAX_ID = 2**63 - 1  # предел INTEGER sqlite
 MAX_HOURS = 24  # как cli/main.py MAX_HOURS
 HOURS = ("work", "hobby", "rest")
-CHECKIN_SCORES = {
-    "mood": "mood",
-    "stress": "stress",
+CHECKIN_SCORES = {  # необязательные шкалы анкеты вечера; mood и stress обязательны, как score
     "fatigue": "fatigue",
     "irritability": "irritability",
     "thoughts": "work_thoughts",
@@ -98,6 +96,8 @@ def _checkin(conn: sqlite3.Connection, payload: dict[str, Any], base: dict[str, 
     values = {
         **base,
         "score": _score("score", payload.get("score")),
+        "mood": _score("mood", payload.get("mood")),
+        "stress": _score("stress", payload.get("stress")),
         "text": _text(payload),
         "flow": flow,
     }

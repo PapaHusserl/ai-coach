@@ -24,7 +24,7 @@ def config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def use_aw(monkeypatch: pytest.MonkeyPatch, aw: FakeAw) -> FakeAw:
-    monkeypatch.setattr(screen, "AwReader", lambda config: aw)
+    monkeypatch.setattr(screen, "AwReader", lambda config, timeout: aw)
     return aw
 
 
@@ -112,7 +112,7 @@ def test_screen_view_gives_reader_the_screen_config(
 ) -> None:
     given: list[object] = []
 
-    def reader(config: object) -> FakeAw:
+    def reader(config: object, timeout: float) -> FakeAw:
         given.append(config)
         return FakeAw()
 
@@ -124,6 +124,37 @@ def test_screen_view_gives_reader_the_screen_config(
         conn.close()
     assert len(given) == 1
     assert given[0].work == frozenset({"alpha editor"})  # type: ignore[attr-defined]
+
+
+def test_screen_view_gives_reader_the_short_timeout_of_3_seconds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    timeouts: list[float] = []
+
+    def reader(config: object, timeout: float) -> FakeAw:
+        timeouts.append(timeout)
+        return FakeAw()
+
+    monkeypatch.setattr(screen, "AwReader", reader)
+    conn = open_db(tmp_path / "coach.db")
+    try:
+        screen.screen_view(conn, DAY, NOW)
+    finally:
+        conn.close()
+    assert timeouts == [3]
+
+
+def test_screen_view_kind_missing_in_rows_is_zero_hours(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [{"kind": "screen_work_hours", "value": 2.5}]
+    monkeypatch.setattr(screen, "read_screen", lambda *args: (rows, []))
+    conn = open_db(tmp_path / "coach.db")
+    try:
+        view = screen.screen_view(conn, DAY, NOW)
+    finally:
+        conn.close()
+    assert view == {"work": 2.5, "hobby": 0.0, "browser": 0.0}
 
 
 def test_screen_view_writes_no_counters(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

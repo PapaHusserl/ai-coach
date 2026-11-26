@@ -31,7 +31,7 @@ import { who5Fields } from "./who5-fields.js";
 export * from "./marks-model.js";
 export { pantryLines };
 
-const state = { id: null, day: null, tab: null, future: false, dayAhead: false, past: false, forms: {}, reload: null, meal: null, offer: 0, pantry: [], training: null, who5: null, form: null, busy: false };
+const state = { id: null, day: null, tab: null, future: false, dayAhead: false, past: false, forms: {}, reload: null, meal: null, offer: 0, pantry: [], training: null, who5: null, hours: null, form: null, busy: false };
 // Красная строка ошибки стоит в форме над «Сохранить» и переезжает вместе с ней.
 const errorLine = typeof document === "undefined" ? null : el("p", "error");
 // Узел окна один на страницу: переезжает под раскрытую строку и переживает перерисовку списка (Р1 = 2).
@@ -183,7 +183,7 @@ function tabFields(tab, save) {
 	const nodes = (TAB_FIELDS[tab] ?? []).map((name) => scale(tab, form, name, save));
 	if (tab === "who5") nodes.push(who5Fields(form, save));
 	if (tab === "form") nodes.push(formFields(state.form.fields, form, save));
-	if (tab === "checkin") nodes.push(hoursFields(form, state.day), flowField(form));
+	if (tab === "checkin") nodes.push(hoursFields(form, state.day, state.hours), flowField(form));
 	return nodes;
 }
 
@@ -288,6 +288,7 @@ export function mountMarks(item, row, view) {
 	state.meal = row.meal ?? null;
 	state.training = row.training ?? null;
 	state.who5 = row.who5 ?? null;
+	state.hours = row.hours;
 	state.form = row.form ?? null;
 	state.past = isPast(row, view.now);
 	state.dayAhead = view.date > view.now.slice(0, 10);

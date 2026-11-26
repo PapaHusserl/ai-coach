@@ -7,6 +7,7 @@ from typing import Any
 from ai_coach.store.db import fetch_all, fetch_one, insert, upsert
 
 EVENING_CUTOFF = time(4, 0)  # чек-ин раньше этого времени относится к прошедшему вечеру
+EVENING_CHECKIN_FROM = "22:00"  # запись самочувствия раньше этого времени вечер не закрывает
 MIN_WEIGHT_KG = 20
 MAX_WEIGHT_KG = 300
 
@@ -231,12 +232,17 @@ def last_who5(conn: sqlite3.Connection, day: str, n: int = 2) -> list[dict[str, 
 
 
 def evening_done(conn: sqlite3.Connection, day: str) -> bool:
-    """Вечерний чек-ин за день сделан: есть запись самочувствия с настроением или стрессом."""
+    """Вечерний чек-ин за день сделан: запись самочувствия с настроением или стрессом, сделанная
+    не раньше EVENING_CHECKIN_FROM своего дня, командой (нет пункта) или анкетой вечера пункта."""
     sql = (
-        "SELECT COUNT(*) AS n FROM wellbeing_log "
-        "WHERE date = ? AND (mood IS NOT NULL OR stress IS NOT NULL)"
+        "SELECT COUNT(*) AS n FROM wellbeing_log w "
+        "LEFT JOIN coach_events e ON e.id = w.event_id "
+        "WHERE w.date = ? AND (w.mood IS NOT NULL OR w.stress IS NOT NULL) "
+        "AND w.logged_at >= w.date || ' ' || ? "
+        "AND (w.event_id IS NULL OR "
+        "(e.kind = 'checkin' AND COALESCE(e.survey, 'evening') = 'evening'))"
     )
-    row = fetch_one(conn, sql, (day,))
+    row = fetch_one(conn, sql, (day, EVENING_CHECKIN_FROM))
     return bool(row and row["n"])
 
 

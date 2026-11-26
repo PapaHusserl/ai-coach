@@ -282,7 +282,7 @@ def test_wellbeing_topic_names_fatigue_and_irritability() -> None:
 
 def test_pult_marks_topic_names_new_evening_scales() -> None:
     text = topic("pult-marks.md")
-    assert "настроение, стресс, усталость, раздражительность, часы работы" in text
+    assert "усталость, раздражительность, часы работы" in text
 
 
 def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
@@ -344,6 +344,48 @@ def test_evening_signals_topic_is_within_limit() -> None:
 
 def test_wellbeing_topic_keeps_reserve_below_limit() -> None:
     assert HELP_TOPIC_LIMIT - len((TOPICS / "wellbeing.md").read_bytes()) >= 200
+
+
+def test_wellbeing_topic_tells_evening_checkin_from_2200() -> None:
+    text = topic("wellbeing.md")
+    assert "не раньше 22:00 - командой (до 04:00 - за вчера) или анкетой вечера пульта" in text
+    assert "запись раньше 22:00 - нет" in text
+
+
+def test_wellbeing_topic_has_no_old_repeat_phrase() -> None:
+    assert "Уже сделанный сегодня чек-ин заново не повторяется" not in topic("wellbeing.md")
+
+
+def test_pult_marks_topic_tells_recorded_hours_line() -> None:
+    text = topic("pult-marks.md")
+    assert "записано: работа N ч · хобби M ч · отдых K ч" in text
+
+
+def test_pult_marks_topic_names_required_scales() -> None:
+    text = topic("pult-marks.md")
+    assert "самочувствие, настроение и стресс обязательны" in text
+    assert "у обязательной - нет" in text
+
+
+def test_pult_marks_topic_has_no_old_required_phrases() -> None:
+    text = topic("pult-marks.md")
+    assert "самочувствие обязательно, остальное" not in text
+    assert "у самочувствия - нет" not in text
+
+
+def test_pult_marks_topic_tells_when_evening_survey_closes_the_evening() -> None:
+    text = topic("pult-marks.md")
+    assert "считается вечерним чек-ином, если записана не раньше 22:00" in text
+    assert (
+        "Записанная раньше вечер не закрывает, но свой пункт гасит: пункт с анкетой вечера "
+        "красный, пока нет ни его анкеты, ни вечернего чек-ина."
+    ) in text
+
+
+def test_pult_marks_topic_has_no_old_checkin_phrases() -> None:
+    text = topic("pult-marks.md")
+    assert "считается вечерним чек-ином: скил вечера" not in text
+    assert "остаётся красным" not in text
 
 
 def test_deviations_topic_keeps_reserve_below_limit() -> None:

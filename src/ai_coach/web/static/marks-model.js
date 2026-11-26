@@ -70,7 +70,7 @@ export const TAB_FIELDS = {
 export const REQUIRED = {
 	rating: ["focus", "fatigue", "effort"],
 	feel: ["score"],
-	checkin: ["score"],
+	checkin: ["score", "mood", "stress"],
 };
 export const HOURS = { work: "Работа, ч", hobby: "Хобби, ч", rest: "Отдых, ч" };
 export const FLOW_CHOICES = [

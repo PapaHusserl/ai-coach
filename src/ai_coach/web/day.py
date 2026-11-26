@@ -13,12 +13,13 @@ from ai_coach.store.forms import list_forms
 from ai_coach.store.journal import evening_done
 from ai_coach.store.plans import get_planned_workout
 from ai_coach.store.workload import list_calendar_events
-from ai_coach.web.day_marks import due, empty_marks, marks_for_day
+from ai_coach.web.day_marks import due, empty_marks, manual_hours, marks_for_day
 from ai_coach.web.food import meal_view, offers_view
 from ai_coach.web.forms import form_view
 from ai_coach.web.header import header_view
 from ai_coach.web.intake import intake_view
 from ai_coach.web.marks import COOKING
+from ai_coach.web.survey import marks_of
 from ai_coach.web.training import fact, plan_view
 from ai_coach.web.who5 import who5_view
 from ai_coach.workload.service import (
@@ -55,6 +56,7 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
     marks = marks_for_day(conn, day.isoformat())
     evening = evening_done(conn, day.isoformat())
     who5 = who5_view(conn, day.isoformat())
+    hours = manual_hours(conn, day.isoformat())
     meal = None
     items: list[dict[str, Any]] = []
     for r in rows:
@@ -67,6 +69,8 @@ def _items(conn: sqlite3.Connection, day: date, now: datetime) -> list[dict[str,
         item |= {"marks": mine, "due": flag}
         if r["kind"] == "checkin" and r["survey"] == "who5":
             item["who5"] = who5
+        if r["kind"] == "checkin" and marks_of(r["survey"]) == ("checkin",):
+            item["hours"] = hours
         if form := form_view(conn, r["survey"]):
             item["form"] = form
         if training:

@@ -387,22 +387,22 @@ def test_morning_entry_without_mood_stress_is_not_evening(conn: sqlite3.Connecti
 
 
 def test_entry_with_mood_is_evening_done(conn: sqlite3.Connection) -> None:
-    feel(conn, DAY, "21:00:00", mood=4)
+    feel(conn, DAY, "22:00:00", mood=4)
     assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is True
 
 
 def test_entry_with_stress_is_evening_done(conn: sqlite3.Connection) -> None:
-    feel(conn, DAY, "21:00:00", stress=2)
+    feel(conn, DAY, "22:00:00", stress=2)
     assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is True
 
 
 def test_yesterdays_evening_does_not_count(conn: sqlite3.Connection) -> None:
-    feel(conn, shift(DAY, -1), "21:00:00", mood=4, stress=2)
+    feel(conn, shift(DAY, -1), "22:00:00", mood=4, stress=2)
     assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is False
 
 
 def test_evening_done_survives_snapshot_trimming(conn: sqlite3.Connection) -> None:
-    feel(conn, DAY, "21:00:00", mood=4)
+    feel(conn, DAY, "22:00:00", mood=4)
     snapshot = call(conn, "get_morning_snapshot", date=DAY)
     assert isinstance(snapshot["evening_done_today"], bool)
 
@@ -469,8 +469,25 @@ def test_snapshot_with_detachment_fields_fits_total_limit(conn: sqlite3.Connecti
 
 
 def test_detachment_fields_alone_do_not_make_evening_done(conn: sqlite3.Connection) -> None:
-    feel(conn, DAY, "21:00:00", work_thoughts=4, hindrance=2, valuable=3, flow=1)
+    feel(conn, DAY, "23:00:00", work_thoughts=4, hindrance=2, valuable=3, flow=1)
     assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is False
+
+
+def test_entry_with_mood_before_2200_is_not_evening_done(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "12:00:00", mood=4)
+    assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is False
+
+
+def test_entry_with_mood_at_2159_is_not_evening_done(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "21:59:59", mood=4)
+    assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is False
+
+
+def test_entry_with_mood_at_2230_is_evening_done(conn: sqlite3.Connection) -> None:
+    feel(conn, DAY, "12:00:00", mood=4)
+    feel(conn, DAY, "21:00:00", mood=4)
+    feel(conn, DAY, "22:30:00", mood=4)
+    assert call(conn, "get_morning_snapshot", date=DAY)["evening_done_today"] is True
 
 
 def test_detachment_fields_do_not_change_deviations(conn: sqlite3.Connection) -> None:

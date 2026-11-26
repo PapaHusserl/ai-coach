@@ -7,7 +7,8 @@ from typing import Any
 from ai_coach.store.agenda import list_done
 from ai_coach.store.forms import list_form_log
 from ai_coach.store.journal import list_focus, list_food, list_slip, list_wellbeing
-from ai_coach.web.marks import COOKING
+from ai_coach.store.workload import list_counters
+from ai_coach.web.marks import COOKING, HOURS
 from ai_coach.web.survey import checkin_due, is_form
 
 
@@ -46,6 +47,17 @@ def marks_for_day(conn: sqlite3.Connection, day: str) -> dict[int, dict[str, Any
             keys = ("id", "text", "kcal", "logged_at")
             of(r["event_id"])["food"].append({k: r[k] for k in keys})
     return found
+
+
+def manual_hours(conn: sqlite3.Connection, day: str) -> dict[str, float]:
+    """Ручные часы дня {work, hobby, rest}: только записанные (source manual)."""
+    counters = list_counters(conn, day, day)
+    return {
+        name: row["value"]
+        for row in counters
+        for name in HOURS
+        if row["kind"] == f"{name}_hours" and row["source"] == "manual"
+    }
 
 
 def due(

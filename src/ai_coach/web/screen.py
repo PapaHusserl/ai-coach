@@ -7,6 +7,7 @@ from typing import Any
 from ai_coach.workload.config import WorkloadConfigError, load_config
 from ai_coach.workload.screen import AwReader, ScreenError, read_screen
 
+TIMEOUT = 3  # секунд: пульт не ждёт зависший ActivityWatch так долго, как sync
 KINDS = {
     "work": "screen_work_hours",
     "hobby": "screen_hobby_hours",
@@ -25,7 +26,7 @@ def screen_view(conn: sqlite3.Connection, day: date, now: datetime) -> dict[str,
     if config.screen is None:
         return {"missing": "config"}
     try:
-        rows, _ = read_screen(AwReader(config.screen), config.screen, day, day)
+        rows, _ = read_screen(AwReader(config.screen, TIMEOUT), config.screen, day, day)
     except ScreenError:
         return {"missing": "silent"}
     if not rows:
