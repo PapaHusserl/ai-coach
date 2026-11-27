@@ -100,10 +100,6 @@ def test_wellbeing_topic_has_commands_and_flags() -> None:
         "coach feel",
         "--mood",
         "--stress",
-        "--thoughts",
-        "--flow",
-        "--hindrance",
-        "--valuable",
         "get_focus_log",
         "get_wellbeing",
         "04:00",
@@ -111,8 +107,22 @@ def test_wellbeing_topic_has_commands_and_flags() -> None:
         assert needle in text, needle
 
 
+def test_evening_checkin_section_lives_in_evening_signals_with_flags() -> None:
+    text = topic("evening-signals.md")
+    assert "Вечерний чек-ин - `тренер вечер`" in text
+    for needle in ("--thoughts", "--flow", "--hindrance", "--valuable", "--rest"):
+        assert needle in text, needle
+
+
+def test_wellbeing_topic_points_to_evening_checkin_in_evening_signals() -> None:
+    text = topic("wellbeing.md")
+    assert "## Вечерний чек-ин" not in text
+    assert "--thoughts" not in text
+    assert "cat .claude/agents/coach-help/evening-signals.md" in text
+
+
 def test_wellbeing_topic_has_scale_poles() -> None:
-    text = topic("wellbeing.md").lower()
+    text = (topic("wellbeing.md") + topic("evening-signals.md")).lower()
     for pole in (
         "рассеян",
         "собран",
@@ -168,7 +178,7 @@ def test_help_index_mentions_pult_marks_overload_deviations() -> None:
 
 def test_pult_topic_points_pult_windows_to_food_and_training() -> None:
     text = topic("pult.md")
-    assert "Еда и тренировка - окна в `food.md` и `training.md`" in text
+    assert "Еда - окно в `food-pult.md`, тренировка - `training.md`" in text
     assert "тренировок в окнах пока нет" not in text
 
 
@@ -184,9 +194,43 @@ def test_pult_topic_has_the_sections_of_the_pult() -> None:
 
 
 def test_pult_topic_describes_state_signals_and_charts() -> None:
-    text = topic("pult.md").lower()
+    text = topic("pult-state.md").lower()
     for needle in ("сигнал", "график", "короткая ночь", "долг сна", "пульс покоя", "готовность"):
         assert needle in text, needle
+
+
+def test_pult_state_topic_has_the_moved_section() -> None:
+    text = topic("pult-state.md")
+    for needle in ("Состояние", "сигналов нет", "Пять графиков"):
+        assert needle in text, needle
+
+
+def test_pult_topic_has_no_state_section_and_one_link_to_state() -> None:
+    text = topic("pult.md")
+    for needle in ("## Состояние", "сигналов нет", "Пять графиков"):
+        assert needle not in text, needle
+    lines = [ln for ln in text.splitlines() if "pult-state.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/pult-state.md" in lines[0]
+
+
+def test_food_pult_topic_has_the_moved_section() -> None:
+    text = topic("food-pult.md")
+    for needle in ("Съел вариант", "Добавки к приёму"):
+        assert needle in text, needle
+
+
+def test_food_topic_has_no_pult_section_and_one_link_to_it() -> None:
+    text = topic("food.md")
+    for needle in ("## Еда в пульте", "Съел вариант", "Добавки к приёму"):
+        assert needle not in text, needle
+    lines = [ln for ln in text.splitlines() if "food-pult.md" in ln]
+    assert len(lines) == 1
+    assert "cat .claude/agents/coach-help/food-pult.md" in lines[0]
+
+
+def test_pult_topic_names_food_pult_topic_for_food_window() -> None:
+    assert "food-pult.md" in topic("pult.md")
 
 
 def test_pult_topic_says_event_note_is_shown_under_the_item() -> None:
@@ -289,7 +333,7 @@ def test_pult_marks_scale_poles_match_wellbeing_topic() -> None:
     script = model.read_text(encoding="utf-8")
     poles = re.findall(r'low: "([^"]+)", high: "([^"]+)"', script)
     assert len(poles) == 10
-    text = topic("wellbeing.md")
+    text = topic("wellbeing.md") + topic("evening-signals.md")
     for low, high in poles:
         assert f"1 - {low}, 5 - {high}" in text, (low, high)
 
@@ -342,7 +386,7 @@ def test_evening_signals_topic_is_within_limit() -> None:
 
 
 def test_wellbeing_topic_tells_evening_checkin_from_2200() -> None:
-    text = topic("wellbeing.md")
+    text = topic("evening-signals.md")
     assert "не раньше 22:00 - командой (до 04:00 - за вчера) или анкетой вечера пульта" in text
     assert "запись раньше 22:00 - нет" in text
 
@@ -415,7 +459,7 @@ def test_deviations_topic_points_scales_to_wellbeing_topic() -> None:
 
 
 def test_pult_topic_describes_yesterday_evening_rows() -> None:
-    text = topic("pult.md")
+    text = topic("pult-state.md")
     assert "вчера вечером" in text
     assert "усталость" in text
     assert "раздражительность" in text
@@ -811,12 +855,12 @@ def test_sleep_topic_illness_says_metric_without_value_is_not_checked() -> None:
 
 
 def test_pult_topic_state_tab_shows_rest_row_with_reason() -> None:
-    text = topic("pult.md")
+    text = topic("pult-state.md")
     assert "покой после болезни · день 1 из 2 — нет записи" in text
 
 
 def test_pult_topic_says_tail_after_dash_is_reason_day_not_counted() -> None:
-    lines = [ln for ln in topic("pult.md").splitlines() if "покой после болезни" in ln]
+    lines = [ln for ln in topic("pult-state.md").splitlines() if "покой после болезни" in ln]
     assert lines
     assert any("причин" in ln and "не засчитан" in ln for ln in lines)
 
@@ -995,7 +1039,7 @@ def test_weather_topic_signal_paragraph_has_needles() -> None:
 
 
 def test_pult_topic_state_section_names_weather_signal_lines() -> None:
-    text = topic("pult.md")
+    text = topic("pult-state.md")
     assert "перепад давления" in text
     assert "перепад температуры" in text
 
@@ -1117,11 +1161,24 @@ def test_workload_topic_keeps_one_link_to_overload() -> None:
 
 
 def test_wellbeing_topic_keeps_one_link_to_deviations() -> None:
-    text = topic("wellbeing.md")
-    assert "## Отклонения" not in text
+    assert "## Отклонения" not in topic("wellbeing.md")
+    text = topic("evening-signals.md")
     lines = [ln for ln in text.splitlines() if "deviations.md" in ln]
     assert len(lines) == 1
     assert "cat .claude/agents/coach-help/deviations.md" in lines[0]
+
+
+def test_wellbeing_topic_has_exactly_one_deviations_cat_line() -> None:
+    lines = [
+        ln
+        for ln in topic("wellbeing.md").splitlines()
+        if "cat .claude/agents/coach-help/deviations.md" in ln
+    ]
+    assert len(lines) == 1
+
+
+def test_start_topic_names_evening_signals_for_evening_checkin() -> None:
+    assert "evening-signals.md" in topic("start.md")
 
 
 def test_overload_and_deviations_topics_have_their_headings() -> None:
@@ -1413,7 +1470,7 @@ def test_workload_topic_weekly_review_names_rest_and_days_off() -> None:
 
 
 def test_wellbeing_topic_says_rest_hours_are_asked_even_with_screen() -> None:
-    text = topic("wellbeing.md")
+    text = topic("evening-signals.md")
     assert "часы отдыха" in text
     assert "экран" in text
 
@@ -1486,7 +1543,7 @@ def test_supplements_topic_sends_course_marks_to_pult() -> None:
 
 
 def test_food_topic_mentions_intake_block() -> None:
-    assert "Добавки к приёму" in topic("food.md")
+    assert "Добавки к приёму" in topic("food-pult.md")
 
 
 def test_help_index_forms_and_weight_food_are_separate_lines() -> None:

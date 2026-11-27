@@ -98,6 +98,12 @@ def test_evening_ritual_offers_day_plan_without_todo() -> None:
         assert "что осталось и с чего начнёшь завтра" not in help_text
 
 
+def test_evening_checkin_section_in_evening_signals_has_no_old_question() -> None:
+    text = (CLAUDE / "agents" / "coach-help" / "evening-signals.md").read_text()
+    assert "Вечерний чек-ин - `тренер вечер`" in text
+    assert "что осталось и с чего начнёшь завтра" not in text
+
+
 def test_evening_skill_keeps_skip_when_unknown() -> None:
     assert "Не знает - пропусти" in EVENING.read_text()
 
