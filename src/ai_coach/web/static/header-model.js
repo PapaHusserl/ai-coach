@@ -20,7 +20,7 @@ export function metricsLine(metrics) {
 	return parts.filter(Boolean).join(" · ") || "показателей нет";
 }
 
-// «вес 81.2 кг»; записи нет — «веса нет».
+// «вес 83.4 кг»; записи нет — «веса нет».
 export function weightLine(weight) {
 	return weight ? `вес ${number(weight.kg)} кг` : "веса нет";
 }

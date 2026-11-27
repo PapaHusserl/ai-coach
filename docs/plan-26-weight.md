@@ -5,41 +5,41 @@
 
 ## Суть
 
-Наблюдение Влада (ручная проверка v2.8, 2026-10-28, записано только в BACKLOG 9): тренер считает КБЖУ от 80,6 кг
-(Garmin), хотя ручное взвешивание 24.10 — 78,7 кг.
+Наблюдение Влада (ручная проверка v2.8, 2026-10-28, записано только в BACKLOG 9): тренер считает КБЖУ от веса Garmin,
+хотя ручное взвешивание 24.10 свежее.
 
-Разведка показала: **КБЖУ уже считается от 78,7**, а 80,6 — это Garmin-вес профиля, который уходит наружу как
+Разведка показала: **КБЖУ уже считается от ручного веса**, а Garmin-вес профиля уходит наружу как
 «вес» рядом с настоящим или вместо него.
 
 Что в базе (измерено):
 
 - `weight_log` — 6 строк, все с `coach weight` (единственный писатель `add_weight` в `src/` —
-  `cli/journal.py:93`); последняя `id 6, 2026-10-24 10:49:04, 78.7`, `deleted_at` пусто. Записей после 24.10
+  `cli/journal.py:93`); последняя — от 24.10, `deleted_at` пусто. Записей после 24.10
   нет, будущих дат нет.
-- `profile_log key=weight` — две строки Garmin: `79.5 @ 2026-10-07`, `80.599 @ 2026-10-11 09:54:42`. С 11.10 Garmin
+- `profile_log key=weight` — две строки Garmin: от 2026-10-07 и от 2026-10-11. С 11.10 Garmin
   отдаёт то же — `set_value` идемпотентен и не пишет повтор (`profile/service.py:152–155`).
 
 Что отдаёт код на `2026-10-28` (прогон `current_profile` + `profile_nutrition` на живой базе):
 
-- `current_profile(...)["weight_kg"] == 78.7` — верно: `_weight_kg` (`profile/service.py:181`) берёт последний
+- `current_profile(...)["weight_kg"]` — ручной вес: верно, `_weight_kg` (`profile/service.py:181`) берёт последний
   `weight_log` до `day` включительно и только при пустом — Garmin.
-- `nutrition`: `bmr 1774, tdee_rest 2129, kcal_target 1774, protein_g 157, fat_g 71, carbs_g 127` —
-  `157 = round(2.0 × 78.7)`; от 80,6 было бы 161. Разница в BMR — 19 ккал.
-- `current_profile(...)["values"]["weight"] == {"value": 80.599, "source": "garmin", "logged_at": "2026-10-11 09:54:42"}`
-  — вот источник «80,6».
+- `nutrition`: белок считается от ручного веса (`round(2.0 × вес)`); от Garmin-веса вышло бы на несколько граммов
+  больше, BMR разошёлся бы на десятки ккал.
+- `current_profile(...)["values"]["weight"]` — запись Garmin от 2026-10-11 с источником `garmin` — вот источник
+  «КБЖУ от Garmin-веса».
 
-Куда это «80,6» утекает (grep по `src/` и `.claude/`):
+Куда этот Garmin-вес утекает (grep по `src/` и `.claude/`):
 
 | Выход | Что видно сейчас | Где |
 |---|---|---|
-| `get_morning_snapshot` → `profile.values.weight` | `80.599`, без источника; `weight_kg` в snapshot **не отдаётся** | `mcp_server/snapshot.py:120` — отдаёт только `values`, `missing`, `nutrition`, … |
-| `get_profile` → `values.weight` и `weight_kg` | `80.599 (garmin, 11.10)` и `78.7` рядом — два «веса» | `mcp_server/tools.py:210–216` (`**current`) |
-| `coach profile show` | `weight: 80.599 (garmin)`; `weight_kg` не печатается | `cli/profile.py:25–26` |
+| `get_morning_snapshot` → `profile.values.weight` | Garmin-вес, без источника; `weight_kg` в snapshot **не отдаётся** | `mcp_server/snapshot.py:120` — отдаёт только `values`, `missing`, `nutrition`, … |
+| `get_profile` → `values.weight` и `weight_kg` | Garmin-вес (11.10) и ручной рядом — два «веса» | `mcp_server/tools.py:210–216` (`**current`) |
+| `coach profile show` | `weight: <Garmin-вес> (garmin)`; `weight_kg` не печатается | `cli/profile.py:25–26` |
 | `nutrition` | от какого веса посчитано — не видно | `profile/nutrition.py:113–123` |
 
 Агент тренера (`.claude/agents/coach.md:16`) строит сводку из snapshot; `weight-food.md:5` велит «вес → цель» без
-указания поля — в snapshot единственный «вес профиля» это `values.weight` = Garmin. Отсюда «КБЖУ от 80,6»:
-ожидание (диалога в репо нет), не проверено, но другого 80,6 в данных нет.
+указания поля — в snapshot единственный «вес профиля» это `values.weight` = Garmin. Отсюда «КБЖУ от Garmin-веса»:
+ожидание (диалога в репо нет), не проверено, но другого такого веса в данных нет.
 
 Кандидаты из хэнд-бэка — проверены и сняты:
 
@@ -57,7 +57,7 @@
 `{"value": <кг>, "source": "manual" | "garmin", "logged_at": <measured_at | logged_at>}`, `weight_kg` ему равен;
 при Р2 = 2 выбор — по дате: `weight_log.measured_at` против `profile_log.logged_at` ключа `weight`, свежее побеждает.
 **Поведение:** меняется — snapshot `profile.values.weight`, `get_profile.values.weight`, `coach profile show`
-показывают один и тот же вес, что идёт в КБЖУ (сейчас на живой базе: 78,7 вместо 80,599). Числа КБЖУ не меняются.
+показывают один и тот же вес, что идёт в КБЖУ (сейчас на живой базе: ручной вес вместо Garmin-веса). Числа КБЖУ не меняются.
 **Вне репо:** нет (Garmin не трогаем, MCP-схема не меняется — перезапуск сервера не нужен).
 
 ## Решения
@@ -98,29 +98,29 @@
 ## Тесты (кабан-доеба)
 
 Воспроизведение (сейчас красные — ожидание, не проверено на тестовой базе; на живой базе `values.weight`
-80.599 при `weight_kg` 78.7 — проверено):
+расходился с `weight_kg` — проверено):
 
-- `weight_log` 78.7 @ 2026-10-24 + Garmin `weight` 80.599 @ 2026-10-11, `day` 2026-10-28 →
-  `values["weight"]["value"] == 78.7`, `source == "manual"`, `logged_at == "2026-10-24 10:49:04"`, `weight_kg == 78.7`.
+- `weight_log` 77.3 @ 2026-10-24 + Garmin `weight` 81.4 @ 2026-10-11, `day` 2026-10-28 (выдуманные числа) →
+  `values["weight"]["value"] == 77.3`, `source == "manual"`, `logged_at == "2026-10-24 10:30:00"`, `weight_kg == 77.3`.
 - Инвариант: `values["weight"]["value"] == weight_kg` всегда, когда вес есть.
 - Только Garmin → `values["weight"]` = Garmin-запись, `weight_kg` = её значение (есть: `test_garmin_weight_is_fallback`,
   дополнить проверкой `values`).
 - Нет данных → `"weight" not in values`, `weight_kg is None`, `"weight" in missing` (есть: `test_weight_is_none_without_data`).
-- Граница дня: тот же набор, `day` = 2026-10-23 → 79.2 (запись 18.10; 24.10 не попадает) — семантика
+- Граница дня: тот же набор, `day` = 2026-10-23 → 75.9 (запись 18.10; 24.10 не попадает) — семантика
   `list_weights` до `day` включительно сохранена.
 - `deleted_at` у последней ручной → берётся предыдущая (есть `test_delete_weight_hides_it_from_list`; через
   `current_profile` — добавить).
 - При Р2 = 2: Garmin `logged_at` 2026-10-27 новее `weight_log` 2026-10-24 → Garmin; одинаковая дата → ручной
   (умолчание); при Р2 = 1 — существующий `test_weight_log_beats_garmin_weight` без изменений.
-- snapshot: фикстура с обоими весами → `profile["values"]["weight"] == 78.7`; `test_snapshot_profile_skips_empty_keys`
+- snapshot: фикстура с обоими весами → `profile["values"]["weight"] == 77.3`; `test_snapshot_profile_skips_empty_keys`
   (`list(values) == ["sex"]`) и `test_snapshot_profile_has_no_history_or_sources` — остаются зелёными (без веса
   ключа нет; в snapshot уходит только `value`).
 - `get_profile` → `values["weight"]["value"] == profile["weight_kg"]`.
-- CLI `coach profile show` после `coach weight 78.7` при Garmin-записи 80.599 в `profile_log` → в выводе
-  `weight: 78.7 (manual)`, строки `80.599` нет.
-- Проверка руками (Влад): `coach profile show` → `weight: 78.7 (manual)`; `тренер` → в сводке вес 78,7; MCP
-  `get_profile` (date = сегодня) → `values.weight.value` 78.7 и `weight_kg` 78.7; `get_morning_snapshot` →
-  `profile.values.weight` 78.7.
+- CLI `coach profile show` после `coach weight 77.3` при Garmin-записи 81.4 в `profile_log` → в выводе
+  `weight: 77.3 (manual)`, строки `81.4` нет.
+- Проверка руками (Влад): `coach profile show` → `weight: <ручной вес> (manual)`; `тренер` → в сводке ручной вес; MCP
+  `get_profile` (date = сегодня) → `values.weight.value` и `weight_kg` равны ручному весу; `get_morning_snapshot` →
+  `profile.values.weight` равен ему же.
 
 Для mutmut (`модуль:функция`): `profile.service:_weight_kg`, `profile.service:current_profile`.
 

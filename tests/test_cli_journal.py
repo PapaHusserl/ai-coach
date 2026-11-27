@@ -51,9 +51,10 @@ def test_weight_is_saved_with_todays_date(isolated: Path) -> None:
 
 
 def test_two_weights_in_a_day_are_two_rows(isolated: Path) -> None:
+    # числа выдуманные
     runner.invoke(main.app, ["weight", "81.7"])
-    runner.invoke(main.app, ["weight", "81.2"])
-    assert [r["weight_kg"] for r in rows(isolated, "weight_log")] == [81.7, 81.2]
+    runner.invoke(main.app, ["weight", "83.4"])
+    assert [r["weight_kg"] for r in rows(isolated, "weight_log")] == [81.7, 83.4]
 
 
 def test_integer_weight_is_accepted(isolated: Path) -> None:

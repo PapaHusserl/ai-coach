@@ -96,20 +96,21 @@ def test_profile_show_has_current_value_not_old_one(isolated: Path) -> None:
 
 
 def test_profile_show_weight_is_fresh_manual_not_garmin(isolated: Path) -> None:
+    # числа выдуманные
     runner.invoke(main.app, ["profile", "show"])
     conn = sqlite3.connect(isolated)
     try:
         with conn:
             conn.execute(
                 "INSERT INTO profile_log (key, value, source, logged_at) VALUES (?,?,?,?)",
-                ("weight", "80.599", "garmin", "2020-01-01 09:00:00"),
+                ("weight", "81.4", "garmin", "2020-01-01 09:00:00"),
             )
     finally:
         conn.close()
-    runner.invoke(main.app, ["weight", "78.7"])
+    runner.invoke(main.app, ["weight", "77.3"])
     result = runner.invoke(main.app, ["profile", "show"])
-    assert "weight: 78.7 (manual)" in result.output
-    assert "80.599" not in result.output
+    assert "weight: 77.3 (manual)" in result.output
+    assert "81.4" not in result.output
 
 
 def test_goal_add_creates_goal_and_event(isolated: Path) -> None:

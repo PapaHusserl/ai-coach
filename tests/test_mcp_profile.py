@@ -94,20 +94,21 @@ def test_snapshot_has_current_profile_values(conn: sqlite3.Connection) -> None:
 
 
 def fresh_manual_and_old_garmin_weight(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
-    set_value(conn, "weight", "80.599", "garmin", "2026-10-11 09:54:42")
+    # числа выдуманные
+    add_weight(conn, {"measured_at": "2026-10-24 10:30:00", "weight_kg": 77.3})
+    set_value(conn, "weight", "81.4", "garmin", "2026-10-11 09:30:00")
 
 
 def test_snapshot_weight_is_fresh_manual_not_garmin(conn: sqlite3.Connection) -> None:
     fresh_manual_and_old_garmin_weight(conn)
     profile = call(conn, "get_morning_snapshot", date="2026-10-28")["profile"]
-    assert profile["values"]["weight"] == 78.7
+    assert profile["values"]["weight"] == 77.3
 
 
 def test_get_profile_values_weight_equals_weight_kg(conn: sqlite3.Connection) -> None:
     fresh_manual_and_old_garmin_weight(conn)
     profile = call(conn, "get_profile", date="2026-10-28")
-    assert profile["weight_kg"] == 78.7
+    assert profile["weight_kg"] == 77.3
     assert profile["values"]["weight"]["value"] == profile["weight_kg"]
     assert profile["values"]["weight"]["source"] == "manual"
 

@@ -4,9 +4,9 @@ SMELLS_MAX ?= 0
 # Модули для мутаций: по умолчанию изменённые относительно HEAD, иначе весь пакет.
 MOD ?= $(or $(shell git diff --name-only HEAD -- src/ai_coach | grep '\.py$$' | sed -e 's|^src/||' -e 's|/__init__\.py$$||' -e 's|\.py$$||' -e 's|/|.|g' -e 's|$$|.*|'),ai_coach.*)
 
-.PHONY: check lint fmt types smells dead cov player-test mutate mutate-report install-trener
+.PHONY: check lint fmt types smells dead cov personal player-test mutate mutate-report install-trener
 
-check: lint types smells dead cov player-test
+check: lint types smells dead cov personal player-test
 	@echo "check: OK"
 
 lint:
@@ -30,6 +30,10 @@ dead:
 
 cov:
 	uv run pytest --cov
+
+# Личные значения в отслеживаемых файлах: сверка с живой базой (только чтение); базы нет — «пропуск», код 0.
+personal:
+	@uv run python spikes/privacy/scan.py
 
 # JS-тесты плеера (нужен node >= 18).
 player-test:

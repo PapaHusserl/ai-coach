@@ -87,8 +87,9 @@ test("metricsLine: дробные часы сна — с точкой", () => {
 });
 
 test("weightLine: дробный вес — с точкой", () => {
-	const line = weightLine({ kg: 81.2, measured_at: "2026-11-10 07:00:00" });
-	assert.match(line, /вес 81\.2 кг/);
+	// числа выдуманные
+	const line = weightLine({ kg: 83.4, measured_at: "2026-11-10 07:00:00" });
+	assert.match(line, /вес 83\.4 кг/);
 });
 
 test("metricsLine: строка дня, все поля пустые — «показателей нет»", () => {

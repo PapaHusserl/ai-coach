@@ -201,20 +201,21 @@ def test_no_weight_data_has_no_weight_value_and_is_missing(conn: sqlite3.Connect
 
 
 def fresh_manual_and_old_garmin(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 79.2})
-    add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
-    put(conn, "weight", "80.599", "garmin", "2026-10-11 09:54:42")
+    # числа выдуманные
+    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 75.9})
+    add_weight(conn, {"measured_at": "2026-10-24 10:30:00", "weight_kg": 77.3})
+    put(conn, "weight", "81.4", "garmin", "2026-10-11 09:30:00")
 
 
 def test_values_weight_is_fresh_manual_not_old_garmin(conn: sqlite3.Connection) -> None:
     fresh_manual_and_old_garmin(conn)
     profile = current_profile(conn, "2026-10-28")
     assert profile["values"]["weight"] == {
-        "value": 78.7,
+        "value": 77.3,
         "source": "manual",
-        "logged_at": "2026-10-24 10:49:04",
+        "logged_at": "2026-10-24 10:30:00",
     }
-    assert profile["weight_kg"] == 78.7
+    assert profile["weight_kg"] == 77.3
 
 
 def test_values_weight_equals_weight_kg(conn: sqlite3.Connection) -> None:
@@ -224,26 +225,26 @@ def test_values_weight_equals_weight_kg(conn: sqlite3.Connection) -> None:
 
 
 def test_weight_on_earlier_day_excludes_later_manual(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 79.2})
-    add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
-    put(conn, "weight", "80.599", "garmin", "2026-10-11 09:54:42")
+    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 75.9})
+    add_weight(conn, {"measured_at": "2026-10-24 10:30:00", "weight_kg": 77.3})
+    put(conn, "weight", "81.4", "garmin", "2026-10-11 09:30:00")
     profile = current_profile(conn, "2026-10-23")
-    assert profile["values"]["weight"]["value"] == 79.2
-    assert profile["weight_kg"] == 79.2
+    assert profile["values"]["weight"]["value"] == 75.9
+    assert profile["weight_kg"] == 75.9
 
 
 def test_deleted_last_weight_falls_back_to_previous(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 79.2})
-    last = add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
+    add_weight(conn, {"measured_at": "2026-10-18 08:00:00", "weight_kg": 75.9})
+    last = add_weight(conn, {"measured_at": "2026-10-24 10:30:00", "weight_kg": 77.3})
     delete_weight(conn, last, "2026-10-25 09:00:00")
     profile = current_profile(conn, "2026-10-28")
-    assert profile["values"]["weight"]["value"] == 79.2
+    assert profile["values"]["weight"]["value"] == 75.9
     assert profile["values"]["weight"]["source"] == "manual"
-    assert profile["weight_kg"] == 79.2
+    assert profile["weight_kg"] == 75.9
 
 
 def test_newer_garmin_weight_beats_older_manual(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-24 10:49:04", "weight_kg": 78.7})
+    add_weight(conn, {"measured_at": "2026-10-24 10:30:00", "weight_kg": 77.3})
     put(conn, "weight", "80.1", "garmin", "2026-10-27 08:00:00")
     profile = current_profile(conn, "2026-10-28")
     assert profile["values"]["weight"] == {
@@ -255,11 +256,11 @@ def test_newer_garmin_weight_beats_older_manual(conn: sqlite3.Connection) -> Non
 
 
 def test_manual_wins_when_garmin_weight_has_same_time(conn: sqlite3.Connection) -> None:
-    add_weight(conn, {"measured_at": "2026-10-24 10:00:00", "weight_kg": 78.7})
+    add_weight(conn, {"measured_at": "2026-10-24 10:00:00", "weight_kg": 77.3})
     put(conn, "weight", "80.1", "garmin", "2026-10-24 10:00:00")
     profile = current_profile(conn, "2026-10-28")
     assert profile["values"]["weight"]["source"] == "manual"
-    assert profile["weight_kg"] == 78.7
+    assert profile["weight_kg"] == 77.3
 
 
 def test_missing_on_empty_database_has_all_required_and_no_goals_mark(
