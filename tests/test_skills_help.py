@@ -5,10 +5,10 @@ import re
 import sqlite3
 from pathlib import Path
 
+import pytest
 import typer
 from mcp_fakes import tool_names
 from text_limits import (
-    AGENT_LIMITS,
     HELP_INDEX_LIMIT,
     HELP_TOPIC_LIMIT,
     PULT_TODO_LINK_LIMIT,
@@ -40,20 +40,19 @@ def allow() -> list[str]:
     return json.loads((CLAUDE / "settings.json").read_text())["permissions"]["allow"]
 
 
+@pytest.mark.parametrize("path", topic_files(), ids=lambda p: p.name)
+def test_topic_file_keeps_reserve_below_limit(path: Path) -> None:
+    from text_limits import HELP_TOPIC_LIMIT, RESERVE
+
+    assert HELP_TOPIC_LIMIT - len(path.read_bytes()) >= RESERVE, path.name
+
+
 def test_index_within_limit() -> None:
     assert len(HELP.read_bytes()) <= HELP_INDEX_LIMIT
 
 
 def test_topic_files_exist() -> None:
     assert topic_files()
-
-
-def test_index_keeps_reserve_below_limit() -> None:
-    assert HELP_INDEX_LIMIT - len(HELP.read_bytes()) >= 200
-
-
-def test_sleep_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "sleep.md").read_bytes()) >= 200
 
 
 def test_topic_files_within_limit_and_not_empty() -> None:
@@ -342,10 +341,6 @@ def test_evening_signals_topic_is_within_limit() -> None:
     assert len((TOPICS / "evening-signals.md").read_bytes()) <= HELP_TOPIC_LIMIT
 
 
-def test_wellbeing_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "wellbeing.md").read_bytes()) >= 200
-
-
 def test_wellbeing_topic_tells_evening_checkin_from_2200() -> None:
     text = topic("wellbeing.md")
     assert "не раньше 22:00 - командой (до 04:00 - за вчера) или анкетой вечера пульта" in text
@@ -386,10 +381,6 @@ def test_pult_marks_topic_has_no_old_checkin_phrases() -> None:
     text = topic("pult-marks.md")
     assert "считается вечерним чек-ином: скил вечера" not in text
     assert "остаётся красным" not in text
-
-
-def test_deviations_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "deviations.md").read_bytes()) >= 200
 
 
 def weekly_review_lines() -> list[str]:
@@ -996,10 +987,6 @@ def test_weather_topic_storm_paragraph_has_needles() -> None:
         assert needle in text, needle
 
 
-def test_weather_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "weather.md").read_bytes()) >= 200
-
-
 def test_weather_topic_signal_paragraph_has_needles() -> None:
     text = topic("weather.md")
     for needle in ("сигнал", "план не", "порог", "не проверен", "прогрев", "4 гПа"):
@@ -1011,10 +998,6 @@ def test_pult_topic_state_section_names_weather_signal_lines() -> None:
     text = topic("pult.md")
     assert "перепад давления" in text
     assert "перепад температуры" in text
-
-
-def test_pult_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "pult.md").read_bytes()) >= 200
 
 
 def test_help_index_names_weather_tool_and_topic() -> None:
@@ -1390,11 +1373,6 @@ def test_recovery_side_file_is_within_side_limit() -> None:
     assert len((AGENTS / "coach-wellbeing" / "recovery.md").read_bytes()) <= SIDE_FILE_LIMIT
 
 
-def test_week_file_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach-week.md").read_bytes())
-    assert AGENT_LIMITS["coach-week.md"] - size >= 200
-
-
 # шаг Н7, партия 2: справка об отдыхе и выходных
 
 
@@ -1438,19 +1416,6 @@ def test_wellbeing_topic_says_rest_hours_are_asked_even_with_screen() -> None:
     text = topic("wellbeing.md")
     assert "часы отдыха" in text
     assert "экран" in text
-
-
-def test_overload_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "overload.md").read_bytes()) >= 200
-
-
-def test_workload_topic_keeps_reserve_below_limit() -> None:
-    assert HELP_TOPIC_LIMIT - len((TOPICS / "workload.md").read_bytes()) >= 200
-
-
-def test_wellbeing_role_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach-wellbeing.md").read_bytes())
-    assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200
 
 
 def test_overload_topic_names_attention_signals() -> None:

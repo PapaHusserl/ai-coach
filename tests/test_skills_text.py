@@ -433,6 +433,20 @@ def test_coach_4a_keeps_meal_plan_today_without_first_run_note() -> None:
     assert "(первый запуск за день)" not in item
 
 
+def test_coach_4a_has_no_pantry_write_off_offer() -> None:
+    item = coach_item("4а.")
+    assert "предложи списать" not in item
+    assert "Кладовая и рецепты" in item
+
+
+def test_food_skill_item_5_keeps_pantry_use_after_yes() -> None:
+    text = (SKILLS / "coach-food" / "SKILL.md").read_text()
+    lines = [x for x in text.splitlines() if x.startswith("5. ")]
+    assert len(lines) == 1
+    assert "pantry use" in lines[0]
+    assert "после «да»" in lines[0]
+
+
 def test_meal_skill_allows_get_food_and_get_pantry() -> None:
     head = (SKILLS / "coach-meal" / "SKILL.md").read_text().split("---")[1]
     allowed = next(line for line in head.splitlines() if line.startswith("allowed-tools:"))
@@ -451,20 +465,6 @@ def test_food_skill_allows_get_pantry() -> None:
 def test_nutrition_points_to_intake_file() -> None:
     text = (ROOT / "agents" / "coach-nutrition.md").read_text()
     assert "coach-nutrition/intake.md" in text
-
-
-def test_nutrition_keeps_at_least_200_bytes_of_room() -> None:
-    from text_limits import AGENT_LIMITS
-
-    size = len((ROOT / "agents" / "coach-nutrition.md").read_bytes())
-    assert AGENT_LIMITS["coach-nutrition.md"] - size >= 200
-
-
-def test_day_keeps_at_least_200_bytes_of_room() -> None:
-    from text_limits import AGENT_LIMITS
-
-    size = len((ROOT / "agents" / "coach-day.md").read_bytes())
-    assert AGENT_LIMITS["coach-day.md"] - size >= 200
 
 
 def test_intake_file_sends_course_marks_to_pult() -> None:

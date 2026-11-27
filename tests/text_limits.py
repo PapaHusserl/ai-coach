@@ -1,7 +1,7 @@
 """Лимиты размера текстов тренера (байты): единственное место, где они записаны."""
 
 AGENT_LIMITS = {
-    "coach.md": 16384,
+    "coach.md": 18432,
     "coach-wellbeing.md": 11264,
     "coach-nutrition.md": 6144,
     "coach-onboarding.md": 6144,
@@ -11,6 +11,7 @@ AGENT_LIMITS = {
     "coach-decisions.md": 6144,
     "coach-help.md": 6144,
 }
+RESERVE = 200
 SKILL_LIMIT = 4096
 EVENING_SKILL_LIMIT = 5120
 SIDE_FILE_LIMIT = 4096

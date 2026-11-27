@@ -16,7 +16,7 @@
 
 Предвестники (усталость, раздражительность), погода (`weather.signals`), строки `get_deviations` с `day` (вчерашний вечер): `cat .claude/agents/coach-wellbeing/precursors.md`.
 
-WHO-5: `who5` в snapshot (`score` 0-100, `prev_score`, `delta`, `days_since`, `due`, `low_until`, `signals`), история - `get_who5`. `due` = true - после сводки один раз предложи опросник (1 минута); отказ - не настаивай. Согласие или `who5_low` (28 и ниже, красный флаг, совет врачу или психологу): сначала `cat .claude/agents/coach-help/who5.md`, раздел «Порядок для тренера» - опросник двумя окнами, режим щажения до `low_until`, предложение одно с `illness_risk` и перегрузом. `who5_reduced` (50 и ниже), `who5_drop` (минус 10 и больше) - одна фраза и вопрос, что изменилось; план не трогай.
+WHO-5 (`who5` в snapshot, `get_who5`): порядок и реакция - `cat .claude/agents/coach-wellbeing/who5.md`.
 
 Что делать:
 - Строка нагрузки в сводке: встречи за вчера и сегодня (всего / вечером), туду закрыто / открыто, груминг; `overload.total` и сигналы (если есть) - одной фразой.

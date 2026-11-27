@@ -6,6 +6,8 @@ from ai_coach.load import deviations
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
 WELLBEING = ROOT / "agents" / "coach-wellbeing.md"
+WHO5_SIDE = ROOT / "agents" / "coach-wellbeing" / "who5.md"
+WHO5_CAT = "cat .claude/agents/coach-wellbeing/who5.md"
 
 
 def test_coach_wellbeing_exists() -> None:
@@ -27,9 +29,12 @@ def test_coach_wellbeing_describes_illness_reaction() -> None:
 
 def test_coach_wellbeing_describes_who5_reaction() -> None:
     text = WELLBEING.read_text()
+    assert "WHO-5" in text
+    side = WHO5_SIDE.read_text()
     for needle in (
-        "WHO-5",
         "who5_low",
+        "who5_reduced",
+        "who5_drop",
         "low_until",
         "врачу или психологу",
         "щажения",
@@ -37,7 +42,24 @@ def test_coach_wellbeing_describes_who5_reaction() -> None:
         "двумя окнами",
         "coach-help/who5.md",
     ):
-        assert needle in text, needle
+        assert needle in side, needle
+
+
+def test_who5_side_file_is_allowed_to_cat() -> None:
+    allow = json.loads((ROOT / "settings.json").read_text())["permissions"]["allow"]
+    assert f"Bash({WHO5_CAT})" in allow
+
+
+def test_wellbeing_role_has_one_line_pointing_to_who5_side_file() -> None:
+    lines = lines_with(WELLBEING.read_text(), WHO5_CAT)
+    assert len(lines) == 1
+
+
+def test_coach_9e_names_who5_side_file() -> None:
+    text = (ROOT / "agents" / "coach.md").read_text()
+    lines = [x for x in text.splitlines() if x.startswith("9е.")]
+    assert len(lines) == 1
+    assert "coach-wellbeing/who5.md" in lines[0]
 
 
 def test_coach_md_offers_who5() -> None:
@@ -567,6 +589,13 @@ def test_coach_morning_step_reads_wellbeing_before_summary_without_covid_conditi
     assert "series_day" not in lines[0]
 
 
+def test_coach_step_2a_asks_covid_question_in_first_reply_for_severe_episode() -> None:
+    lines = [ln for ln in coach_text().splitlines() if ln.startswith("2а.")]
+    assert len(lines) == 1
+    for needle in ("illness.episode.severe", "тест на COVID делал?", "в первом ответе сессии"):
+        assert needle in lines[0], needle
+
+
 def test_coach_step_2a_reads_covid_side_before_summary_even_without_signals() -> None:
     from ai_coach.load.covid import COVID_REST_DAYS
 
@@ -764,9 +793,8 @@ def test_covid_topic_quotes_question_and_reminder_verbatim() -> None:
     assert COVID_REMINDER in text
 
 
-def test_illness_side_links_covid_side_and_keeps_reserve() -> None:
+def test_illness_side_links_covid_side() -> None:
     assert "cat .claude/agents/coach-wellbeing/covid.md" in illness_side()
-    assert 4096 - len(ILLNESS_SIDE.read_bytes()) >= 200
 
 
 def test_readme_illness_line_names_covid_command() -> None:
@@ -1027,10 +1055,9 @@ def test_precursors_file_stays_within_side_limit() -> None:
     assert len(PRECURSORS.read_bytes()) <= 4096
 
 
-def test_wellbeing_line_17_names_weather_next_to_precursors() -> None:
-    line = WELLBEING.read_text().splitlines()[16]
-    assert "погод" in line.lower()
-    assert "coach-wellbeing/precursors.md" in line
+def test_wellbeing_precursors_line_names_weather() -> None:
+    lines = lines_with(WELLBEING.read_text(), "coach-wellbeing/precursors.md")
+    assert any("погод" in line.lower() for line in lines)
 
 
 def test_morning_recovery_names_weather_key() -> None:

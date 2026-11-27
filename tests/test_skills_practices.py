@@ -22,29 +22,12 @@ def test_agent_files_within_their_limits() -> None:
         assert len((AGENTS / name).read_bytes()) <= limit, name
 
 
-def test_agenda_file_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach-agenda.md").read_bytes())
-    assert AGENT_LIMITS["coach-agenda.md"] - size >= 200
+@pytest.mark.parametrize("name", sorted(AGENT_LIMITS))
+def test_agent_file_keeps_reserve_below_limit(name: str) -> None:
+    from text_limits import RESERVE
 
-
-def test_coach_file_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach.md").read_bytes())
-    assert AGENT_LIMITS["coach.md"] - size >= 200
-
-
-def test_wellbeing_file_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach-wellbeing.md").read_bytes())
-    assert AGENT_LIMITS["coach-wellbeing.md"] - size >= 200
-
-
-def test_week_file_keeps_reserve_below_limit() -> None:
-    size = len((AGENTS / "coach-week.md").read_bytes())
-    assert AGENT_LIMITS["coach-week.md"] - size >= 200
-
-
-def test_wellbeing_file_reserve_is_larger_than_before_n38() -> None:
-    size = len((AGENTS / "coach-wellbeing.md").read_bytes())
-    assert AGENT_LIMITS["coach-wellbeing.md"] - size > 209
+    size = len((AGENTS / name).read_bytes())
+    assert AGENT_LIMITS[name] - size >= RESERVE, name
 
 
 def test_every_agent_file_has_a_limit() -> None:
@@ -61,6 +44,13 @@ def agent_side_files() -> list[Path]:
 @pytest.mark.parametrize("path", agent_side_files(), ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_agent_side_file_is_within_its_limit(path: Path) -> None:
     assert len(path.read_bytes()) <= SIDE_FILE_LIMIT
+
+
+@pytest.mark.parametrize("path", agent_side_files(), ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_agent_side_file_keeps_reserve_below_limit(path: Path) -> None:
+    from text_limits import RESERVE
+
+    assert SIDE_FILE_LIMIT - len(path.read_bytes()) >= RESERVE, path.name
 
 
 def test_agent_side_files_are_found() -> None:

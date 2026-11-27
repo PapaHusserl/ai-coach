@@ -282,3 +282,30 @@ def test_week_file_says_few_data_with_count_out_of_four() -> None:
 
 def test_week_file_points_to_rest_side_file() -> None:
     assert REST_CAT in week_item(3)
+
+
+# шаг Н51, партия 1: хвост шага 5 вынесен в coach-week/done.md
+
+DONE_CAT = "cat .claude/agents/coach-week/done.md"
+
+
+def done_text() -> str:
+    return (AGENTS / "coach-week" / "done.md").read_text()
+
+
+def test_done_side_file_names_week_option_and_four_am() -> None:
+    text = done_text()
+    for needle in ("--week", "04:00"):
+        assert needle in text, needle
+
+
+def test_week_item_5_keeps_review_done_command() -> None:
+    assert "uv run coach review done" in week_item(5)
+
+
+def test_week_item_5_points_to_done_side_file() -> None:
+    assert DONE_CAT in week_item(5)
+
+
+def test_done_side_file_is_allowed_to_cat() -> None:
+    assert f"Bash({DONE_CAT})" in ALLOW
